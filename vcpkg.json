@@ -1,0 +1,30 @@
+{
+  "name" : "ocrtest",
+  "version-string" : "1.0.0",
+  "builtin-baseline" : "cbb38f7824373004154d678b0eb54bff4e5466ea",
+  "dependencies" : [ {
+    "name" : "clipper2",
+    "version>=" : "1.5.4"
+  }, {
+    "name" : "fmt",
+    "version>=" : "12.1.0"
+  }, {
+    "name" : "ncnn",
+    "version>=" : "20250916"
+  }, {
+    "name" : "opencv",
+    "version>=" : "4.11.0"
+  }, {
+    "name" : "usockets",
+    "version>=" : "0.8.8#3"
+  }, {
+    "name" : "uwebsockets",
+    "version>=" : "20.74.0"
+  }, {
+    "name" : "yaml-cpp",
+    "version>=" : "0.8.0#3"
+  }, {
+    "name" : "spdlog",
+    "version>=" : "1.16.0"
+  } ]
+}
