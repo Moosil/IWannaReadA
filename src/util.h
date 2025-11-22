@@ -23,7 +23,5 @@ namespace ocr {
 
 	std::tuple<unsigned long, unsigned long> getScreenSize();
 
-	std::string utf8_to_gbk(const std::string& utf8);
-
-	std::wstring utf8_to_utf16(const std::string& str);
+	int lerpi(int a, int b, float t);
 } // ocr

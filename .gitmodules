@@ -1,0 +1,6 @@
+[submodule "third_party/mdict"]
+	path = third_party/mdict
+	url = https://github.com/dictlab/mdict-cpp.git
+[submodule "third_party/utfcpp"]
+	path = third_party/utfcpp
+	url = https://github.com/nemtrif/utfcpp.git

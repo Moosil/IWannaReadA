@@ -10,14 +10,75 @@
 #pragma comment(lib,"dxgi")
 #pragma comment(lib,"dcomp")
 
+#include <filesystem>
 #include <spdlog/spdlog.h>
 #include <opencv2/imgproc.hpp>
+#include <utf8/cpp20.h>
 
 #include "util.h"
 
 
 namespace ocr {
-	std::unique_ptr<TooltipWnd> TooltipWnd::initTooltip(const std::vector<OCRResult>& res, const cv::Point& topleft) {
+	std::vector<OCRResultPacked> TooltipWnd::processOCRResults(const std::vector<OCRResult>& res, const cv::Point& topleft, const bool separate_characters) {
+		std::vector<OCRResultPacked> res_packed;
+		if (separate_characters) {
+			for (const auto& [rect, text] : res) {
+				const std::array xs = {rect.rect[0].x, rect.rect[1].x, rect.rect[2].x, rect.rect[3].x};
+				const std::array ys = {rect.rect[0].y, rect.rect[1].y, rect.rect[2].y, rect.rect[3].y};
+				const auto [left, right] = std::minmax_element(xs.begin(), xs.end());
+				const auto [top, bottom] = std::minmax_element(ys.begin(), ys.end());
+				const auto width = *right - *left;
+				const auto height = *bottom - *top;
+				if (width > height) {
+					auto it = text.text.begin();
+					const auto end = text.text.end();
+					for (const auto& [lower, upper] : text.char_lengths) {
+						Poly2I char_rect{
+							cv::Point{lerpi(rect.rect[0].x, rect.rect[1].x, lower), rect.rect[0].y} + topleft,
+							cv::Point{lerpi(rect.rect[0].x, rect.rect[1].x, upper), rect.rect[1].y} + topleft,
+							cv::Point{lerpi(rect.rect[3].x, rect.rect[2].x, upper), rect.rect[2].y} + topleft,
+							cv::Point{lerpi(rect.rect[3].x, rect.rect[2].x, lower), rect.rect[3].y} + topleft
+						};
+						std::string utf16i;
+						utf8::append(utf8::next(it, end), utf16i);
+						res_packed.emplace_back(char_rect, utf16i);
+					}
+				} else {
+					auto it = text.text.begin();
+					const auto end = text.text.end();
+					for (const auto& [lower, upper] : text.char_lengths) {
+						Poly2I char_rect{
+							cv::Point{rect.rect[0].x, lerpi(rect.rect[0].x, rect.rect[3].x, lower)} + topleft,
+							cv::Point{rect.rect[1].x, lerpi(rect.rect[1].x, rect.rect[2].x, lower)} + topleft,
+							cv::Point{rect.rect[2].x, lerpi(rect.rect[1].x, rect.rect[2].x, lower)} + topleft,
+							cv::Point{rect.rect[3].x, lerpi(rect.rect[0].x, rect.rect[3].x, lower)} + topleft
+						};
+						std::string utf16i;
+						utf8::append(utf8::next(it, end), utf16i);
+						res_packed.emplace_back(char_rect, utf16i);
+					}
+				}
+			}
+		} else {
+			res_packed.reserve(res.size());
+
+			for (const auto& [rect, text] : res) {
+				Poly2I new_rect;
+				std::ranges::copy(
+					std::views::iota(0, 4) | std::views::transform(
+						[&rect, &topleft](const int i) -> cv::Point2i {
+							return rect.rect[i] + topleft;
+						}
+					),
+					new_rect.begin()
+				);
+				res_packed.emplace_back(new_rect, text.text);
+			}
+		}
+		return res_packed;
+	}
+
+	std::unique_ptr<TooltipWnd> TooltipWnd::initTooltip(const std::vector<OCRResult>& res, const cv::Point& topleft, std::filesystem::path& dict_path) {
 		auto wnd = std::make_unique<TooltipWnd>();
 		if (!isInitialised) {
 			WNDCLASS wc{};
@@ -32,23 +93,7 @@ namespace ocr {
 			isInitialised = true;
 		}
 
-		std::vector<OCRResultPacked> res_packed;
-		res_packed.reserve(res.size());
-
-		for (const auto& [rect, text] : res) {
-			Poly2I new_rect;
-			std::ranges::copy(
-				std::views::iota(0, 4) | std::views::transform(
-					[&rect, &topleft](const int i) -> cv::Point2i {
-						return rect.rect[i] + topleft;
-					}
-				),
-				new_rect.begin()
-			);
-			res_packed.emplace_back(new_rect, text.text);
-		}
-
-		wnd->results = res_packed;
+		wnd->results = processOCRResults(res, topleft, true);
 
 		constexpr int style           = WS_POPUP;
 		constexpr int extended_styles = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_TRANSPARENT;
@@ -72,6 +117,9 @@ namespace ocr {
 
 		wnd->initDirectWrite();
 
+		wnd->mdict = std::make_unique<mdict::Mdict>(dict_path.string());
+		wnd->mdict->init();
+
 		return wnd;
 	}
 
@@ -86,13 +134,13 @@ namespace ocr {
 		))
 			return false;
 
-		const D2D1_RENDER_TARGET_PROPERTIES      rtProps   = D2D1::RenderTargetProperties(
+		const D2D1_RENDER_TARGET_PROPERTIES rtProps = D2D1::RenderTargetProperties(
 			D2D1_RENDER_TARGET_TYPE_DEFAULT,
-			D2D1::PixelFormat( DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED )
+			D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)
 		);
 		const D2D1_HWND_RENDER_TARGET_PROPERTIES hwndProps = D2D1::HwndRenderTargetProperties(
 			hwnd,
-			D2D1::SizeU(width, height)
+			D2D1::SizeU(static_cast<unsigned int>(width), static_cast<unsigned int>(height))
 		);
 
 		if (FAILED(d2d1_factory->CreateHwndRenderTarget(rtProps, hwndProps, &render_target)))
@@ -152,10 +200,15 @@ namespace ocr {
 					}
 				}
 				if (is_hovering) {
-					const std::wstring w_hover_text              = utf8_to_utf16(hover_text);
-					const auto         [text_width, text_height] = getTextSize(w_hover_text);
-					width                                        = static_cast<int>(std::ceil(text_width));
-					height                                       = static_cast<int>(std::ceil(text_height));
+					const auto w_hover_text = utf8::utf8to16(hover_text);
+					const auto         [title_text_width, title_text_height] = getTextSize(w_hover_text);
+					width = std::max(static_cast<int>(std::ceil(title_text_width)), min_width);
+					row_heights[0] = static_cast<int>(std::ceil(title_text_height));
+
+					dictionary_text = mdict->lookup(hover_text);
+					const auto w_dictionary_text = utf8::utf8to16(dictionary_text);
+					const auto         [_, define_text_height] = getTextSize(w_hover_text, static_cast<float>(width));
+					height = std::max(static_cast<int>(std::ceil(title_text_height + define_text_height)), min_height);
 
 					SetWindowPos(
 						hwnd,
@@ -166,7 +219,7 @@ namespace ocr {
 						height,
 						SWP_NOZORDER | SWP_NOMOVE | SWP_NOACTIVATE
 					);
-					render_target->Resize(D2D1::SizeU(width, height));
+					render_target->Resize(D2D1::SizeU(static_cast<unsigned int>(width), static_cast<unsigned int>(height)));
 					InvalidateRect(hwnd, nullptr, FALSE);
 				}
 			}
@@ -184,20 +237,22 @@ namespace ocr {
 		}
 	}
 
-	std::tuple<float, float> TooltipWnd::getTextSize(const std::wstring& w_hover_text) const {
+	std::tuple<float, float> TooltipWnd::getTextSize(
+		const std::u16string& w_hover_text,
+		const float         p_width,
+		const float         p_height
+	) const {
 		IDWriteTextLayout* text_layout;
 		direct_write_factory->CreateTextLayout(
-			w_hover_text.c_str(),
+			reinterpret_cast<const wchar_t*>(w_hover_text.c_str()),
 			static_cast<UINT32>(w_hover_text.length()),
 			direct_write_text_format,
-			FLT_MAX,
-			// width: let it expand
-			FLT_MAX,
-			// height: let it expand
+			p_width,
+			p_height,
 			&text_layout
 		);
 
-		DWRITE_TEXT_METRICS text_metrics;
+		DWRITE_TEXT_METRICS text_metrics{};
 		text_layout->GetMetrics(&text_metrics);
 
 		return {text_metrics.width, text_metrics.height};
@@ -252,17 +307,26 @@ namespace ocr {
 					PAINTSTRUCT ps;
 					BeginPaint(hwnd, &ps);
 
-					const std::wstring w_hover_text = utf8_to_utf16(hover_text);
-
 					render_target->BeginDraw();
-					// for transparency don't clear
 					render_target->Clear(D2D1::ColorF(D2D1::ColorF::White));
 
+					const std::u16string w_hover_text = utf8::utf8to16(hover_text);
+					direct_write_text_format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
 					render_target->DrawText(
-						w_hover_text.c_str(),
+						reinterpret_cast<const wchar_t*>(w_hover_text.c_str()),
 						static_cast<UINT32>(w_hover_text.length()),
 						direct_write_text_format,
-						D2D1::RectF(0, 0, width, height),
+						D2D1::RectF(0, 0, static_cast<float>(width), static_cast<float>(height)),
+						brush
+					);
+
+					const std::u16string w_dictionary_text = utf8::utf8to16(dictionary_text);
+					direct_write_text_format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+					render_target->DrawText(
+						reinterpret_cast<const wchar_t*>(w_dictionary_text.c_str()),
+						static_cast<UINT32>(w_dictionary_text.length()),
+						direct_write_text_format,
+						D2D1::RectF(0, static_cast<float>(row_heights[0]), static_cast<float>(width), static_cast<float>(height)),
 						brush
 					);
 

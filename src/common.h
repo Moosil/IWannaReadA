@@ -24,6 +24,7 @@ namespace ocr {
 
 	struct Text {
 		std::string text;
+		std::vector<std::tuple<float, float>> char_lengths;
 		std::vector<float> scores;
 
 		// Convert to std::string

@@ -170,26 +170,7 @@ namespace ocr {
 		return {devMode.dmPelsWidth, devMode.dmPelsHeight};
 	}
 
-	std::string utf8_to_gbk(const std::string& utf8) {
-		// UTF-8 → UTF-16
-		const int wlen = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, nullptr, 0);
-		std::wstring wstr(wlen, L'\0');
-		MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, &wstr[0], wlen);
-
-		// UTF-16 → GBK (936)
-		const int len = WideCharToMultiByte(936, 0, wstr.c_str(), -1, nullptr, 0, NULL, NULL);
-		std::string gbk(len, '\0');
-		WideCharToMultiByte(936, 0, wstr.c_str(), -1, &gbk[0], len, NULL, NULL);
-
-		gbk.pop_back(); // remove null
-		return gbk;
-	}
-
-	std::wstring utf8_to_utf16(const std::string& str) {
-		const int size_needed = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, nullptr, 0);
-		std::wstring wstr(size_needed, 0);
-		MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, &wstr[0], size_needed);
-		wstr.pop_back(); // remove extra null
-		return wstr;
+	int lerpi(const int a, const int b, const float t) {
+		return static_cast<int>(std::round(std::lerp(static_cast<float>(a), static_cast<float>(b), t)));
 	}
 }

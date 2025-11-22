@@ -49,7 +49,7 @@ namespace ocr {
 		const std::size_t length = images.size();
 		std::vector<Text> text_lines{length};
 
-		#pragma omp parallel for num_threads(1) schedule(dynamic)
+		//#pragma omp parallel for num_threads(1) schedule(dynamic)
 		for (int i = 0; i < length; ++i) {
 			text_lines[i] = _run(images[i]);
 		}
@@ -72,10 +72,10 @@ namespace ocr {
 		ncnn::Mat out_inf;
 		ex.extract("output", out_inf);
 
-		return infer2Text(out_inf);
+		return infer2Text(out_inf, {image.cols});
 	}
 
-	Text Rec::infer2Text(const ncnn::Mat& infer) const {
+	Text Rec::infer2Text(const ncnn::Mat& infer, const RetInfo info) const {
 		const std::size_t cols = infer.w;
 		if (cols != key_count) {
 			return Text{};
@@ -83,10 +83,14 @@ namespace ocr {
 
 		std::string text;
 		std::vector<float> text_scores;
+		std::vector<std::tuple<float, float>> text_lengths;
 
 		std::size_t prev_index = -1;
 		constexpr int blank_idx = 0;
-		for (int i = 0; i < infer.h; ++i) {
+		const int len = infer.h;
+		int start_idx = 0;
+		int blank_chain = 0;
+		for (int i = 0; i < len; ++i) {
 			const float* row_i = infer.row(i);
 			const auto max_it = std::max_element(row_i, row_i + cols);
 			const size_t max_idx = std::distance(row_i, max_it);
@@ -99,18 +103,29 @@ namespace ocr {
 
 			// discard if max index is blank (0) A B _ B -> A B B
 			if (max_idx == blank_idx) {
+				blank_chain += 1;
 				continue;
 			}
 
 			text.append(keys[max_idx]);
 			text_scores.push_back(max_val);
+			text_lengths.emplace_back(static_cast<float>(start_idx) / static_cast<float>(len), static_cast<float>(i) / static_cast<float>(len));
 
 			// update previous index
 			prev_index = max_idx;
+			start_idx = i;
+			blank_chain = 0;
 		}
+
+		const float add = static_cast<float>(blank_chain) / static_cast<float>(len);
+		for (auto& length : text_lengths) {
+			length = {std::get<0>(length) + add, std::get<1>(length) + add};
+		}
+		text_lengths[0] = {std::get<0>(text_lengths[0]) - add, std::get<1>(text_lengths[0])};
 
 		return {
 			.text = strip(text),
+			.char_lengths = text_lengths,
 			.scores = text_scores
 		};
 	}

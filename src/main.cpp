@@ -1,7 +1,6 @@
 #define NOMINMAX
 #include <ranges>
 #include <spdlog/spdlog.h>
-#include <uwebsockets/App.h>
 #include <Windows.h>
 
 #include "ocr_engine.h"
@@ -41,7 +40,7 @@ using namespace ocr;
 				const auto output = engine.run(ss);
 				ss_wnd            = nullptr;
 				spdlog::info("top left: {}, {}", topleft.x, topleft.y);
-				tt_wnd = TooltipWnd::initTooltip(output, topleft);
+				tt_wnd = TooltipWnd::initTooltip(output, topleft, "");
 			}
 		} else {
 			if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {

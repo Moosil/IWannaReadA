@@ -13,6 +13,10 @@
 namespace ocr {
 	class Rec {
 	private:
+		struct RetInfo {
+			int width;
+		};
+
 
 		static constexpr int target_height = 48;
 		static constexpr float mean_values[3]{127.5f, 127.5f, 127.5f};
@@ -25,7 +29,7 @@ namespace ocr {
 
 		[[nodiscard]] Text _run(const cv::Mat& image) const;
 
-		[[nodiscard]] Text infer2Text(const ncnn::Mat& infer) const;
+		[[nodiscard]] Text infer2Text(const ncnn::Mat& infer, RetInfo info) const;
 	public:
 		Rec() = default;
 		Rec(const std::string& det_model_path, const std::string& det_param_path, const std::string& keys_path);
