@@ -12,6 +12,7 @@ namespace ocr {
 		Rec rec;
 
 		void initFromYAML(const std::filesystem::path& config_path);
+
 	public:
 		OCREngine(
 			const std::string& det_model_path,
@@ -38,10 +39,13 @@ namespace ocr {
 		);
 
 		explicit OCREngine(const std::string& config_path);
+
 		explicit OCREngine(const std::filesystem::path& config_path);
+
 		explicit OCREngine(const char* config_path);
 
 		std::vector<OCRResult> run(const std::string& image_path) const;
+
 		std::vector<OCRResult> run(const cv::Mat& image) const;
 	};
 }

@@ -19,7 +19,7 @@ namespace ocr {
 	}
 
 	void Rec::init(const std::string& det_model_path, const std::string& det_param_path, const std::string& keys_path) {
-		std::string line;
+		std::string   line;
 		std::ifstream file_stream{keys_path.c_str()};
 		if (!file_stream.is_open()) {
 			throw std::runtime_error(std::format("fatal error to open keys file at {}", keys_path));
@@ -33,13 +33,14 @@ namespace ocr {
 		net->load_model(det_model_path.c_str());
 	}
 
-	Rec::Rec(Rec&& other) noexcept:
+	Rec::Rec(Rec&& other) noexcept :
 		net{std::move(other.net)},
-		keys{std::move(other.keys)} {}
+		keys{std::move(other.keys)} {
+	}
 
 	Rec& Rec::operator=(Rec&& other) noexcept {
 		if (this != &other) {
-			net = std::move(other.net);
+			net  = std::move(other.net);
 			keys = std::move(other.keys);
 		}
 		return *this;
@@ -60,10 +61,16 @@ namespace ocr {
 	Text Rec::_run(const cv::Mat& image) const {
 		// resize image
 		const float ratio = static_cast<float>(target_height) / static_cast<float>(image.rows);
-		const int rsz_w = static_cast<int>(static_cast<float>(image.cols) * ratio);
+		const int   rsz_w = static_cast<int>(static_cast<float>(image.cols) * ratio);
 
-		ncnn::Mat in_inf = ncnn::Mat::from_pixels_resize(image.data, ncnn::Mat::PIXEL_RGB,
-			image.cols, image.rows, rsz_w, target_height);
+		ncnn::Mat in_inf = ncnn::Mat::from_pixels_resize(
+			image.data,
+			ncnn::Mat::PIXEL_RGB,
+			image.cols,
+			image.rows,
+			rsz_w,
+			target_height
+		);
 		in_inf.substract_mean_normalize(mean_values, norm_values);
 
 		// inference
@@ -81,20 +88,20 @@ namespace ocr {
 			return Text{};
 		}
 
-		std::string text;
-		std::vector<float> text_scores;
-		std::vector<std::tuple<float, float>> text_lengths;
+		std::string                            text;
+		std::vector<float>                     text_scores;
+		std::vector<std::tuple<float, float> > text_lengths;
 
-		std::size_t prev_index = -1;
-		constexpr int blank_idx = 0;
-		const int len = infer.h;
-		int start_idx = 0;
-		int blank_chain = 0;
+		std::size_t   prev_index  = -1;
+		constexpr int blank_idx   = 0;
+		const int     len         = infer.h;
+		int           start_idx   = 0;
+		int           blank_chain = 0;
 		for (int i = 0; i < len; ++i) {
-			const float* row_i = infer.row(i);
-			const auto max_it = std::max_element(row_i, row_i + cols);
+			const float* row_i   = infer.row(i);
+			const auto   max_it  = std::max_element(row_i, row_i + cols);
 			const size_t max_idx = std::distance(row_i, max_it);
-			float max_val = *max_it;
+			float        max_val = *max_it;
 
 			// if index is same, collapse A A B _ B B -> A B _ B
 			if (max_idx == prev_index) {
@@ -109,11 +116,14 @@ namespace ocr {
 
 			text.append(keys[max_idx]);
 			text_scores.push_back(max_val);
-			text_lengths.emplace_back(static_cast<float>(start_idx) / static_cast<float>(len), static_cast<float>(i) / static_cast<float>(len));
+			text_lengths.emplace_back(
+				static_cast<float>(start_idx) / static_cast<float>(len),
+				static_cast<float>(i) / static_cast<float>(len)
+			);
 
 			// update previous index
-			prev_index = max_idx;
-			start_idx = i;
+			prev_index  = max_idx;
+			start_idx   = i;
 			blank_chain = 0;
 		}
 

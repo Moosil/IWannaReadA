@@ -18,9 +18,10 @@ namespace ocr {
 		const std::string& rec_model_path,
 		const std::string& rec_param_path,
 		const std::string& keys_path
-	):
+	) :
 		det{det_model_path, det_param_path},
-		rec{rec_model_path, rec_param_path, keys_path} {}
+		rec{rec_model_path, rec_param_path, keys_path} {
+	}
 
 	OCREngine::OCREngine(
 		const std::filesystem::path& det_model_path,
@@ -28,9 +29,10 @@ namespace ocr {
 		const std::filesystem::path& rec_model_path,
 		const std::filesystem::path& rec_param_path,
 		const std::filesystem::path& keys_path
-	):
+	) :
 		det{det_model_path.string(), det_param_path.string()},
-		rec{rec_model_path.string(), rec_param_path.string(), keys_path.string()} {}
+		rec{rec_model_path.string(), rec_param_path.string(), keys_path.string()} {
+	}
 
 	OCREngine::OCREngine(
 		const char* det_model_path,
@@ -38,9 +40,10 @@ namespace ocr {
 		const char* rec_model_path,
 		const char* rec_param_path,
 		const char* keys_path
-	):
+	) :
 		det{det_model_path, det_param_path},
-		rec{rec_model_path, rec_param_path, keys_path} {}
+		rec{rec_model_path, rec_param_path, keys_path} {
+	}
 
 	OCREngine::OCREngine(const std::string& config_path) {
 		initFromYAML(config_path);
@@ -79,10 +82,12 @@ namespace ocr {
 
 		// get individual text images 4 rec
 		const std::vector<cv::Mat> text_images = std::views::iota(std::size_t{0}, num_boxes)
-			| std::ranges::views::transform([&image, &text_boxes](const std::size_t i) -> cv::Mat {
-				return cropImage(image, text_boxes[i].rect);
-			})
-			| std::ranges::to<std::vector<cv::Mat>>();
+		                                         | std::ranges::views::transform(
+			                                         [&image, &text_boxes](const std::size_t i) -> cv::Mat {
+				                                         return cropImage(image, text_boxes[i].rect);
+			                                         }
+		                                         )
+		                                         | std::ranges::to<std::vector<cv::Mat> >();
 
 		// skip cls cause who has the time for that
 
@@ -91,13 +96,15 @@ namespace ocr {
 
 		// fill OCRResult vector
 		const std::vector<OCRResult> results = std::views::iota(std::size_t{0}, num_boxes)
-			| std::ranges::views::transform([&text_boxes, &text_lines](const std::size_t i) -> OCRResult {
-				return OCRResult{
-					.rect = text_boxes[i],
-					.text = text_lines[i],
-				};
-			})
-			| std::ranges::to<std::vector<OCRResult>>();
+		                                       | std::ranges::views::transform(
+			                                       [&text_boxes, &text_lines](const std::size_t i) -> OCRResult {
+				                                       return OCRResult{
+					                                       .rect = text_boxes[i],
+					                                       .text = text_lines[i],
+				                                       };
+			                                       }
+		                                       )
+		                                       | std::ranges::to<std::vector<OCRResult> >();
 
 		return results;
 	}

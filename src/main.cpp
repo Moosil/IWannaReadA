@@ -1,4 +1,8 @@
 #define NOMINMAX
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
 #include <ranges>
 #include <spdlog/spdlog.h>
 #include <Windows.h>
@@ -37,10 +41,12 @@ using namespace ocr;
 			ss_wnd->update();
 
 			if (!ss_wnd->is_running) {
-				const auto output = engine.run(ss);
-				ss_wnd            = nullptr;
-				spdlog::info("top left: {}, {}", topleft.x, topleft.y);
-				tt_wnd = TooltipWnd::initTooltip(output, topleft, "");
+				ss_wnd = nullptr;
+				if (topleft.x != -1 && topleft.y != -1) {
+					const auto output = engine.run(ss);
+					spdlog::info("top left: {}, {}", topleft.x, topleft.y);
+					tt_wnd = TooltipWnd::initTooltip(output, topleft, "../hanyingcidian(disanban).mdx");
+				}
 			}
 		} else {
 			if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -54,6 +60,8 @@ using namespace ocr;
 						ss_wnd = ScreenshotWnd::startScreenShot(&ss, &topleft);
 					}
 				}
+				TranslateMessage(&msg);
+				DispatchMessage(&msg);
 			}
 
 			if (tt_wnd) {

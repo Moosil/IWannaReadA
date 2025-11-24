@@ -21,8 +21,9 @@ namespace ocr {
 		net->load_model(det_model_path.c_str());
 	}
 
-	Det::Det(Det&& other) noexcept:
-		net{std::move(other.net)} {}
+	Det::Det(Det&& other) noexcept :
+		net{std::move(other.net)} {
+	}
 
 	Det& Det::operator=(Det&& other) noexcept {
 		if (this != &other) {
@@ -34,21 +35,37 @@ namespace ocr {
 	std::vector<TextRect> Det::run(const cv::Mat& image) const {
 		// padding
 		cv::Mat pad_image = image.clone();
-		cv::copyMakeBorder(image, pad_image, padding, padding, padding, padding,
-			cv::BORDER_CONSTANT | cv::BORDER_ISOLATED, cv::Scalar(255.f, 255.f, 255.f));
+		cv::copyMakeBorder(
+			image,
+			pad_image,
+			padding,
+			padding,
+			padding,
+			padding,
+			cv::BORDER_CONSTANT | cv::BORDER_ISOLATED,
+			cv::Scalar(255.f, 255.f, 255.f)
+		);
 
 		// resize
-		const int target_size = std::min(max_side_len + 2 * padding,
-			std::max(pad_image.rows, pad_image.cols));
+		const int target_size = std::min(
+			max_side_len + 2 * padding,
+			std::max(pad_image.rows, pad_image.cols)
+		);
 
-		const int   img_rows  = pad_image.rows, img_cols  = pad_image.cols;
+		const int   img_rows  = pad_image.rows,               img_cols  = pad_image.cols;
 		const auto  img_rowsf = static_cast<float>(img_rows), img_colsf = static_cast<float>(img_cols);
 		const float ratio     = static_cast<float>(target_size) / std::max(img_rowsf, img_colsf);
 		const int   rsz_rows  = std::max(static_cast<int>(img_rowsf * ratio) / 32 * 32, 32); // rounding to nearest 32
 		const int   rsz_cols  = std::max(static_cast<int>(img_colsf * ratio) / 32 * 32, 32); // rounding to nearest 32
 
 		ncnn::Mat in_inf = ncnn::Mat::from_pixels_resize(
-			pad_image.data, ncnn::Mat::PIXEL_RGB, img_cols, img_rows, rsz_cols, rsz_rows);
+			pad_image.data,
+			ncnn::Mat::PIXEL_RGB,
+			img_cols,
+			img_rows,
+			rsz_cols,
+			rsz_rows
+		);
 		in_inf.substract_mean_normalize(mean_values_, norm_values_);
 
 		// inference: image -> Mat float
@@ -72,13 +89,13 @@ namespace ocr {
 	std::vector<TextRect> Det::box_from_bitmap(
 		const cv::Mat& probability_map,
 		const cv::Mat& bitmap,
-		const int dest_width,
-		const int dest_height
+		const int      dest_width,
+		const int      dest_height
 	) {
 		const int width = bitmap.cols, height = bitmap.rows;
 
 		// get contours of bitmap. as in strips that cover the "white" parts
-		std::vector<std::vector<cv::Point>> contours;
+		std::vector<std::vector<cv::Point> > contours;
 		cv::findContours(bitmap, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
 
 		// cap number of contours to max number
@@ -129,20 +146,22 @@ namespace ocr {
 			// copy -> (0..3 -> lambda) -> text_points
 			Poly2I text_points;
 			std::ranges::copy(
-				std::views::iota(0, 4) | std::views::transform([&unclip_rect_points, ratio_col, ratio_row, dest_width, dest_height](const int j) -> cv::Point {
-					return {
-						std::clamp(
-							static_cast<int>(std::round(unclip_rect_points[j].x * ratio_col)) - padding,
-							0,
-							dest_width - 2 * padding - 1
-						),
-								std::clamp(
-							static_cast<int>(std::round(unclip_rect_points[j].y * ratio_row)) - padding,
-							0,
-							dest_height - 2 * padding - 1
-						)
-					};
-				}),
+				std::views::iota(0, 4) | std::views::transform(
+					[&unclip_rect_points, ratio_col, ratio_row, dest_width, dest_height](const int j) -> cv::Point {
+						return {
+							std::clamp(
+								static_cast<int>(std::round(unclip_rect_points[j].x * ratio_col)) - padding,
+								0,
+								dest_width - 2 * padding - 1
+							),
+							std::clamp(
+								static_cast<int>(std::round(unclip_rect_points[j].y * ratio_row)) - padding,
+								0,
+								dest_height - 2 * padding - 1
+							)
+						};
+					}
+				),
 				text_points.begin()
 			);
 
@@ -180,8 +199,14 @@ namespace ocr {
 		cv::fillPoly(mask, pts, npt, 1, cv::Scalar(1));
 
 		// gets mean of bitmap & mask
-		const cv::Mat croppedImage = bitmap(cv::Rect(min_x, min_y,
-			max_x - min_x + 1, max_y - min_y + 1)).clone();
+		const cv::Mat croppedImage = bitmap(
+			cv::Rect(
+				min_x,
+				min_y,
+				max_x - min_x + 1,
+				max_y - min_y + 1
+			)
+		).clone();
 
 		return static_cast<float>(cv::mean(croppedImage, mask)[0] / 255.f);
 	}

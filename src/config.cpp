@@ -8,7 +8,7 @@
 #include <format>
 
 namespace ocr {
-	Config::Config(const std::filesystem::path& path):
+	Config::Config(const std::filesystem::path& path) :
 		node{YAML::LoadFile(path.string())},
 		config_path{path} {
 		file_root = getRootPath();
@@ -70,7 +70,8 @@ namespace ocr {
 					std::string curr_name = alias;
 					curr_name.append(connector).append(suffix);
 					if (node[curr_name]) {
-						if (file_path path = file_root / node[curr_name].as<std::string>(); std::filesystem::is_regular_file(path)) {
+						if (file_path path = file_root / node[curr_name].as<std::string>();
+							std::filesystem::is_regular_file(path)) {
 							spdlog::info("found key path at {}", path.string());
 							return path;
 						}
@@ -86,11 +87,13 @@ namespace ocr {
 		const FileType opposite_file_type = file_type == FileType::Model ? FileType::Param : FileType::Model;
 		const std::vector<std::string>& model_type_alias = model_type == ModelType::Det ? det_alias : rec_alias;
 		const std::vector<std::string>& file_type_alias = file_type == FileType::Model ? model_alias : param_alias;
-		const std::vector<std::string>& opposite_file_type_alias = file_type == FileType::Model ? param_alias : model_alias;
-		const std::vector<std::string>& file_extensions = file_type == FileType::Model ? model_ext : param_ext;
-		const std::string model_type_name = enum2String(model_type);
-		const std::string file_type_name = enum2String(file_type);
-		const std::string opposite_file_type_name = enum2String(opposite_file_type);
+		const std::vector<std::string>& opposite_file_type_alias = file_type == FileType::Model
+		                                                           ? param_alias
+		                                                           : model_alias;
+		const std::vector<std::string>& file_extensions         = file_type == FileType::Model ? model_ext : param_ext;
+		const std::string               model_type_name         = enum2String(model_type);
+		const std::string               file_type_name          = enum2String(file_type);
+		const std::string               opposite_file_type_name = enum2String(opposite_file_type);
 
 		spdlog::info("looking for {} {} path...", model_type_name, file_type_name);
 		spdlog::info("looking for model name...");
@@ -104,7 +107,8 @@ namespace ocr {
 				for (const std::string& connector : connectors) {
 					for (const std::string& det : model_type_alias) {
 						for (const std::string& ext : file_extensions) {
-							if (file_path path = (file_root / name / connector / det).replace_extension(ext); std::filesystem::is_regular_file(path)) {
+							if (file_path path = (file_root / name / connector / det).replace_extension(ext);
+								std::filesystem::is_regular_file(path)) {
 								spdlog::info("found {} {} path at {}", model_type_name, file_type_name, path.string());
 								return path;
 							}
@@ -124,9 +128,15 @@ namespace ocr {
 							std::string curr_name = alias;
 							curr_name.append(connector).append(suffix);
 							if (det_node[curr_name]) {
-								if (file_path path = file_root / det_node[curr_name].as<std::string>(); std::filesystem::is_regular_file(path)) {
-								spdlog::info("found {} {} path at {}", model_type_name, file_type_name, path.string());
-								return path;
+								if (file_path path = file_root / det_node[curr_name].as<std::string>();
+									std::filesystem::is_regular_file(path)) {
+									spdlog::info(
+										"found {} {} path at {}",
+										model_type_name,
+										file_type_name,
+										path.string()
+									);
+									return path;
 								}
 							}
 						}
@@ -139,12 +149,24 @@ namespace ocr {
 						for (const std::string& suffix : suffixes) {
 							std::string curr_name = alias;
 							curr_name.append(connector).append(suffix);
-							spdlog::info("found {0} {1} path. looking for {0} {2} path", model_type_name, opposite_file_type_name, file_type_name);
+							spdlog::info(
+								"found {0} {1} path. looking for {0} {2} path",
+								model_type_name,
+								opposite_file_type_name,
+								file_type_name
+							);
 							if (det_node[curr_name]) {
-								if (file_path param_path = file_root / det_node[curr_name].as<std::string>(); std::filesystem::is_regular_file(param_path)) {
+								if (file_path param_path = file_root / det_node[curr_name].as<std::string>();
+									std::filesystem::is_regular_file(param_path)) {
 									for (const std::string& ext : file_extensions) {
-										if (file_path model_path = param_path.replace_extension(ext); std::filesystem::is_regular_file(model_path)) {
-											spdlog::info("found {} {} path at {}", model_type_name, file_type_name, model_path.string());
+										if (file_path model_path = param_path.replace_extension(ext);
+											std::filesystem::is_regular_file(model_path)) {
+											spdlog::info(
+												"found {} {} path at {}",
+												model_type_name,
+												file_type_name,
+												model_path.string()
+											);
 											return model_path;
 										}
 									}
@@ -164,9 +186,15 @@ namespace ocr {
 							std::string curr_name = det;
 							curr_name.append(connector0).append(alias).append(connector1).append(suffix);
 							if (node[curr_name]) {
-								if (file_path path = file_root / node[curr_name].as<std::string>(); std::filesystem::is_regular_file(path)) {
-								spdlog::info("found {} {} path at {}", model_type_name, file_type_name, path.string());
-								return path;
+								if (file_path path = file_root / node[curr_name].as<std::string>();
+									std::filesystem::is_regular_file(path)) {
+									spdlog::info(
+										"found {} {} path at {}",
+										model_type_name,
+										file_type_name,
+										path.string()
+									);
+									return path;
 								}
 							}
 						}
@@ -175,7 +203,9 @@ namespace ocr {
 			}
 		}
 		spdlog::error("couldn't find {} {} in {}", model_type_name, file_type_name, config_path.string());
-		throw std::runtime_error{std::format("couldn't find {} {} in {}", model_type_name, file_type_name, config_path.string())};
+		throw std::runtime_error{
+			std::format("couldn't find {} {} in {}", model_type_name, file_type_name, config_path.string())
+		};
 	}
 
 	Config::file_path Config::getDetModelPath() {

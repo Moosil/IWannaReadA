@@ -111,13 +111,13 @@ namespace ocr {
 				constexpr RECT rect = {0,0,1,1};
 				FillRect(darkenDC, &rect, static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
 				SetCapture(hwnd);
-				return 0;
+				break;
 			}
 
 			case WM_LBUTTONDOWN: {
 				is_dragging = true;
 				start = { GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam) };
-				return 0;
+				break;
 			}
 
 			case WM_MOUSEMOVE: {
@@ -125,7 +125,7 @@ namespace ocr {
 					end = { GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam) };
 					InvalidateRect(hwnd, nullptr, FALSE);
 				}
-				return 0;
+				break;
 			}
 
 			case WM_LBUTTONUP: {
@@ -147,18 +147,21 @@ namespace ocr {
 					}
 					DestroyWindow(hwnd);
 				}
-				return 0;
+				break;
 			}
 
 			case WM_KEYDOWN: {
 				if (wparam == VK_ESCAPE) {
+					spdlog::info("aborting screenshot");
 					start = { -1, -1 };
 					end = { -1, -1 };
 					is_dragging = false;
 					is_running = false;
 					ReleaseCapture();
+					*topleft = cv::Point(-1, -1);
+					DestroyWindow(hwnd);
 				}
-				return 0;
+				break;
 			}
 
 			case WM_PAINT: {
@@ -224,12 +227,10 @@ namespace ocr {
 					DeleteDC(darkenDC);
 				}
 				ReleaseCapture();
-				return 0;
-			}
-			default: {
-				return DefWindowProc(hwnd, msg, wparam, lparam);
+				break;
 			}
 		}
+		return DefWindowProc(hwnd, msg, wparam, lparam);
 	}
 
 	LRESULT CALLBACK ScreenshotWnd::wndProcSetup(const HWND hwnd, const UINT msg, const WPARAM wparam, const LPARAM lparam) {
