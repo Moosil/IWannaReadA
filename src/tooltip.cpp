@@ -5,6 +5,7 @@
 #include <gdiplus.h>
 #include <dwmapi.h>
 #include <dcomp.h>
+#include <wrl.h>
 #pragma comment(lib,"gdiplus")
 #pragma comment(lib,"dwmapi")
 #pragma comment(lib,"dxgi")
@@ -90,7 +91,7 @@ namespace ocr {
 	std::unique_ptr<TooltipWnd> TooltipWnd::initTooltip(
 		const std::vector<OCRResult>& res,
 		const cv::Point&              topleft,
-		const std::string&            dict_path
+		const std::string&            dict_folder_path
 	) {
 		auto wnd = std::make_unique<TooltipWnd>();
 		if (!isInitialised) {
@@ -98,7 +99,7 @@ namespace ocr {
 			wc.lpfnWndProc   = &wndProcSetup;
 			wc.hInstance     = GetModuleHandle(nullptr);
 			wc.lpszClassName = className.c_str();
-			wc.hbrBackground = nullptr;
+			wc.hbrBackground = reinterpret_cast<HBRUSH>((COLOR_WINDOW + 1));
 			if (!RegisterClassA(&wc)) {
 				spdlog::error("registering window class failed");
 				return nullptr;
@@ -108,8 +109,8 @@ namespace ocr {
 
 		wnd->results = processOCRResults(res, topleft, true);
 
-		constexpr int style           = WS_OVERLAPPEDWINDOW;
-		constexpr int extended_styles = WS_EX_TOPMOST;
+		constexpr int style           = WS_POPUP;
+		constexpr int extended_styles = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_TRANSPARENT;
 		wnd->width                    = min_width;
 		wnd->height                   = min_height;
 
@@ -130,7 +131,21 @@ namespace ocr {
 
 		wnd->initDirectWrite();
 
-		wnd->mdict = std::make_unique<mdict::Mdict>(dict_path);
+		const std::filesystem::path dict_folder_path_path = dict_folder_path;
+		std::filesystem::path dict_file_path{dict_folder_path_path};
+		dict_file_path /= dict_file_path.filename();
+		dict_file_path += ".mdx";
+		auto iterator = std::filesystem::directory_iterator{dict_folder_path_path};
+		for (const auto& dir_item : iterator) {
+			if (dir_item.path().extension() == ".css") {
+				std::ifstream in(dir_item.path());
+				const std::string contents((std::istreambuf_iterator(in)),
+					std::istreambuf_iterator<char>());
+				wnd->css_data += contents;
+			}
+		}
+
+		wnd->mdict = std::make_unique<mdict::Mdict>(dict_file_path.string());
 		wnd->mdict->init();
 
 		return wnd;
@@ -152,8 +167,7 @@ namespace ocr {
 		}
 		wv_init = std::make_unique<WebView2::Impl>(
 			hwnd,
-			width,
-			height,
+			RECT{0, title_bar_height, width, height},
 			[this](ICoreWebView2Controller* controller, ICoreWebView2* wv) {
 				if (!controller || !wv) {
 					return;
@@ -163,6 +177,11 @@ namespace ocr {
 				wv_controller  = controller;
 				webview        = wv;
 				initedWebView2 = true;
+
+				if (!is_hovering) {
+					ShowWindow(hwnd, SW_HIDE);
+					UpdateWindow(hwnd);
+				}
 			}
 		);
 		wv_init->try_init_env();
@@ -171,15 +190,29 @@ namespace ocr {
 	}
 
 	bool TooltipWnd::initDirectWrite() {
-		if (FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &d2d1_factory)))
-			return false;
+		auto err = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &d2d1_factory);
+		spdlog::info("D2D1CreateFactory called, HRESULT = 0x{:X}", err);
+		if (FAILED(err)) return false;
 
-		if (FAILED(
-			DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,
-				__uuidof(IDWriteFactory),
-				reinterpret_cast<IUnknown**>(&direct_write_factory))
-		))
-			return false;
+		err = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,
+			__uuidof(IDWriteFactory),
+			reinterpret_cast<IUnknown**>(&direct_write_factory)
+		);
+		spdlog::info("DWriteCreateFactory called, HRESULT = 0x{:X}", err);
+		if (FAILED(err)) return false;
+
+		err = direct_write_factory->CreateTextFormat(
+			L"KaiTi",
+			nullptr,
+			DWRITE_FONT_WEIGHT_BOLD,
+			DWRITE_FONT_STYLE_NORMAL,
+			DWRITE_FONT_STRETCH_NORMAL,
+			24.0f,
+			L"zh-CN",
+			&direct_write_text_format
+		);
+		spdlog::info("CreateTextFormat called, HRESULT = 0x{:X}", err);
+		if (FAILED(err)) return false;
 
 		const D2D1_RENDER_TARGET_PROPERTIES rtProps = D2D1::RenderTargetProperties(
 			D2D1_RENDER_TARGET_TYPE_DEFAULT,
@@ -190,24 +223,13 @@ namespace ocr {
 			D2D1::SizeU(static_cast<unsigned int>(width), static_cast<unsigned int>(height))
 		);
 
-		if (FAILED(d2d1_factory->CreateHwndRenderTarget(rtProps, hwndProps, &render_target)))
-			return false;
+		err = d2d1_factory->CreateHwndRenderTarget(rtProps, hwndProps, &render_target);
+		spdlog::info("CreateHwndRenderTarget called, HRESULT = 0x{:X}", err);
+		if (FAILED(err)) return false;
 
-		if (FAILED(render_target->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black), &brush)))
-			return false;
-
-		if (FAILED(
-			direct_write_factory->CreateTextFormat(
-				L"KaiTi",
-				nullptr,
-				DWRITE_FONT_WEIGHT_BOLD,
-				DWRITE_FONT_STYLE_NORMAL,
-				DWRITE_FONT_STRETCH_NORMAL,
-				24.0f,
-				L"zh-CN",
-				&direct_write_text_format)
-		))
-			return false;
+		err = render_target->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black), &brush);
+		spdlog::info("CreateSolidColorBrush called, HRESULT = 0x{:X}", err);
+		if (FAILED(err)) return false;
 
 		return true;
 	}
@@ -250,24 +272,67 @@ namespace ocr {
 				if (is_hovering) {
 					const auto w_hover_text = utf8::utf8to16(hover_text);
 					const auto [title_text_width, title_text_height] = getTextSize(w_hover_text);
+					height = std::max(static_cast<int>(std::ceil(title_text_height)), min_height);
 					width = std::max(static_cast<int>(std::ceil(title_text_width)), min_width);
-					width = std::max(static_cast<int>(std::ceil(title_text_height)), min_height);
 
-					dictionary_html = mdict->lookup(hover_text);
+					if (initedWebView2) {
+						std::string dictionary_html = mdict->lookup(hover_text);
 
-					SetWindowPos(
-						hwnd,
-						HWND_TOPMOST,
-						0,
-						0,
-						width,
-						height,
-						SWP_NOZORDER | SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOREDRAW
-					);
-					render_target->Resize(
-						D2D1::SizeU(static_cast<unsigned int>(width), static_cast<unsigned int>(height))
-					);
-					InvalidateRect(hwnd, nullptr, FALSE);
+
+						dictionary_html += fmt::format("<style>{}</style>", css_data);
+						const std::u16string dict_html_16 = utf8::utf8to16(dictionary_html);
+						const std::wstring dict_html_w(dict_html_16.begin(), dict_html_16.end());
+						webview->NavigateToString(dict_html_w.c_str());
+
+						webview->ExecuteScript(LR"(
+					        (function() {
+					            // Get all elements in the document
+					            var elems = document.getElementsByTagName('*');
+					            var maxRight = 0;
+
+					            for (var i = 0; i < elems.length; i++) {
+					                var el = elems[i];
+					                var rect = el.getBoundingClientRect();
+					                // scroll position relative to document
+					                var right = rect.right + window.scrollX;
+					                if (right > maxRight) maxRight = right;
+					            }
+
+					            // Return as JSON
+					            return Math.ceil(maxRight);
+					        })();
+						    )",
+							Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+								[this](HRESULT errorCode, LPCWSTR resultObjectAsJson) -> HRESULT {
+									if (SUCCEEDED(errorCode)) {
+										const int webview_width = _wtoi(resultObjectAsJson);
+										width = std::max(webview_width + 16, width);
+										SetWindowPos(
+											hwnd,
+											HWND_TOPMOST,
+											0,
+											0,
+											width,
+											height,
+											SWP_NOZORDER | SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOREDRAW
+										);
+										InvalidateRect(hwnd, nullptr, FALSE);
+									}
+									return S_OK;
+								}
+						).Get());
+					} else {
+						SetWindowPos(
+							hwnd,
+							HWND_TOPMOST,
+							0,
+							0,
+							width,
+							height,
+							SWP_NOZORDER | SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOREDRAW
+						);
+						InvalidateRect(hwnd, nullptr, FALSE);
+					}
 				}
 			}
 			if (is_hovering) {
@@ -275,7 +340,6 @@ namespace ocr {
 				UpdateWindow(hwnd);
 			} else {
 				if (initedWebView2) {
-					spdlog::info("inited web view 2 supposedly");
 					ShowWindow(hwnd, SW_HIDE);
 				}
 				UpdateWindow(hwnd);
@@ -295,7 +359,7 @@ namespace ocr {
 		const float           p_height
 	) const {
 		IDWriteTextLayout* text_layout;
-		direct_write_factory->CreateTextLayout(
+		/*auto err = */direct_write_factory->CreateTextLayout(
 			reinterpret_cast<const wchar_t*>(w_hover_text.c_str()),
 			static_cast<UINT32>(w_hover_text.length()),
 			direct_write_text_format,
@@ -305,7 +369,7 @@ namespace ocr {
 		);
 
 		DWRITE_TEXT_METRICS text_metrics{};
-		text_layout->GetMetrics(&text_metrics);
+		/*err = */text_layout->GetMetrics(&text_metrics);
 
 		return {text_metrics.width, text_metrics.height};
 	}
@@ -313,25 +377,7 @@ namespace ocr {
 	LRESULT TooltipWnd::wndProc(UINT msg, WPARAM wparam, LPARAM lparam) {
 		switch (msg) {
 			case WM_CREATE: {
-				constexpr DWM_SYSTEMBACKDROP_TYPE backdrop_material = DWMSBT_TRANSIENTWINDOW;
-				const HRESULT                     backdrop_err      = DwmSetWindowAttribute(
-					hwnd,
-					DWMWA_SYSTEMBACKDROP_TYPE,
-					&backdrop_material,
-					sizeof(backdrop_material)
-				);
-				spdlog::info("{} set backdrop material", (FAILED(backdrop_err) ? "successfully" : "failed to"));
-
-				constexpr DWM_WINDOW_CORNER_PREFERENCE corner_round     = DWMWCP_ROUNDSMALL;
-				const auto                             corner_round_err = DwmSetWindowAttribute(
-					hwnd,
-					DWMWA_WINDOW_CORNER_PREFERENCE,
-					&corner_round,
-					sizeof(corner_round)
-				);
-				spdlog::info("{} set corner rounding", (FAILED(corner_round_err) ? "successfully" : "failed to"));
-
-
+				spdlog::info("WM_CREATE");
 				if (!initedWebView2) {
 					ShowWindow(hwnd, SW_SHOWNOACTIVATE);
 					if (!initWebView2()) {
@@ -356,17 +402,27 @@ namespace ocr {
 				break;
 			}
 			case WM_KEYDOWN: {
+				spdlog::info("WM_KEYDOWN");
 				if (wparam == VK_ESCAPE) {
 					// do something
 				}
 				break;
 			}
 			case WM_SIZE: {
-				if (webview != nullptr) {
-					RECT bounds;
-					GetClientRect(hwnd, &bounds);
-					wv_controller->put_Bounds(bounds);
+				width  = LOWORD(lparam);
+				height = HIWORD(lparam);
+
+				spdlog::info("WM_SIZE");
+				if (webview) {
+					auto err = wv_controller->put_Bounds(RECT{0,title_bar_height,width, height});
+					spdlog::info("wv_controller->put_Bounds called, HRESULT = 0x{:X}", err);
 				};
+				if (render_target) {
+					auto err = render_target->Resize(
+						D2D1::SizeU(static_cast<unsigned int>(width), static_cast<unsigned int>(height))
+					);
+					spdlog::info("render_target->Resize called, HRESULT = 0x{:X}", err);
+				}
 				break;
 			}
 			case WM_PAINT: {
@@ -387,22 +443,24 @@ namespace ocr {
 						brush
 					);
 
-					std::wstring dict_html_w(dictionary_html.begin(), dictionary_html.end());
-					if (initedWebView2) {
-						spdlog::info("inited web view 2 supposedly");
-						webview->NavigateToString(dict_html_w.c_str());
-					}
-
 					render_target->EndDraw();
 
 					EndPaint(hwnd, &ps);
 					return 0;
 				}
+				break;
 			}
 			case WM_DESTROY: {
-				if (wv_controller)
+				spdlog::info("WM_DESTROY");
+				if (wv_controller) {
 					this->wv_controller->Release();
+					wv_controller = nullptr;
+				}
 				cleanupDirectWrite();
+				break;
+			}
+			case WM_NCDESTROY: {
+				SetWindowLongPtr(hwnd, GWLP_USERDATA, 0);
 				break;
 			}
 		}

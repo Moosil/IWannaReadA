@@ -10,13 +10,13 @@ namespace WebView2 {
 		using init_callback = std::function<void(ICoreWebView2Controller*, ICoreWebView2* webview)>;
 
 	private:
-		HWND                                                                  hwnd;
-		int                                                                   width, height;
-		std::function<void(ICoreWebView2Controller*, ICoreWebView2* webview)> callback;
-		std::atomic<ULONG>                                                    ref_count{1};
-		unsigned int                                                          attempts{0};
-		static constexpr unsigned int                                         MaxAttempts{50};
-		static constexpr int                                                  SleepMs{100};
+		HWND                          hwnd;
+		RECT                          extent;
+		init_callback                 callback;
+		std::atomic<ULONG>            ref_count{1};
+		unsigned int                  attempts{0};
+		static constexpr unsigned int MaxAttempts{50};
+		static constexpr int          SleepMs{100};
 
 	public:
 		virtual ~Impl() = default;
@@ -31,8 +31,7 @@ namespace WebView2 {
 
 		Impl(
 			const HWND&   hwnd,
-			int           width,
-			int           height,
+			RECT          extent,
 			init_callback callback
 		);
 

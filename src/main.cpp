@@ -45,7 +45,7 @@ using namespace ocr;
 				if (topleft.x != -1 && topleft.y != -1) {
 					const auto output = engine.run(ss);
 					spdlog::info("top left: {}, {}", topleft.x, topleft.y);
-					tt_wnd = TooltipWnd::initTooltip(output, topleft, "../hanyingcidian(disanban).mdx");
+					tt_wnd = TooltipWnd::initTooltip(output, topleft, "../dictionaries/hanyingcidian(disanban)");
 				}
 			}
 		} else {

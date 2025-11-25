@@ -19,18 +19,19 @@ namespace ocr {
 
 	class TooltipWnd {
 	private:
-		static inline const std::string className     = "TooltipWnd";
-		static inline bool              isInitialised = false;
-		static constexpr int            min_width     = 128;
-		static constexpr int            min_height    = 256;
+		static inline const std::string className        = "TooltipWnd";
+		static inline bool              isInitialised    = false;
+		static constexpr int            title_bar_height = 32;
+		static constexpr int            min_width        = 128;
+		static constexpr int            min_height       = 256;
 
 		int                           width, height;
 		bool                          is_hovering;
 		Poly2I                        prev_hover_rect;
 		POINT                         prev_hover_point;
 		std::string                   hover_text;
-		std::string                   dictionary_html;
 		std::unique_ptr<mdict::Mdict> mdict;
+		std::string css_data;
 
 		ID2D1Factory*          d2d1_factory             = nullptr;
 		ID2D1HwndRenderTarget* render_target            = nullptr;
@@ -76,7 +77,7 @@ namespace ocr {
 		static std::unique_ptr<TooltipWnd> initTooltip(
 			const std::vector<OCRResult>& res,
 			const cv::Point&              topleft,
-			const std::string&            dict_path
+			const std::string&            dict_folder_path
 		);
 
 		bool initWebView2();

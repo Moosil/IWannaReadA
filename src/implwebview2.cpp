@@ -6,17 +6,16 @@
 #include "implwebview2.h"
 
 #include <spdlog/spdlog.h>
+#include <wil/com.h>
 
 namespace WebView2 {
 	Impl::Impl(
 		const HWND&   hwnd,
-		const int     width,
-		const int     height,
+		const RECT    extent,
 		init_callback callback
 	) :
 		hwnd{hwnd},
-		width{width},
-		height{height},
+		extent{extent},
 		callback{std::move(callback)} {
 	}
 
@@ -48,6 +47,7 @@ namespace WebView2 {
 			spdlog::info("HWND valid? {}, visible? {}", IsWindow(hwnd), IsWindowVisible(hwnd));
 			err = env->CreateCoreWebView2Controller(hwnd, this);
 			spdlog::info("CreateCoreWebView2Controller returned 0x{:X}", err);
+
 			if (SUCCEEDED(err)) {
 				return err;
 			}
@@ -75,13 +75,29 @@ namespace WebView2 {
 		err = controller->get_CoreWebView2(&webview);
 		spdlog::info("get_CoreWebView2 called, HRESULT = 0x{:X}", err);
 
-		// Resize WebView to fit the bounds of the parent window
-		controller->put_Bounds(RECT{0, 0, width, height});
+		err = controller->put_Bounds(extent);
 		spdlog::info("put_Bounds called, HRESULT = 0x{:X}", err);
 
-		spdlog::info("callback about to be called");
+		wil::com_ptr<ICoreWebView2Controller2> controller2;
+		err = controller->QueryInterface(IID_PPV_ARGS(&controller2));
+		spdlog::info("QueryInterface (ICoreWebView2Controller2) called, HRESULT = 0x{:X}", err);
+
+		constexpr COREWEBVIEW2_COLOR color = {255,255,255,255};
+		err = controller2->put_DefaultBackgroundColor(color);
+		spdlog::info("put_DefaultBackgroundColor called, HRESULT = 0x{:X}", err);
+
+		wil::com_ptr<ICoreWebView2_13> webview13;
+		err = webview->QueryInterface(IID_PPV_ARGS(&webview13));
+		spdlog::info("QueryInterface (ICoreWebView2_13) called, HRESULT = 0x{:X}", err);
+
+		wil::com_ptr<ICoreWebView2Profile> profile;
+		err = webview13->get_Profile(&profile);
+		spdlog::info("get_Profile called, HRESULT = 0x{:X}", err);
+
+		err = profile->put_PreferredColorScheme(COREWEBVIEW2_PREFERRED_COLOR_SCHEME_LIGHT);
+		spdlog::info("put_PreferredColorScheme called, HRESULT = 0x{:X}", err);
+
 		callback(controller, webview);
-		spdlog::info("callback called, HRESULT = 0x{:X}", err);
 		return S_OK;
 	}
 
