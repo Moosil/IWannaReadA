@@ -38,7 +38,7 @@ namespace ocr {
 		std::vector<OCRResultPacked> results;
 		std::unique_ptr<mdict::Mdict>      mdict;
 		std::string                        css_data;
-		std::map<std::string, DictionaryData> dictionary_data;
+		std::unordered_map<std::string, DictionaryData> dictionary_data;
 		std::vector<EventRegistrationToken> dict_init_nav_tokens;
 		bool inited_dictionary{false};
 

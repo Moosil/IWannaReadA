@@ -407,7 +407,6 @@ namespace ocr {
 		const float           p_height
 	) const {
 		IDWriteTextLayout* text_layout;
-		/*auto err = */
 		direct_write_factory->CreateTextLayout(
 			reinterpret_cast<const wchar_t*>(w_hover_text.c_str()),
 			static_cast<UINT32>(w_hover_text.length()),
@@ -418,13 +417,12 @@ namespace ocr {
 		);
 
 		DWRITE_TEXT_METRICS text_metrics{};
-		/*err = */
 		text_layout->GetMetrics(&text_metrics);
 
 		return {text_metrics.width, text_metrics.height};
 	}
 
-	LRESULT TooltipWnd::wndProc(UINT msg, WPARAM wparam, LPARAM lparam) {
+	LRESULT TooltipWnd::wndProc(const UINT msg, const WPARAM wparam, const LPARAM lparam) {
 		switch (msg) {
 			case WM_CREATE: {
 				if (!inited_web_view2) {
@@ -495,7 +493,9 @@ namespace ocr {
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	}
 
+	// ReSharper disable CppParameterMayBeConst
 	LRESULT CALLBACK TooltipWnd::wndProcSetup(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+		// ReSharper restore CppParameterMayBeConst
 		TooltipWnd* self;
 
 		if (msg == WM_NCCREATE) {
