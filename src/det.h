@@ -43,6 +43,6 @@ namespace ocr {
 
 		Det& operator =(const Det&) = delete;
 
-		std::vector<TextRect> run(const cv::Mat& image) const;
+		[[nodiscard]] std::vector<TextRect> run(const cv::Mat& image) const;
 	};
 }

@@ -163,7 +163,7 @@ namespace ocr {
 		return text;
 	}
 
-	std::tuple<unsigned long, unsigned long> getScreenSize() {
+	std::pair<unsigned long, unsigned long> getScreenSize() {
 		DEVMODE devMode{};
 		devMode.dmSize = sizeof(DEVMODEA);
 		EnumDisplaySettings(nullptr, ENUM_CURRENT_SETTINGS, &devMode);

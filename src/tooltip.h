@@ -7,7 +7,6 @@
 #pragma comment(lib,"d2d1")
 #pragma comment(lib,"dwrite")
 
-#include <map>
 #include <mdict.h>
 #include <WebView2.h>
 
@@ -15,9 +14,10 @@
 #include "implwebview2.h"
 
 namespace ocr {
-	struct DictionaryData {
-		std::wstring entry;
-		int width;
+	struct DictionaryEntry {
+		std::string entry;
+		int          width;
+		std::string words;
 	};
 
 	class TooltipWnd {
@@ -25,22 +25,23 @@ namespace ocr {
 		static inline const std::string className        = "TooltipWnd";
 		static inline bool              isInitialised    = false;
 		static constexpr int            title_bar_height = 32;
-		static constexpr int            min_width        = 128;
+		static constexpr int            min_width        = 256;
 		static constexpr int            min_height       = 256;
-		static constexpr int scroll_bar_width = 16;
+		static constexpr int            scroll_bar_width = 16;
 
-		int                                width{}, height{};
-		bool                               is_hovering{};
-		Poly2I                             prev_hover_rect;
-		cv::Rect                           rect;
-		std::string                        hover_text;
+		int         width{}, height{};
+		bool        is_hovering{};
+		Poly2I      prev_hover_rect;
+		cv::Rect    rect;
+		std::string hover_text;
 
-		std::vector<OCRResultPacked> results;
-		std::unique_ptr<mdict::Mdict>      mdict;
-		std::string                        css_data;
-		std::unordered_map<std::string, DictionaryData> dictionary_data;
-		std::vector<EventRegistrationToken> dict_init_nav_tokens;
-		bool inited_dictionary{false};
+		std::vector<std::vector<OCRResultPacked> >      results;
+		std::size_t                                     results_size{};
+		std::unique_ptr<mdict::Mdict>                   mdict;
+		std::string                                     css_data;
+		std::unordered_map<std::string, std::vector<DictionaryEntry>> dictionary_data;
+		std::vector<EventRegistrationToken>             dict_init_nav_tokens;
+		bool                                            inited_dictionary{false};
 
 		ID2D1Factory*          d2d1_factory             = nullptr;
 		ID2D1HwndRenderTarget* render_target            = nullptr;
@@ -66,18 +67,17 @@ namespace ocr {
 
 		void startDictLoading();
 
-		void loadDictEntry(int iter);
+		void loadDictEntry(std::size_t iter1, std::size_t iter2, std::size_t max_length, std::size_t length = 1);
 
-		[[nodiscard]] std::tuple<float, float> getTextSize(
+		[[nodiscard]] std::pair<float, float> getTextSize(
 			const std::u16string& w_hover_text,
 			float                 p_width  = FLT_MAX,
 			float                 p_height = FLT_MAX
 		) const;
 
-		static std::vector<OCRResultPacked> processOCRResults(
+		static std::vector<std::vector<OCRResultPacked> > processOCRResults(
 			const std::vector<OCRResult>& res,
-			const cv::Point&              topleft,
-			bool                          separate_characters
+			const cv::Point&              topleft
 		);
 
 		static LRESULT CALLBACK wndProcSetup(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
@@ -85,8 +85,8 @@ namespace ocr {
 		LRESULT CALLBACK wndProc(UINT msg, WPARAM wparam, LPARAM lparam);
 
 	public:
-		HWND                         hwnd{};
-		bool                         is_running = true;
+		HWND hwnd{};
+		bool is_running = true;
 
 		TooltipWnd() = default;
 

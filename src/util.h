@@ -4,7 +4,6 @@
 
 #pragma once
 #include <opencv2/core/types.hpp>
-#include <tuple>
 
 #include "common.h"
 
@@ -21,7 +20,7 @@ namespace ocr {
 
 	std::string strip(std::string& text);
 
-	std::tuple<unsigned long, unsigned long> getScreenSize();
+	std::pair<unsigned long, unsigned long> getScreenSize();
 
 	int lerpi(int a, int b, float t);
 } // ocr

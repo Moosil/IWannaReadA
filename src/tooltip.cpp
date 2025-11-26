@@ -10,10 +10,10 @@
 #pragma comment(lib,"dcomp")
 
 #include <filesystem>
+#include <regex>
 #include <spdlog/spdlog.h>
 #include <opencv2/imgproc.hpp>
 #include <utf8/cpp20.h>
-#include <xmlutils.h>
 
 #include "log.h"
 #include "util.h"
@@ -39,11 +39,15 @@ namespace ocr {
 
 	void TooltipWnd::startDictLoading() {
 		dict_init_nav_tokens.resize(results.size());
-		loadDictEntry(0);
+		std::size_t max_length = 0;
+		for (const auto& res : results) {
+			max_length = std::max(max_length, res.size());
+		}
+		loadDictEntry(0, 0, max_length);
 	}
 
-	void TooltipWnd::loadDictEntry(const int iter) {
-		if (iter >= results.size()) {
+	void TooltipWnd::loadDictEntry(std::size_t iter1, std::size_t iter2, const std::size_t max_length, const std::size_t length) {
+		if (length > max_length) {
 			inited_dictionary = true;
 
 			if (!is_hovering) {
@@ -53,29 +57,50 @@ namespace ocr {
 			return;
 		}
 
-		std::string dictionary_html = mdict->lookup(results[iter].text);
-
-		if (!dictionary_html.contains("<body>")) {
-			dictionary_html = "<body>" + dictionary_html + "</body>";
-		}
-		if (!dictionary_html.contains("<html>")) {
-			dictionary_html = "<html>" + dictionary_html + "</html>";
+		if (iter2 + length - 1 >= results[iter1].size() && iter1 + 1 >= results.size()) {
+			loadDictEntry(0, 0, max_length, length + 1);
+			return;
 		}
 
-		dictionary_html += fmt::format("<style>{}</style>", css_data);
-		const std::u16string dict_html_16 = utf8::utf8to16(dictionary_html);
+		while (iter2 + length - 1 >= results[iter1].size()) {
+			iter2 = 0;
+			iter1++;
+
+			if (iter2 + length - 1 >= results[iter1].size() && iter1 + 1 >= results.size()) {
+				loadDictEntry(0, 0, max_length, length + 1);
+				return;
+			}
+		}
+
+		const std::string lookup_string = std::views::iota(iter2, iter2 + length)
+												 | std::ranges::views::transform(
+													 [this, iter1](const std::size_t i) -> std::string {
+														 return results[iter1][i].text;
+													 }
+												 )
+												 | std::views::join
+												 | std::ranges::to<std::string>();
+
+		const std::string dict_html = mdict->lookup(lookup_string);
+		if (dict_html.empty()) {
+			loadDictEntry(iter1, iter2 + 1, max_length, length);
+			return;
+		}
+		const std::string dict_html_wrapped = "<html><head><style>" + css_data + "</style></head><body>" + dict_html + "</body></html>";
+
+		const std::u16string dict_html_16 = utf8::utf8to16(dict_html_wrapped);
 		const std::wstring   dict_html_w(dict_html_16.begin(), dict_html_16.end());
 
-		HRESULT              nav_err = webview->NavigateToString(dict_html_w.c_str());
+		HRESULT nav_err = webview->NavigateToString(dict_html_w.c_str());
 		log(nav_err, "ICoreWebView2.NavigateToString", ERR_LEVEL::FATAL);
 
-		EventRegistrationToken& tokenRef = dict_init_nav_tokens[iter];
-		nav_err = webview->add_NavigationCompleted(
+		EventRegistrationToken& tokenRef = dict_init_nav_tokens[iter1];
+		nav_err                          = webview->add_NavigationCompleted(
 			Microsoft::WRL::Callback<ICoreWebView2NavigationCompletedEventHandler>(
-				[this, iter, dict_html_w, &tokenRef](
-					ICoreWebView2*                             sender,
-					ICoreWebView2NavigationCompletedEventArgs* args
-				) -> HRESULT {
+				[this, iter1, iter2, max_length, length, lookup_string, dict_html, &tokenRef](
+			ICoreWebView2*                             sender,
+			ICoreWebView2NavigationCompletedEventArgs* args
+		) -> HRESULT {
 					const HRESULT exec_err = webview->ExecuteScript(
 						LR"(
 							(function() {
@@ -88,22 +113,32 @@ namespace ocr {
 							})();
 						    )",
 						Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
-							[this, iter, dict_html_w, &tokenRef, sender](HRESULT errorCode, LPCWSTR resultObjectAsJson) -> HRESULT {
-								spdlog::info("Loaded dict data for {}", iter);
+							[this, iter1, iter2, max_length, length, lookup_string, dict_html, &tokenRef, sender](
+						HRESULT errorCode,
+						LPCWSTR resultObjectAsJson
+					) -> HRESULT {
+								spdlog::info("Loaded dict data for {}.{} len={}", iter1, iter2, length);
 								log(errorCode, "ICoreWebView2ExecuteScriptCompletedHandler.Invoke", ERR_LEVEL::WARN);
 
 								if (SUCCEEDED(errorCode)) {
 									const int webview_width = _wtoi(resultObjectAsJson) + scroll_bar_width;
 
-									dictionary_data.insert({
-										results[iter].text,
-										DictionaryData{dict_html_w, webview_width}
-									});
+									if (const auto iter = dictionary_data.find(results[iter1][iter2].text); iter != dictionary_data.end()) {
+										iter->second.emplace_back(dict_html, webview_width, lookup_string);
+									} else {
+										std::vector<DictionaryEntry> new_vec{};
+										new_vec.emplace_back(dict_html, webview_width, lookup_string);
+										dictionary_data.insert({
+											results[iter1][iter2].text,
+											new_vec
+										});
+									}
+
 
 									const HRESULT rem_err = sender->remove_NavigationCompleted(tokenRef);
 									log(rem_err, "ICoreWebView2.remove_NavigationCompleted", ERR_LEVEL::WARN);
 
-									loadDictEntry(iter + 1);
+									loadDictEntry(iter1, iter2 + 1, max_length, length);
 								}
 								return S_OK;
 							}
@@ -118,66 +153,57 @@ namespace ocr {
 		log(nav_err, "ICoreWebView2.add_NavigationCompleted", ERR_LEVEL::WARN);
 	}
 
-	std::vector<OCRResultPacked> TooltipWnd::processOCRResults(
+	std::vector<std::vector<OCRResultPacked> > TooltipWnd::processOCRResults(
 		const std::vector<OCRResult>& res,
-		const cv::Point&              topleft,
-		const bool                    separate_characters
+		const cv::Point&              topleft
 	) {
-		std::vector<OCRResultPacked> res_packed;
-		if (separate_characters) {
-			for (const auto& [rect, text] : res) {
-				const std::array xs            = {rect.rect[0].x, rect.rect[1].x, rect.rect[2].x, rect.rect[3].x};
-				const std::array ys            = {rect.rect[0].y, rect.rect[1].y, rect.rect[2].y, rect.rect[3].y};
-				const auto       [left, right] = std::minmax_element(xs.begin(), xs.end());
-				const auto       [top, bottom] = std::minmax_element(ys.begin(), ys.end());
-				const auto       width         = *right - *left;
-				const auto       height        = *bottom - *top;
-				if (width > height) {
-					auto       it  = text.text.begin();
-					const auto end = text.text.end();
-					for (const auto& [lower, upper] : text.char_lengths) {
-						Poly2I char_rect{
-							cv::Point{lerpi(rect.rect[0].x, rect.rect[1].x, lower), rect.rect[0].y} + topleft,
-							cv::Point{lerpi(rect.rect[0].x, rect.rect[1].x, upper), rect.rect[1].y} + topleft,
-							cv::Point{lerpi(rect.rect[3].x, rect.rect[2].x, upper), rect.rect[2].y} + topleft,
-							cv::Point{lerpi(rect.rect[3].x, rect.rect[2].x, lower), rect.rect[3].y} + topleft
-						};
-						std::string utf16i;
+		std::vector<std::vector<OCRResultPacked> > res_packed{};
+		for (const auto& [rect, text] : res) {
+			const std::array xs            = {rect.rect[0].x, rect.rect[1].x, rect.rect[2].x, rect.rect[3].x};
+			const std::array ys            = {rect.rect[0].y, rect.rect[1].y, rect.rect[2].y, rect.rect[3].y};
+			const auto       [left, right] = std::minmax_element(xs.begin(), xs.end());
+			const auto       [top, bottom] = std::minmax_element(ys.begin(), ys.end());
+			const auto       width         = *right - *left;
+			const auto       height        = *bottom - *top;
+			if (width > height) {
+				auto                         it  = text.text.begin();
+				const auto                   end = text.text.end();
+				std::vector<OCRResultPacked> split_line{};
+				for (const auto& [lower, upper] : text.char_lengths) {
+					std::string utf16i;
+					try {
 						utf8::append(utf8::next(it, end), utf16i);
-						res_packed.emplace_back(char_rect, utf16i);
+					} catch (const utf8::not_enough_room& _) {
+						continue;
 					}
-				} else {
-					auto       it  = text.text.begin();
-					const auto end = text.text.end();
-					for (const auto& [lower, upper] : text.char_lengths) {
-						Poly2I char_rect{
-							cv::Point{rect.rect[0].x, lerpi(rect.rect[0].x, rect.rect[3].x, lower)} + topleft,
-							cv::Point{rect.rect[1].x, lerpi(rect.rect[1].x, rect.rect[2].x, lower)} + topleft,
-							cv::Point{rect.rect[2].x, lerpi(rect.rect[1].x, rect.rect[2].x, lower)} + topleft,
-							cv::Point{rect.rect[3].x, lerpi(rect.rect[0].x, rect.rect[3].x, lower)} + topleft
-						};
-						std::string utf16i;
-						utf8::append(utf8::next(it, end), utf16i);
-						res_packed.emplace_back(char_rect, utf16i);
-					}
+					Poly2I char_rect{
+						cv::Point{lerpi(rect.rect[0].x, rect.rect[1].x, lower), rect.rect[0].y} + topleft,
+						cv::Point{lerpi(rect.rect[0].x, rect.rect[1].x, upper), rect.rect[1].y} + topleft,
+						cv::Point{lerpi(rect.rect[3].x, rect.rect[2].x, upper), rect.rect[2].y} + topleft,
+						cv::Point{lerpi(rect.rect[3].x, rect.rect[2].x, lower), rect.rect[3].y} + topleft
+					};
+					split_line.emplace_back(char_rect, utf16i);
 				}
-			}
-		} else {
-			res_packed.reserve(res.size());
-
-			for (const auto& [rect, text] : res) {
-				Poly2I new_rect;
-				std::ranges::copy(
-					std::views::iota(0, 4) | std::views::transform(
-						[&rect, &topleft](const int i) -> cv::Point2i {
-							return rect.rect[i] + topleft;
-						}
-					),
-					new_rect.begin()
-				);
-				res_packed.emplace_back(new_rect, text.text);
+				res_packed.emplace_back(split_line);
+			} else {
+				auto                         it  = text.text.begin();
+				const auto                   end = text.text.end();
+				std::vector<OCRResultPacked> split_line{};
+				for (const auto& [lower, upper] : text.char_lengths) {
+					Poly2I char_rect{
+						cv::Point{rect.rect[0].x, lerpi(rect.rect[0].x, rect.rect[3].x, lower)} + topleft,
+						cv::Point{rect.rect[1].x, lerpi(rect.rect[1].x, rect.rect[2].x, lower)} + topleft,
+						cv::Point{rect.rect[2].x, lerpi(rect.rect[1].x, rect.rect[2].x, upper)} + topleft,
+						cv::Point{rect.rect[3].x, lerpi(rect.rect[0].x, rect.rect[3].x, upper)} + topleft
+					};
+					std::string utf16i;
+					utf8::append(utf8::next(it, end), utf16i);
+					split_line.emplace_back(char_rect, utf16i);
+				}
+				res_packed.emplace_back(split_line);
 			}
 		}
+
 		return res_packed;
 	}
 
@@ -221,7 +247,7 @@ namespace ocr {
 		}
 
 		wnd->rect    = rect;
-		wnd->results = processOCRResults(res, cv::Point{rect.x, rect.y}, true);
+		wnd->results = processOCRResults(res, cv::Point{rect.x, rect.y});
 
 		constexpr int style           = WS_POPUP;
 		constexpr int extended_styles = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_TRANSPARENT;
@@ -355,14 +381,16 @@ namespace ocr {
 			// caching previous rect in case (optimisation)
 		} else {
 			is_hovering = false;
-			for (const auto& [text_rect, text] : results) {
-				// returns positive (inside), negative (outside), or zero (on an edge) value
-				if (cv::pointPolygonTest(text_rect, mouse_pos, false) > 0) {
-					// inside polygon
-					is_hovering     = true;
-					prev_hover_rect = text_rect;
-					hover_text      = text;
-					break;
+			for (const auto& res_flat : results) {
+				for (const auto& [text_rect, text] : res_flat) {
+					// returns positive (inside), negative (outside), or zero (on an edge) value
+					if (cv::pointPolygonTest(text_rect, mouse_pos, false) > 0) {
+						// inside polygon
+						is_hovering     = true;
+						prev_hover_rect = text_rect;
+						hover_text      = text;
+						break;
+					}
 				}
 			}
 			if (!is_hovering) {
@@ -375,11 +403,22 @@ namespace ocr {
 				width = std::max(static_cast<int>(std::ceil(title_text_width)), min_width);
 
 				if (inited_web_view2 && inited_dictionary) {
-					const auto    [entry, webpage_width] = dictionary_data[hover_text];
-					const HRESULT err                    = webview->NavigateToString(entry.c_str());
-					log(err, "ICoreWebView2.NavigateToString", ERR_LEVEL::FATAL);
+					std::string total_website;
 
-					width = std::max(width, webpage_width);
+					for (const auto [html, webpage_width, word] : dictionary_data[hover_text]) {
+						// Shadow DOM template to isolate duplicated HTML ids
+						total_website += "<div id=\"host\"><template shadowrootmode=\"open\"><style>" + css_data + "</style>" + html + "</template></div>";
+						width = std::max(width, webpage_width);
+					}
+					total_website = "<html><head><lang=\"en\"><title>" + hover_text + "</title></head><body>" + total_website + "</body></html>";
+
+					const std::u16string total_website_u16 = utf8::utf8to16(total_website);
+					const std::wstring   total_website_wstr(total_website_u16.begin(), total_website_u16.end());
+
+					spdlog::info(total_website);
+
+					const HRESULT err                    = webview->NavigateToString(total_website_wstr.c_str());
+					log(err, "ICoreWebView2.NavigateToString", ERR_LEVEL::FATAL);
 				}
 				updateWindowSize();
 			}
@@ -401,7 +440,7 @@ namespace ocr {
 		}
 	}
 
-	std::tuple<float, float> TooltipWnd::getTextSize(
+	std::pair<float, float> TooltipWnd::getTextSize(
 		const std::u16string& w_hover_text,
 		const float           p_width,
 		const float           p_height

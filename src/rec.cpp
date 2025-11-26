@@ -90,7 +90,7 @@ namespace ocr {
 
 		std::string                            text;
 		std::vector<float>                     text_scores;
-		std::vector<std::tuple<float, float> > text_lengths;
+		std::vector<std::pair<float, float>> text_lengths;
 
 		std::size_t   prev_index  = -1;
 		constexpr int blank_idx   = 0;
