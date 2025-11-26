@@ -35,17 +35,23 @@ using namespace ocr;
 	std::unique_ptr<ScreenshotWnd> ss_wnd;
 	std::unique_ptr<TooltipWnd>    tt_wnd;
 	cv::Mat                        ss;
-	cv::Point                      topleft;
+	cv::Rect                       rect;
 	while (true) {
 		if (ss_wnd) {
 			ss_wnd->update();
 
 			if (!ss_wnd->is_running) {
-				ss_wnd = nullptr;
-				if (topleft.x != -1 && topleft.y != -1) {
+				ss_wnd.reset();
+				if (!rect.empty()) {
 					const auto output = engine.run(ss);
-					spdlog::info("top left: {}, {}", topleft.x, topleft.y);
-					tt_wnd = TooltipWnd::initTooltip(output, topleft, "../dictionaries/hanyingcidian(disanban)");
+					spdlog::info(
+						"Screenshot Rect = [({}, {}), ({}, {})]",
+						rect.x,
+						rect.y,
+						rect.x + rect.width,
+						rect.y + rect.height
+					);
+					tt_wnd = TooltipWnd::initTooltip(output, rect, "../dictionaries/hanyingcidian(disanban)");
 				}
 			}
 		} else {
@@ -55,9 +61,9 @@ using namespace ocr;
 					if (!ss_wnd) {
 						if (tt_wnd) {
 							DestroyWindow(tt_wnd->hwnd);
-							tt_wnd = nullptr;
+							tt_wnd.reset();
 						}
-						ss_wnd = ScreenshotWnd::startScreenShot(&ss, &topleft);
+						ss_wnd = ScreenshotWnd::startScreenShot(&ss, &rect);
 					}
 				}
 				TranslateMessage(&msg);

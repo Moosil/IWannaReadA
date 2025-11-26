@@ -12,7 +12,7 @@
 
 
 namespace ocr {
-	std::unique_ptr<ScreenshotWnd> ScreenshotWnd::startScreenShot(cv::Mat* ss, cv::Point* topleft) {
+	std::unique_ptr<ScreenshotWnd> ScreenshotWnd::startScreenShot(cv::Mat* ss, cv::Rect* rect) {
 		auto wnd = std::make_unique<ScreenshotWnd>();
 		if (!isInitialised) {
 			WNDCLASS wc{};
@@ -31,11 +31,11 @@ namespace ocr {
 		constexpr int extended_styles = WS_EX_TOOLWINDOW | WS_EX_TOPMOST;
 
 		const auto [width, height] = getScreenSize();
-		wnd->width = width;
-		wnd->height = height;
+		wnd->width = static_cast<long>(width);
+		wnd->height = static_cast<long>(height);
 
 		wnd->screenshot = ss;
-		wnd->topleft = topleft;
+		wnd->rect = rect;
 
 		wnd->hwnd = CreateWindowEx(
 			extended_styles,
@@ -58,7 +58,7 @@ namespace ocr {
 	HBITMAP ScreenshotWnd::captureEntireScreen() {
 		const auto [width, height] = getScreenSize();
 
-		return captureScreenRegion(cv::Rect(0, 0, width, height));
+		return captureScreenRegion(cv::Rect(0, 0, static_cast<int>(width), static_cast<int>((height))));
 	}
 
 	HBITMAP ScreenshotWnd::captureScreenRegion(const cv::Rect rect) {
@@ -76,7 +76,7 @@ namespace ocr {
 		return h_bitmap;
 	}
 
-	cv::Mat ScreenshotWnd::hBitmap2cvMat(const HBITMAP h_bitmap) {
+	cv::Mat ScreenshotWnd::hBitmap2cvMat(HBITMAP h_bitmap) {
 		BITMAP bitmap;
 		GetObject(h_bitmap, sizeof(bitmap), &bitmap);
 
@@ -90,7 +90,7 @@ namespace ocr {
 		return mat.clone();
 	}
 
-	void ScreenshotWnd::update() {
+	void ScreenshotWnd::update() const {
 		MSG msg;
 		while (PeekMessage(&msg, hwnd, 0, 0, PM_REMOVE)) {
 			TranslateMessage(&msg);
@@ -108,8 +108,8 @@ namespace ocr {
 				darkenBitmap = CreateCompatibleBitmap(hdc, 1, 1);
 				SelectObject(darkenDC, darkenBitmap);
 
-				constexpr RECT rect = {0,0,1,1};
-				FillRect(darkenDC, &rect, static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
+				constexpr RECT black_pixel_rect = {0,0,1,1};
+				FillRect(darkenDC, &black_pixel_rect, static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
 				SetCapture(hwnd);
 				break;
 			}
@@ -143,7 +143,7 @@ namespace ocr {
 						const auto r_height = bottom - top;
 						const auto bitmap = captureScreenRegion(cv::Rect(left, top, r_width, r_height));
 						*screenshot = hBitmap2cvMat(bitmap);
-						*topleft = {left, top};
+						*rect = {left, top, r_width, r_height};
 					}
 					DestroyWindow(hwnd);
 				}
@@ -158,7 +158,7 @@ namespace ocr {
 					is_dragging = false;
 					is_running = false;
 					ReleaseCapture();
-					*topleft = cv::Point(-1, -1);
+					*rect = cv::Rect(-1, -1, -1, -1);
 					DestroyWindow(hwnd);
 				}
 				break;
@@ -229,11 +229,12 @@ namespace ocr {
 				ReleaseCapture();
 				break;
 			}
+			default: {};
 		}
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	}
 
-	LRESULT CALLBACK ScreenshotWnd::wndProcSetup(const HWND hwnd, const UINT msg, const WPARAM wparam, const LPARAM lparam) {
+	LRESULT CALLBACK ScreenshotWnd::wndProcSetup(HWND hwnd, const UINT msg, const WPARAM wparam, const LPARAM lparam) {
 		ScreenshotWnd* self;
 
 		if (msg == WM_NCCREATE) {

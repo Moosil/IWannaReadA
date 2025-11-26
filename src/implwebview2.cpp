@@ -8,6 +8,8 @@
 #include <spdlog/spdlog.h>
 #include <wil/com.h>
 
+#include "log.h"
+
 namespace WebView2 {
 	Impl::Impl(
 		const HWND&   hwnd,
@@ -25,7 +27,7 @@ namespace WebView2 {
 			attempts++;
 
 			const HRESULT err = CreateCoreWebView2EnvironmentWithOptions(nullptr, nullptr, nullptr, this);
-			spdlog::info("CreateCoreWebView2EnvironmentWithOptions called, HRESULT = 0x{:X}", err);
+			ocr::log(err, "CreateCoreWebView2EnvironmentWithOptions", ocr::ERR_LEVEL::WARN);
 			if (SUCCEEDED(err)) {
 				return;
 			}
@@ -38,15 +40,16 @@ namespace WebView2 {
 			return try_init_env();
 		}
 
+		spdlog::error("Failed to initialise WebView2!");
 		callback(nullptr, nullptr);
 	}
 
 	HRESULT STDMETHODCALLTYPE Impl::Invoke(HRESULT err, ICoreWebView2Environment* env) {
-		spdlog::info("Environment Invoke called, HRESULT = 0x{:X}", err);
+		ocr::log(err, "ICoreWebView2Environment.Invoke", ocr::ERR_LEVEL::WARN);
 		if (SUCCEEDED(err)) {
 			spdlog::info("HWND valid? {}, visible? {}", IsWindow(hwnd), IsWindowVisible(hwnd));
 			err = env->CreateCoreWebView2Controller(hwnd, this);
-			spdlog::info("CreateCoreWebView2Controller returned 0x{:X}", err);
+			ocr::log(err, "ICoreWebView2Environment.CreateCoreWebView2Controller", ocr::ERR_LEVEL::WARN);
 
 			if (SUCCEEDED(err)) {
 				return err;
@@ -57,7 +60,7 @@ namespace WebView2 {
 	}
 
 	HRESULT STDMETHODCALLTYPE Impl::Invoke(HRESULT err, ICoreWebView2Controller* controller) {
-		spdlog::info("Controller Invoke called, HRESULT = 0x{:X}", err);
+		ocr::log(err, "ICoreWebView2Controller.Invoke", ocr::ERR_LEVEL::WARN);
 		if (FAILED(err)) {
 			if (err == E_ABORT) {
 				spdlog::info("Controller Invoke: E_ABORT");
@@ -74,28 +77,35 @@ namespace WebView2 {
 		ICoreWebView2* webview;
 		err = controller->get_CoreWebView2(&webview);
 		spdlog::info("get_CoreWebView2 called, HRESULT = 0x{:X}", err);
+		ocr::log(err, "ICoreWebView2Controller.get_CoreWebView2", ocr::ERR_LEVEL::FATAL);
 
 		err = controller->put_Bounds(extent);
-		spdlog::info("put_Bounds called, HRESULT = 0x{:X}", err);
+		ocr::log(err, "ICoreWebView2Controller.put_Bounds", ocr::ERR_LEVEL::WARN);
 
 		wil::com_ptr<ICoreWebView2Controller2> controller2;
 		err = controller->QueryInterface(IID_PPV_ARGS(&controller2));
-		spdlog::info("QueryInterface (ICoreWebView2Controller2) called, HRESULT = 0x{:X}", err);
+		ocr::log(err, "ICoreWebView2Controller.QueryInterface", ocr::ERR_LEVEL::WARN);
 
-		constexpr COREWEBVIEW2_COLOR color = {255,255,255,255};
-		err = controller2->put_DefaultBackgroundColor(color);
-		spdlog::info("put_DefaultBackgroundColor called, HRESULT = 0x{:X}", err);
+		if (SUCCEEDED(err)) {
+			constexpr COREWEBVIEW2_COLOR color = {255,255,255,255};
+			err = controller2->put_DefaultBackgroundColor(color);
+			ocr::log(err, "controller2.put_DefaultBackgroundColor", ocr::ERR_LEVEL::WARN);
+		}
 
 		wil::com_ptr<ICoreWebView2_13> webview13;
 		err = webview->QueryInterface(IID_PPV_ARGS(&webview13));
-		spdlog::info("QueryInterface (ICoreWebView2_13) called, HRESULT = 0x{:X}", err);
+		ocr::log(err, "ICoreWebView2.QueryInterface", ocr::ERR_LEVEL::WARN);
 
-		wil::com_ptr<ICoreWebView2Profile> profile;
-		err = webview13->get_Profile(&profile);
-		spdlog::info("get_Profile called, HRESULT = 0x{:X}", err);
+		if (SUCCEEDED(err)) {
+			wil::com_ptr<ICoreWebView2Profile> profile;
+			err = webview13->get_Profile(&profile);
+			ocr::log(err, "ICoreWebView2_13.get_Profile", ocr::ERR_LEVEL::WARN);
 
-		err = profile->put_PreferredColorScheme(COREWEBVIEW2_PREFERRED_COLOR_SCHEME_LIGHT);
-		spdlog::info("put_PreferredColorScheme called, HRESULT = 0x{:X}", err);
+			if (SUCCEEDED(err)) {
+				err = profile->put_PreferredColorScheme(COREWEBVIEW2_PREFERRED_COLOR_SCHEME_LIGHT);
+				ocr::log(err, "ICoreWebView2Profile.put_PreferredColorScheme", ocr::ERR_LEVEL::WARN);
+			}
+		}
 
 		callback(controller, webview);
 		return S_OK;

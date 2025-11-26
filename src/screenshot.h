@@ -14,7 +14,7 @@ namespace ocr {
 		POINT      end{0, 0};
 		HBITMAP    desktop;
 		cv::Mat*   screenshot;
-		cv::Point* topleft;
+		cv::Rect* rect;
 
 		HDC     darkenDC;
 		HBITMAP darkenBitmap;
@@ -30,7 +30,7 @@ namespace ocr {
 
 		ScreenshotWnd() = default;
 
-		static std::unique_ptr<ScreenshotWnd> startScreenShot(cv::Mat* ss, cv::Point* topleft);
+		static std::unique_ptr<ScreenshotWnd> startScreenShot(cv::Mat* ss, cv::Rect* rect);
 
 		static HBITMAP captureEntireScreen();
 
@@ -38,6 +38,6 @@ namespace ocr {
 
 		static cv::Mat hBitmap2cvMat(HBITMAP h_bitmap);
 
-		void update();
+		void update() const;
 	};
 }
