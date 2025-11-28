@@ -19,6 +19,10 @@ namespace ocr {
 		int          width;
 		std::string words;
 	};
+	struct DictionaryData {
+		std::vector<DictionaryEntry> entries;
+		bool sorted{false};
+	};
 
 	class TooltipWnd {
 	private:
@@ -39,7 +43,7 @@ namespace ocr {
 		std::size_t                                     results_size{};
 		std::unique_ptr<mdict::Mdict>                   mdict;
 		std::string                                     css_data;
-		std::unordered_map<std::string, std::vector<DictionaryEntry>> dictionary_data;
+		std::unordered_map<std::string, DictionaryData> dictionary_data;
 		std::vector<EventRegistrationToken>             dict_init_nav_tokens;
 		bool                                            inited_dictionary{false};
 

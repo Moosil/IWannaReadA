@@ -173,4 +173,33 @@ namespace ocr {
 	int lerpi(const int a, const int b, const float t) {
 		return static_cast<int>(std::round(std::lerp(static_cast<float>(a), static_cast<float>(b), t)));
 	}
+
+	std::string& ltrim(std::string& str) {
+		const auto it2 = std::ranges::find_if(
+			str,[](const char ch) {
+				return !(std::isspace<char>(ch, std::locale::classic()) || ch == '\0');
+			}
+		);
+		str.erase(str.begin(), it2);
+		return str;
+	}
+
+	std::string& rtrim(std::string& str) {
+		const auto it1 =  std::find_if(str.rbegin(), str.rend(),
+			[](const char ch) {
+				return !(std::isspace<char>(ch, std::locale::classic()) || ch == '\0');
+			}
+		);
+		str.erase(it1.base(), str.end());
+		return str;
+	}
+
+	std::string& trim(std::string& str) {
+		return ltrim(rtrim(str));
+	}
+
+	std::string trim_copy(const std::string& str) {
+		auto s = str;
+		return ltrim(rtrim(s));
+	}
 }

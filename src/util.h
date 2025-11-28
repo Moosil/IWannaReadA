@@ -23,4 +23,18 @@ namespace ocr {
 	std::pair<unsigned long, unsigned long> getScreenSize();
 
 	int lerpi(int a, int b, float t);
+
+	// Source - https://stackoverflow.com/a
+	// Posted by g-217, modified by community. See post 'Timeline' for change history
+	// Retrieved 2025-11-27, License - CC BY-SA 3.0
+	std::string& ltrim(std::string& str);
+
+	std::string& rtrim(std::string& str);
+
+	std::string& trim(std::string& str);
+
+	std::string trim_copy(const std::string& str);
+
+	// End attribution
+
 } // ocr
