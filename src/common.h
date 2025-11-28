@@ -8,6 +8,16 @@ namespace ocr {
 	using Poly2I = std::array<cv::Point, 4>;
 	using Poly2F = std::array<cv::Point2f, 4>;
 
+	inline const cv::Point& getTopLeft(const Poly2I& poly) { return poly[0]; }
+	inline const cv::Point& getTopRight(const Poly2I& poly) { return poly[0]; }
+	inline const cv::Point& getBottomRight(const Poly2I& poly) { return poly[0]; }
+	inline const cv::Point& getBottomLeft(const Poly2I& poly) { return poly[0]; }
+
+	inline int getTop(const Poly2I& poly) { return std::min(getTopLeft(poly).y, getTopRight(poly).y); }
+	inline int getRight(const Poly2I& poly) { return std::max(getTopRight(poly).x, getBottomRight(poly).x); }
+	inline int getBottom(const Poly2I& poly) { return std::max(getBottomLeft(poly).y, getBottomRight(poly).y); }
+	inline int getLeft(const Poly2I& poly) { return std::min(getTopLeft(poly).x, getBottomLeft(poly).x); }
+
 	struct TextRect {
 		Poly2I rect;
 		float  score{};

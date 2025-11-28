@@ -387,79 +387,100 @@ namespace ocr {
 	}
 
 	void TooltipWnd::updateLoop() {
-		POINT win_mouse_pos;
-		GetCursorPos(&win_mouse_pos);
-		SetWindowPos(hwnd, HWND_TOPMOST, win_mouse_pos.x, win_mouse_pos.y - height, -1, -1, SWP_NOSIZE | SWP_NOZORDER);
+		const SHORT shift_key_state = GetAsyncKeyState(VK_SHIFT);
+		if (shift_key_state & (1 << 15)) {
+			POINT win_mouse_pos;
+			GetCursorPos(&win_mouse_pos);
 
-		const cv::Point mouse_pos{win_mouse_pos.x, win_mouse_pos.y};
-		if (!rect.contains(mouse_pos)) {
-			// if mouse is in the captured rect
-			is_hovering = false;
-		} else if (is_hovering && cv::pointPolygonTest(prev_hover_rect, mouse_pos, false) > 0) {
-			// caching previous rect in case (optimisation)
-		} else {
-			is_hovering = false;
-			for (const auto& res_flat : results) {
-				for (const auto& [text_rect, text] : res_flat) {
-					// returns positive (inside), negative (outside), or zero (on an edge) value
-					if (cv::pointPolygonTest(text_rect, mouse_pos, false) > 0) {
-						// inside polygon
-						is_hovering     = true;
-						prev_hover_rect = text_rect;
-						hover_text      = text;
-						break;
-					}
-				}
-			}
-			if (!is_hovering) {
-				// for logging ONLY
-				// hover_text = "";
+			const cv::Point mouse_pos{win_mouse_pos.x, win_mouse_pos.y};
+			if (!rect.contains(mouse_pos)) {
+				// if mouse is in the captured rect
+				is_hovering = false;
+			} else if (is_hovering && cv::pointPolygonTest(prev_hover_rect, mouse_pos, false) > 0) {
+				// caching previous rect in case (optimisation)
 			} else {
-				const auto w_hover_text = utf8::utf8to16(hover_text);
-				const auto [title_text_width, title_text_height] = getTextSize(w_hover_text);
-				height = std::max(static_cast<int>(std::ceil(title_text_height)), min_height);
-				width = std::max(static_cast<int>(std::ceil(title_text_width)), min_width);
-
-				if (inited_web_view2 && inited_dictionary) {
-					std::string total_website;
-
-					const auto& [entries, sorted] = dictionary_data[hover_text];
-
-					std::vector<DictionaryEntry> sorted_entries = dictionary_data[hover_text].entries;
-					if (!sorted) {
-						std::ranges::sort(
-							sorted_entries,
-							[](const DictionaryEntry& a, const DictionaryEntry& b) {
-								return utf8::utf8to16(a.words).size() > utf8::utf8to16(b.words).size();
-							}
-						);
+				is_hovering = false;
+				for (const auto& res_flat : results) {
+					for (const auto& [text_rect, text] : res_flat) {
+						// returns positive (inside), negative (outside), or zero (on an edge) value
+						if (cv::pointPolygonTest(text_rect, mouse_pos, false) > 0) {
+							// inside polygon
+							is_hovering     = true;
+							prev_hover_rect = text_rect;
+							hover_text      = text;
+							break;
+						}
 					}
-
-					for (const auto [html, webpage_width, word] : sorted_entries) {
-						// Shadow DOM template to isolate duplicated HTML ids
-						total_website += "<div><template shadowrootmode=\"open\"><style>" + css_data + "</style>" + html
-								+ "</template></div>";
-						width = std::max(width, webpage_width);
-					}
-					total_website = "<html lang=\"en\"><head><title>" + hover_text + "</title></head><body>" + total_website + "</body></html>";
-
-					const std::u16string total_website_u16 = utf8::utf8to16(total_website);
-					const std::wstring   total_website_wstr(total_website_u16.begin(), total_website_u16.end());
-
-					const HRESULT err = webview->NavigateToString(total_website_wstr.c_str());
-					log(err, "ICoreWebView2.NavigateToString", ERR_LEVEL::FATAL);
 				}
-				updateWindowSize();
+				if (!is_hovering) {
+					// for logging ONLY
+					// hover_text = "";
+				} else {
+					const auto w_hover_text = utf8::utf8to16(hover_text);
+					const auto [title_text_width, title_text_height] = getTextSize(w_hover_text);
+					height = std::max(static_cast<int>(std::ceil(title_text_height)), min_height);
+					width = std::max(static_cast<int>(std::ceil(title_text_width)), min_width);
+
+					if (inited_web_view2 && inited_dictionary) {
+						std::string total_website;
+
+						const auto& [entries, sorted] = dictionary_data[hover_text];
+
+						std::vector<DictionaryEntry> sorted_entries = dictionary_data[hover_text].entries;
+						if (!sorted) {
+							std::ranges::sort(
+								sorted_entries,
+								[](const DictionaryEntry& a, const DictionaryEntry& b) {
+									return utf8::utf8to16(a.words).size() > utf8::utf8to16(b.words).size();
+								}
+							);
+						}
+
+						for (const auto [html, webpage_width, word] : sorted_entries) {
+							// Shadow DOM template to isolate duplicated HTML ids
+							total_website += "<div><template shadowrootmode=\"open\"><style>" + css_data + "</style>" + html
+									+ "</template></div>";
+							width = std::max(width, webpage_width);
+						}
+						total_website = "<html lang=\"en\"><head><title>" + hover_text + "</title></head><body>" + total_website + "</body></html>";
+
+						const std::u16string total_website_u16 = utf8::utf8to16(total_website);
+						const std::wstring   total_website_wstr(total_website_u16.begin(), total_website_u16.end());
+
+						const HRESULT err = webview->NavigateToString(total_website_wstr.c_str());
+						log(err, "ICoreWebView2.NavigateToString", ERR_LEVEL::FATAL);
+					}
+					updateWindowSize();
+
+					int top;
+					if (height < getTop(prev_hover_rect)) {
+						// window is too tall (it goes above top of screen)
+						top = getTop(prev_hover_rect);
+					} else {
+						// window can extend up and is below screen
+						top = getBottom(prev_hover_rect);
+					}
+					int left;
+					const auto [screen_width, _] = getScreenSize();
+					if (getRight(prev_hover_rect) + width > screen_width) {
+						// window is too width (it goes past right of screen)
+						left = static_cast<int>(screen_width) - width;
+					} else {
+						// window can extend right and is left of screen edge
+						left = getLeft(prev_hover_rect);
+					}
+					SetWindowPos(hwnd, HWND_TOPMOST, left, top - height, -1, -1, SWP_NOSIZE | SWP_NOZORDER);
+				}
 			}
-		}
-		if (is_hovering) {
-			ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-			UpdateWindow(hwnd);
-		} else {
-			if (inited_web_view2) {
-				ShowWindow(hwnd, SW_HIDE);
+			if (is_hovering) {
+				ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+				UpdateWindow(hwnd);
+			} else {
+				if (inited_web_view2) {
+					ShowWindow(hwnd, SW_HIDE);
+				}
+				UpdateWindow(hwnd);
 			}
-			UpdateWindow(hwnd);
 		}
 
 		MSG msg;
