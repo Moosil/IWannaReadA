@@ -9,6 +9,7 @@
 
 #include <mdict.h>
 #include <WebView2.h>
+#include <clipper2/clipper.core.h>
 
 #include "common.h"
 #include "implwebview2.h"
@@ -16,12 +17,19 @@
 namespace ocr {
 	struct DictionaryEntry {
 		std::string entry;
-		int          width;
+		int         width;
 		std::string words;
 	};
+
 	struct DictionaryData {
 		std::vector<DictionaryEntry> entries;
-		bool sorted{false};
+		bool                         sorted{false};
+	};
+
+	struct OCRBlock {
+		std::vector<OCRResultPacked> results;
+		bool                         horizontal;
+		std::vector<cv::Point>       poly;
 	};
 
 	class TooltipWnd {
@@ -39,7 +47,7 @@ namespace ocr {
 		cv::Rect    rect;
 		std::string hover_text;
 
-		std::vector<std::vector<OCRResultPacked> >      results;
+		std::vector<OCRBlock>                           results;
 		std::size_t                                     results_size{};
 		std::unique_ptr<mdict::Mdict>                   mdict;
 		std::string                                     css_data;
@@ -69,6 +77,8 @@ namespace ocr {
 
 		void updateWindowSize() const;
 
+		void refreshWindow();
+
 		void startDictLoading();
 
 		void loadDictEntry(std::size_t iter1, std::size_t iter2, std::size_t max_length, std::size_t length = 1);
@@ -79,7 +89,7 @@ namespace ocr {
 			float                 p_height = FLT_MAX
 		) const;
 
-		static std::vector<std::vector<OCRResultPacked> > processOCRResults(
+		static std::vector<OCRBlock> processOCRResults(
 			const std::vector<OCRResult>& res,
 			const cv::Point&              topleft
 		);

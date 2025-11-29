@@ -37,11 +37,69 @@ namespace ocr {
 		InvalidateRect(hwnd, nullptr, FALSE);
 	}
 
+	void TooltipWnd::refreshWindow() {
+		const auto w_hover_text = utf8::utf8to16(hover_text);
+		const auto [title_text_width, title_text_height] = getTextSize(w_hover_text);
+		height = std::max(static_cast<int>(std::ceil(title_text_height)), min_height);
+		width = std::max(static_cast<int>(std::ceil(title_text_width)), min_width);
+
+		if (inited_web_view2 && inited_dictionary) {
+			std::string total_website;
+
+			const auto& [entries, sorted] = dictionary_data[hover_text];
+
+			std::vector<DictionaryEntry> sorted_entries = dictionary_data[hover_text].entries;
+			if (!sorted) {
+				std::ranges::sort(
+					sorted_entries,
+					[](const DictionaryEntry& a, const DictionaryEntry& b) {
+						return utf8::utf8to16(a.words).size() > utf8::utf8to16(b.words).size();
+					}
+				);
+			}
+
+			for (const auto [html, webpage_width, word] : sorted_entries) {
+				// Shadow DOM template to isolate duplicated HTML ids
+				total_website += "<div><template shadowrootmode=\"open\"><style>" + css_data + "</style>" + html
+						+ "</template></div>";
+				width = std::max(width, webpage_width);
+			}
+			total_website = "<html lang=\"en\"><head><title>" + hover_text + "</title></head><body>" + total_website +
+			                "</body></html>";
+
+			const std::u16string total_website_u16 = utf8::utf8to16(total_website);
+			const std::wstring   total_website_wstr(total_website_u16.begin(), total_website_u16.end());
+
+			const HRESULT err = webview->NavigateToString(total_website_wstr.c_str());
+			log(err, "ICoreWebView2.NavigateToString", ERR_LEVEL::FATAL);
+		}
+		updateWindowSize();
+
+		int top;
+		if (height < getTop(prev_hover_rect)) {
+			// window is too tall (it goes above top of screen)
+			top = getTop(prev_hover_rect);
+		} else {
+			// window can extend up and is below screen
+			top = getBottom(prev_hover_rect);
+		}
+		int        left;
+		const auto [screen_width, _] = getScreenSize();
+		if (getRight(prev_hover_rect) + width > screen_width) {
+			// window is too width (it goes past right of screen)
+			left = static_cast<int>(screen_width) - width;
+		} else {
+			// window can extend right and is left of screen edge
+			left = getLeft(prev_hover_rect);
+		}
+		SetWindowPos(hwnd, HWND_TOPMOST, left, top - height, -1, -1, SWP_NOSIZE | SWP_NOZORDER);
+	}
+
 	void TooltipWnd::startDictLoading() {
 		dict_init_nav_tokens.resize(results.size());
 		std::size_t max_length = 0;
 		for (const auto& res : results) {
-			max_length = std::max(max_length, res.size());
+			max_length = std::max(max_length, res.results.size());
 		}
 		loadDictEntry(0, 0, max_length);
 	}
@@ -62,16 +120,16 @@ namespace ocr {
 			return;
 		}
 
-		if (iter2 + length - 1 >= results[iter1].size() && iter1 + 1 >= results.size()) {
+		if (iter2 + length - 1 >= results[iter1].results.size() && iter1 + 1 >= results.size()) {
 			loadDictEntry(0, 0, max_length, length + 1);
 			return;
 		}
 
-		while (iter2 + length - 1 >= results[iter1].size()) {
+		while (iter2 + length - 1 >= results[iter1].results.size()) {
 			iter2 = 0;
 			iter1++;
 
-			if (iter2 + length - 1 >= results[iter1].size() && iter1 + 1 >= results.size()) {
+			if (iter2 + length - 1 >= results[iter1].results.size() && iter1 + 1 >= results.size()) {
 				loadDictEntry(0, 0, max_length, length + 1);
 				return;
 			}
@@ -80,7 +138,7 @@ namespace ocr {
 		const std::string lookup_string = std::views::iota(iter2, iter2 + length)
 		                                  | std::ranges::views::transform(
 			                                  [this, iter1](const std::size_t i) -> std::string {
-				                                  return results[iter1][i].text;
+				                                  return results[iter1].results[i].text;
 			                                  }
 		                                  )
 		                                  | std::views::join
@@ -130,7 +188,7 @@ namespace ocr {
 								if (SUCCEEDED(errorCode)) {
 									const int webview_width = _wtoi(resultObjectAsJson) + scroll_bar_width;
 
-									if (const auto iter = dictionary_data.find(results[iter1][iter2].text);
+									if (const auto iter = dictionary_data.find(results[iter1].results[iter2].text);
 										iter != dictionary_data.end()) {
 										iter->second.entries.emplace_back(
 											strip_dict_html,
@@ -142,7 +200,7 @@ namespace ocr {
 										new_vec.emplace_back(strip_dict_html, webview_width, lookup_string);
 										dictionary_data.insert(
 											{
-												results[iter1][iter2].text,
+												results[iter1].results[iter2].text,
 												{new_vec}
 											}
 										);
@@ -167,12 +225,18 @@ namespace ocr {
 		log(nav_err, "ICoreWebView2.add_NavigationCompleted", ERR_LEVEL::WARN);
 	}
 
-	std::vector<std::vector<OCRResultPacked> > TooltipWnd::processOCRResults(
+	std::vector<OCRBlock> TooltipWnd::processOCRResults(
 		const std::vector<OCRResult>& res,
 		const cv::Point&              topleft
 	) {
-		std::vector<std::vector<OCRResultPacked> > res_packed{};
+		std::vector<OCRBlock> res_packed{};
 		for (const auto& [rect, text] : res) {
+			const Poly2I moved_rect = {
+				rect.rect[0] + topleft,
+				rect.rect[1] + topleft,
+				rect.rect[2] + topleft,
+				rect.rect[3] + topleft,
+			};
 			const std::array xs            = {rect.rect[0].x, rect.rect[1].x, rect.rect[2].x, rect.rect[3].x};
 			const std::array ys            = {rect.rect[0].y, rect.rect[1].y, rect.rect[2].y, rect.rect[3].y};
 			const auto       [left, right] = std::minmax_element(xs.begin(), xs.end());
@@ -191,14 +255,35 @@ namespace ocr {
 						continue;
 					}
 					Poly2I char_rect{
-						cv::Point{lerpi(rect.rect[0].x, rect.rect[1].x, lower), rect.rect[0].y} + topleft,
-						cv::Point{lerpi(rect.rect[0].x, rect.rect[1].x, upper), rect.rect[1].y} + topleft,
-						cv::Point{lerpi(rect.rect[3].x, rect.rect[2].x, upper), rect.rect[2].y} + topleft,
-						cv::Point{lerpi(rect.rect[3].x, rect.rect[2].x, lower), rect.rect[3].y} + topleft
+						cv::Point{lerpi(moved_rect[0].x, moved_rect[1].x, lower), moved_rect[0].y},
+						cv::Point{lerpi(moved_rect[0].x, moved_rect[1].x, upper), moved_rect[1].y},
+						cv::Point{lerpi(moved_rect[3].x, moved_rect[2].x, upper), moved_rect[2].y},
+						cv::Point{lerpi(moved_rect[3].x, moved_rect[2].x, lower), moved_rect[3].y}
 					};
 					split_line.emplace_back(char_rect, utf16i);
 				}
-				res_packed.emplace_back(split_line);
+				std::vector<int> intersections{};
+				for (int i = 0; i < res_packed.size(); i++) {
+					if (res_packed[i].horizontal & intersects(res_packed[i].poly, moved_rect)) {
+						intersections.push_back(i);
+					}
+				}
+				if (intersections.empty()) {
+					std::vector<cv::Point> poly{};
+					poly.append_range(moved_rect);
+					res_packed.emplace_back(split_line, true, poly);
+				} else {
+					std::ranges::reverse(intersections);
+					OCRBlock& first = res_packed[intersections[0]];
+					first.results.append_range(split_line);
+					first.poly = union_(first.poly, moved_rect);
+					for (int i = 1; i < intersections.size(); i++) {
+						OCRBlock curr = res_packed[intersections[i]];
+						first.results.append_range(curr.results);
+						first.poly = union_(first.poly, curr.poly);
+						res_packed.erase(res_packed.begin() + intersections[i]);
+					}
+				}
 			} else {
 				auto                         it  = text.text.begin();
 				const auto                   end = text.text.end();
@@ -211,14 +296,35 @@ namespace ocr {
 						continue;
 					}
 					Poly2I char_rect{
-						cv::Point{rect.rect[0].x, lerpi(rect.rect[0].y, rect.rect[3].y, lower)} + topleft,
-						cv::Point{rect.rect[1].x, lerpi(rect.rect[1].y, rect.rect[2].y, lower)} + topleft,
-						cv::Point{rect.rect[2].x, lerpi(rect.rect[1].y, rect.rect[2].y, upper)} + topleft,
-						cv::Point{rect.rect[3].x, lerpi(rect.rect[0].y, rect.rect[3].y, upper)} + topleft
+						cv::Point{moved_rect[0].x, lerpi(moved_rect[0].y, moved_rect[3].y, lower)},
+						cv::Point{moved_rect[1].x, lerpi(moved_rect[1].y, moved_rect[2].y, lower)},
+						cv::Point{moved_rect[2].x, lerpi(moved_rect[1].y, moved_rect[2].y, upper)},
+						cv::Point{moved_rect[3].x, lerpi(moved_rect[0].y, moved_rect[3].y, upper)}
 					};
 					split_line.emplace_back(char_rect, utf16i);
 				}
-				res_packed.emplace_back(split_line);
+				std::vector<int> intersections{};
+				for (int i = 0; i < res_packed.size(); i++) {
+					if (!res_packed[i].horizontal & intersects(res_packed[i].poly, moved_rect)) {
+						intersections.push_back(i);
+					}
+				}
+				if (intersections.empty()) {
+					std::vector<cv::Point> poly{};
+					poly.append_range(moved_rect);
+					res_packed.emplace_back(split_line, true, poly);
+				} else {
+					std::ranges::reverse(intersections);
+					OCRBlock& first = res_packed[intersections[0]];
+					first.results.append_range(split_line);
+					first.poly = union_(first.poly, moved_rect);
+					for (int i = 1; i < intersections.size(); i++) {
+						OCRBlock curr = res_packed[intersections[i]];
+						first.results.append_range(curr.results);
+						first.poly = union_(first.poly, curr.poly);
+						res_packed.erase(res_packed.begin() + intersections[i]);
+					}
+				}
 			}
 		}
 
@@ -387,90 +493,46 @@ namespace ocr {
 	}
 
 	void TooltipWnd::updateLoop() {
-		const SHORT shift_key_state = GetAsyncKeyState(VK_SHIFT);
-		if (shift_key_state & (1 << 15)) {
+		if (GetAsyncKeyState(VK_SHIFT) & (1 << 15)) {
 			POINT win_mouse_pos;
 			GetCursorPos(&win_mouse_pos);
 
 			const cv::Point mouse_pos{win_mouse_pos.x, win_mouse_pos.y};
-			if (!rect.contains(mouse_pos)) {
+			if (rect.contains(mouse_pos)) {
+				const auto intersect_iter = std::ranges::find_if(
+					results,
+					[&mouse_pos](const auto res) {
+						// returns positive (inside), negative (outside), or zero (on an edge) value
+						return cv::pointPolygonTest(res.poly, mouse_pos, false) > 0;
+					}
+				);
+				if (intersect_iter != results.end()) {
+					if (is_hovering && cv::pointPolygonTest(prev_hover_rect, mouse_pos, false) > 0) {
+						// caching previous rect in case (optimisation)
+					} else {
+						const auto word_iter = std::ranges::find_if(
+							intersect_iter->results,
+							[&mouse_pos](const auto res) {
+								// returns positive (inside), negative (outside), or zero (on an edge) value
+								return cv::pointPolygonTest(res.rect, mouse_pos, false) > 0;
+							}
+						);
+						if (word_iter != intersect_iter->results.end()) {
+							is_hovering     = true;
+							prev_hover_rect = word_iter->rect;
+							hover_text      = word_iter->text;
+							refreshWindow();
+						} else {
+							is_hovering = false;
+						}
+					}
+				} else {
+					// mouse isn't in any of the OCR areas
+					is_hovering = false;
+				}
+			} else {
 				// if mouse is in the captured rect
 				is_hovering = false;
-			} else if (is_hovering && cv::pointPolygonTest(prev_hover_rect, mouse_pos, false) > 0) {
-				// caching previous rect in case (optimisation)
-			} else {
-				is_hovering = false;
-				for (const auto& res_flat : results) {
-					for (const auto& [text_rect, text] : res_flat) {
-						// returns positive (inside), negative (outside), or zero (on an edge) value
-						if (cv::pointPolygonTest(text_rect, mouse_pos, false) > 0) {
-							// inside polygon
-							is_hovering     = true;
-							prev_hover_rect = text_rect;
-							hover_text      = text;
-							break;
-						}
-					}
-				}
-				if (!is_hovering) {
-					// for logging ONLY
-					// hover_text = "";
-				} else {
-					const auto w_hover_text = utf8::utf8to16(hover_text);
-					const auto [title_text_width, title_text_height] = getTextSize(w_hover_text);
-					height = std::max(static_cast<int>(std::ceil(title_text_height)), min_height);
-					width = std::max(static_cast<int>(std::ceil(title_text_width)), min_width);
-
-					if (inited_web_view2 && inited_dictionary) {
-						std::string total_website;
-
-						const auto& [entries, sorted] = dictionary_data[hover_text];
-
-						std::vector<DictionaryEntry> sorted_entries = dictionary_data[hover_text].entries;
-						if (!sorted) {
-							std::ranges::sort(
-								sorted_entries,
-								[](const DictionaryEntry& a, const DictionaryEntry& b) {
-									return utf8::utf8to16(a.words).size() > utf8::utf8to16(b.words).size();
-								}
-							);
-						}
-
-						for (const auto [html, webpage_width, word] : sorted_entries) {
-							// Shadow DOM template to isolate duplicated HTML ids
-							total_website += "<div><template shadowrootmode=\"open\"><style>" + css_data + "</style>" + html
-									+ "</template></div>";
-							width = std::max(width, webpage_width);
-						}
-						total_website = "<html lang=\"en\"><head><title>" + hover_text + "</title></head><body>" + total_website + "</body></html>";
-
-						const std::u16string total_website_u16 = utf8::utf8to16(total_website);
-						const std::wstring   total_website_wstr(total_website_u16.begin(), total_website_u16.end());
-
-						const HRESULT err = webview->NavigateToString(total_website_wstr.c_str());
-						log(err, "ICoreWebView2.NavigateToString", ERR_LEVEL::FATAL);
-					}
-					updateWindowSize();
-
-					int top;
-					if (height < getTop(prev_hover_rect)) {
-						// window is too tall (it goes above top of screen)
-						top = getTop(prev_hover_rect);
-					} else {
-						// window can extend up and is below screen
-						top = getBottom(prev_hover_rect);
-					}
-					int left;
-					const auto [screen_width, _] = getScreenSize();
-					if (getRight(prev_hover_rect) + width > screen_width) {
-						// window is too width (it goes past right of screen)
-						left = static_cast<int>(screen_width) - width;
-					} else {
-						// window can extend right and is left of screen edge
-						left = getLeft(prev_hover_rect);
-					}
-					SetWindowPos(hwnd, HWND_TOPMOST, left, top - height, -1, -1, SWP_NOSIZE | SWP_NOZORDER);
-				}
 			}
 			if (is_hovering) {
 				ShowWindow(hwnd, SW_SHOWNOACTIVATE);

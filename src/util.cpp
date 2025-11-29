@@ -4,7 +4,6 @@
 
 #include "util.h"
 
-#include "clipper2/clipper.h"
 #include <opencv2/imgproc.hpp>
 #include <Windows.h>
 
@@ -34,19 +33,30 @@ namespace ocr {
 		return poly;
 	}
 
+	Clipper2Lib::Path64 rect2path(const Poly2I& rect) {
+		return {
+			Clipper2Lib::Point64(rect[0].x, rect[0].y),
+			Clipper2Lib::Point64(rect[1].x, rect[1].y),
+			Clipper2Lib::Point64(rect[2].x, rect[2].y),
+			Clipper2Lib::Point64(rect[3].x, rect[3].y)
+		};
+	}
+
+	Clipper2Lib::Path64 rect2path(const Poly2F& rect) {
+		return {
+			Clipper2Lib::Point64(rect[0].x, rect[0].y),
+			Clipper2Lib::Point64(rect[1].x, rect[1].y),
+			Clipper2Lib::Point64(rect[2].x, rect[2].y),
+			Clipper2Lib::Point64(rect[3].x, rect[3].y)
+		};
+	}
+
 	cv::RotatedRect unclip(const Poly2F& rect, const float unclip_ratio) {
 		// get unclip distance (don't fully understand what it's doing yet?)
 		const float distance = getUnclipDistance(rect, unclip_ratio);
 
 		// convert rect to Clipper2 path
-		const Clipper2Lib::Paths64 path{
-			{
-				Clipper2Lib::Point64(rect[0].x, rect[0].y),
-				Clipper2Lib::Point64(rect[1].x, rect[1].y),
-				Clipper2Lib::Point64(rect[2].x, rect[2].y),
-				Clipper2Lib::Point64(rect[3].x, rect[3].y)
-			}
-		};
+		const Clipper2Lib::Paths64 path = {rect2path(rect)};
 
 		const Clipper2Lib::Paths64 inflated_path = Clipper2Lib::InflatePaths(
 			path,
