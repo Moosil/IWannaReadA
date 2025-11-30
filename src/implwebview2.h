@@ -1,6 +1,9 @@
 #pragma once
-#include <functional>
+
 #include <WebView2.h>
+
+#include <coroutine>
+#include <functional>
 
 
 namespace WebView2 {
@@ -13,7 +16,7 @@ namespace WebView2 {
 		HWND                          hwnd;
 		RECT                          extent;
 		init_callback                 callback;
-		std::atomic<ULONG>            ref_count{1};
+		ULONG                         ref_count{1};
 		unsigned int                  attempts{0};
 		static constexpr unsigned int MaxAttempts{50};
 		static constexpr int          SleepMs{100};
@@ -31,7 +34,7 @@ namespace WebView2 {
 
 		Impl(
 			const HWND&   hwnd,
-			RECT          extent,
+			const RECT&   extent,
 			init_callback callback
 		);
 
@@ -51,35 +54,35 @@ namespace WebView2 {
 
 		HRESULT STDMETHODCALLTYPE Invoke(HRESULT err, ICoreWebView2Controller* controller) override;
 
-		HRESULT QueryInterface(const IID& riid, LPVOID* ppv) override;
+		HRESULT QueryInterface(const IID& riid, LPVOID* ppv) noexcept override;
 	};
 
-	template<typename T>
-	struct CastInfo_t {
-		using type = T;
-		IID iid;
+	struct Navigate {
+		wil::com_ptr<ICoreWebView2> webview;
+		const wchar_t* html;
+		EventRegistrationToken token;
+		HRESULT result = E_FAIL;
+
+		bool await_ready() const noexcept { return false; }
+
+		void await_suspend(std::coroutine_handle<> h);
+
+		HRESULT await_resume() const noexcept { return result; }
 	};
 
-	static const auto ControllerCompleted =
-			CastInfo_t<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>{
-				IID_ICoreWebView2CreateCoreWebView2ControllerCompletedHandler
-			};
+	struct ExecuteScript {
+		wil::com_ptr<ICoreWebView2> webview;
+		std::wstring script;
+		std::wstring resultJson;
+		HRESULT result = E_FAIL;
 
-	static const auto EnvCompleted =
-			CastInfo_t<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>{
-				IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler
-			};
+		bool await_ready() const noexcept { return false; }
 
-	template<typename From, typename To>
-	To* cast_if_equal_iid(From* from, REFIID riid, const CastInfo_t<To>& info, LPVOID* ppv = nullptr) noexcept {
-		To* ptr = nullptr;
-		if (IsEqualIID(riid, info.iid)) {
-			ptr = static_cast<To*>(from);
-			ptr->AddRef();
+		void await_suspend(std::coroutine_handle<> h);
+
+		auto await_resume() const {
+			return std::tuple{ result, resultJson };
 		}
-		if (ppv) {
-			*ppv = ptr;
-		}
-		return ptr;
-	}
+	};
+
 }

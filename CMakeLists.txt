@@ -11,6 +11,8 @@ find_package(Clipper2 CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(turbobase64 CONFIG REQUIRED)
 find_package(unofficial-webview2 CONFIG REQUIRED)
+find_package(clip CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 find_path(RAPIDXML_INCLUDE_DIRS "rapidxml/rapidxml.hpp")
 find_package(ZLIB REQUIRED)
 
@@ -33,7 +35,8 @@ add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/screenshot.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/tooltip.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/implwebview2.cpp
-        src/log.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/log.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/task.h
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC src
@@ -51,4 +54,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         utf8cpp
         mdict
         unofficial::webview2::webview2
+        clip::clip
+        nlohmann_json::nlohmann_json
 )
