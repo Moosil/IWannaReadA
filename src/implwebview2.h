@@ -58,7 +58,7 @@ namespace WebView2 {
 	};
 
 	struct Navigate {
-		wil::com_ptr<ICoreWebView2> webview;
+		ICoreWebView2* webview;
 		const wchar_t* html;
 		EventRegistrationToken token;
 		HRESULT result = E_FAIL;
@@ -71,7 +71,7 @@ namespace WebView2 {
 	};
 
 	struct ExecuteScript {
-		wil::com_ptr<ICoreWebView2> webview;
+		ICoreWebView2* webview;
 		std::wstring script;
 		std::wstring resultJson;
 		HRESULT result = E_FAIL;

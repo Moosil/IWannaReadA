@@ -4,6 +4,7 @@
 #include <wil/com.h>
 
 #include <mdict.h>
+#include <stack>
 #include <unordered_map>
 #include <WebView2.h>
 #include <clipper2/clipper.core.h>
@@ -53,12 +54,12 @@ namespace ocr {
 		static constexpr int            min_height       = 256;
 		static constexpr int            scroll_bar_width = 16;
 
-		int         width{}, height{};
-		bool        is_hovering{};
-		Poly2I      prev_hover_rect;
-		cv::Rect    rect;
-		OCRBlock*   hover_block{nullptr};
-		std::string hover_text;
+		int                                                             width{}, height{};
+		bool                                                            is_hovering{};
+		cv::Rect                                                        rect;
+		std::ranges::borrowed_iterator_t<std::vector<OCRBlock>&>        hover_block;
+		std::ranges::borrowed_iterator_t<std::vector<OCRResultPacked>&> hover_word;
+		bool                                                            need_refresh{false};
 
 		std::vector<OCRBlock>                           results;
 		std::size_t                                     results_size{};
@@ -66,7 +67,6 @@ namespace ocr {
 		std::string                                     css_data;
 		std::unordered_map<std::string, DictionaryData> dictionary_data;
 		std::vector<EventRegistrationToken>             dict_init_nav_tokens;
-		bool                                            inited_dictionary{false};
 
 		wil::com_ptr<ID2D1Factory>          d2d1_factory             = nullptr;
 		wil::com_ptr<ID2D1HwndRenderTarget> render_target            = nullptr;
@@ -74,11 +74,12 @@ namespace ocr {
 		wil::com_ptr<IDWriteFactory>        direct_write_factory     = nullptr;
 		wil::com_ptr<IDWriteTextFormat>     direct_write_text_format = nullptr;
 
-		std::unique_ptr<WebView2::Impl>       wv_init;
-		wil::com_ptr<ICoreWebView2Controller> wv_controller;
-		wil::com_ptr<ICoreWebView2>           webview;
-		bool                                  inited_web_view2{false};
-		std::unique_ptr<task<void> >          dict_loading_task;
+		std::unique_ptr<WebView2::Impl>                  wv_init;
+		wil::com_ptr<ICoreWebView2Controller>            wv_controller;
+		wil::com_ptr<ICoreWebView2>                      webview;
+		bool                                             inited_web_view2{false};
+		std::unique_ptr<task<void> >                     dict_loading_task;
+		std::stack<std::pair<std::string, std::string> > dict_stack;
 
 
 		bool initDirectWrite();
@@ -87,7 +88,7 @@ namespace ocr {
 
 		void cleanupDirectWrite();
 
-		void loadDictionary(const std::string& dict_string_path);
+		void initDictionary(const std::string& dict_string_path);
 
 		void updateWindowSize() const;
 
@@ -101,7 +102,9 @@ namespace ocr {
 
 		void createContextMenu(int x, int y, const std::string& phrase) const;
 
-		task<void> loadDictHTML();
+		void initCurrDictHTML();
+
+		task<void> emptyDictStack();
 
 		[[nodiscard]] std::pair<float, float> getTextSize(
 			const std::u16string& w_hover_text,

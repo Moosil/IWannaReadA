@@ -79,34 +79,45 @@ namespace ocr {
 
 	void TooltipWnd::updateWindowPosition() const {
 		int top;
-		if (height < getTop(prev_hover_rect)) {
+		if (height < getTop(hover_word->rect)) {
 			// window is too tall (it goes above top of screen)
-			top = getTop(prev_hover_rect);
+			top = getTop(hover_word->rect);
 		} else {
 			// window can extend up and is below screen
-			top = getBottom(prev_hover_rect);
+			top = getBottom(hover_word->rect);
 		}
 		int        left;
 		const auto screen_width = getScreenSize().first;
-		if (getRight(prev_hover_rect) + width > screen_width) {
+		if (getRight(hover_word->rect) + width > screen_width) {
 			// window is too width (it goes past right of screen)
 			left = static_cast<int>(screen_width) - width;
 		} else {
 			// window can extend right and is left of screen edge
-			left = getLeft(prev_hover_rect);
+			left = getLeft(hover_word->rect);
 		}
 		SetWindowPos(hwnd, HWND_TOPMOST, left, top - height, -1, -1, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 	}
 
 	void TooltipWnd::refreshWindow() {
-		const auto w_hover_text = utf8::utf8to16(hover_text);
+		need_refresh = false;
+		if (!is_hovering) {
+			return;
+		}
+
+		const auto w_hover_text = utf8::utf8to16(hover_word->text);
 		const auto [title_text_width, title_text_height] = getTextSize(w_hover_text);
 		height = std::max(static_cast<int>(std::ceil(title_text_height)), min_height);
 		width = std::max(static_cast<int>(std::ceil(title_text_width)), min_width);
 
 		if (inited_web_view2) {
-			const auto it = dictionary_data.find(hover_text);
-			if (it != dictionary_data.end()) {
+			const auto it = dictionary_data.find(hover_word->text);
+			if (it == dictionary_data.end()) {
+				initCurrDictHTML();
+				if (!dict_loading_task) {
+					dict_loading_task = std::make_unique<task<void> >(emptyDictStack());
+					dict_loading_task->start();
+				}
+			} else {
 				std::string total_website;
 				auto&       [entries, sorted] = it->second;
 
@@ -129,7 +140,7 @@ namespace ocr {
 					);
 					width = std::max(width, webpage_width);
 				}
-				total_website = "<html lang=\"en\"><head><title>" + hover_text + "</title></head><body>" + total_website
+				total_website = "<html lang=\"en\"><head><title>" + hover_word->text + "</title></head><body>" + total_website
 				                +
 				                "</body></html>";
 
@@ -140,9 +151,6 @@ namespace ocr {
 				log(err, "ICoreWebView2.NavigateToString", ERR_LEVEL::FATAL);
 			}
 		}
-		updateWindowSize();
-
-		updateWindowPosition();
 	}
 
 	void TooltipWnd::onWebsiteChanged() {
@@ -188,6 +196,10 @@ namespace ocr {
 			).Get()
 		);
 		log(script_err, "ICoreWebView2::ExecuteScript", ERR_LEVEL::FATAL);
+
+		updateWindowSize();
+
+		updateWindowPosition();
 	}
 
 	void TooltipWnd::createContextMenu(const int x, const int y, const std::string& phrase) const {
@@ -208,7 +220,7 @@ namespace ocr {
 		switch (selected) {
 			case 1: {
 				if (is_hovering) {
-					clip::set_text(hover_text);
+					clip::set_text(hover_word->text);
 				}
 				break;
 			}
@@ -233,41 +245,35 @@ namespace ocr {
 		}
 	}
 
-	task<void> TooltipWnd::loadDictHTML() {
-		std::vector<std::pair<std::string, std::string> > dict_queue;
-		dict_init_nav_tokens.resize(results.size());
-		for (size_t iter0 = 0; iter0 < results.size(); ++iter0) {
-			const size_t max_iter1 = results[iter0].results.size();
-			for (size_t iter1 = 0; iter1 < max_iter1; ++iter1) {
-				for (size_t length = 1; length <= max_iter1 - iter1; ++length) {
-					const std::string lookup_string = std::views::iota(iter1, iter1 + length)
-					                                  | std::ranges::views::transform(
-						                                  [this, iter0](const std::size_t i) -> std::string {
-							                                  return results[iter0].results[i].text;
-						                                  }
-					                                  )
-					                                  | std::views::join
-					                                  | std::ranges::to<std::string>();
+	void TooltipWnd::initCurrDictHTML() {
+		const auto result_it = hover_block;
+		std::string lookup_string;
+		for (auto word_it = hover_word; word_it != result_it->results.end(); ++word_it) {
+			lookup_string += word_it->text;
 
-					const std::string dict_html = mdict->lookup(lookup_string);
-					if (dict_html.empty()) {
-						continue;
-					}
-					const std::string strip_dict_html = trim_copy(dict_html);
-					dict_queue.emplace_back(lookup_string, strip_dict_html);
-				}
+			const std::string dict_html = mdict->lookup(lookup_string);
+			if (dict_html.empty()) {
+				continue;
 			}
+			const std::string strip_dict_html = trim_copy(dict_html);
+			const std::string static_lookup_string(lookup_string);
+			dict_stack.emplace(static_lookup_string, strip_dict_html);
 		}
-		for (const auto& [lookup_string, strip_dict_html] : dict_queue) {
+	}
+
+	task<void> TooltipWnd::emptyDictStack() {
+		while (!dict_stack.empty()) {
+			const auto [entry, strip_dict_html] = dict_stack.top();
+			dict_stack.pop();
 			const std::string dict_html_wrapped = "<html><head><style>" + css_data + "</style></head><body>" +
-			                                      strip_dict_html + "</body></html>";
+												  strip_dict_html + "</body></html>";
 
 			const std::u16string dict_html_16 = utf8::utf8to16(dict_html_wrapped);
 			const std::wstring   dict_html_w(dict_html_16.begin(), dict_html_16.end());
-			co_await WebView2::Navigate{webview, dict_html_w.c_str()};
+			co_await WebView2::Navigate{webview.get(), dict_html_w.c_str()};
 
 			auto [err, widthStr] = co_await WebView2::ExecuteScript{
-				webview,
+				webview.get(),
 				LR"(
                     (() => {
                         const html = document.documentElement;
@@ -279,17 +285,14 @@ namespace ocr {
 
 			const int webpage_width = _wtoi(widthStr.c_str()) + scroll_bar_width;
 
-			auto        start      = lookup_string.begin();
-			char32_t    first_char = utf8::next(start, lookup_string.end());
+			auto        start      = entry.begin();
+			char32_t    first_char = utf8::next(start, entry.end());
 			std::string first_char_str;
 			utf8::append(first_char, std::back_inserter(first_char_str));
-			dictionary_data[first_char_str].entries.emplace_back(lookup_string, strip_dict_html, webpage_width);
+			dictionary_data[first_char_str].entries.emplace_back(entry, strip_dict_html, webpage_width);
+			need_refresh = true;
 		}
-
-		if (!is_hovering) {
-			ShowWindow(hwnd, SW_HIDE);
-			UpdateWindow(hwnd);
-		}
+		dict_loading_task.reset();
 	}
 
 	void TooltipWnd::processOCRResults(
@@ -396,7 +399,7 @@ namespace ocr {
 		}
 	}
 
-	void TooltipWnd::loadDictionary(const std::string& dict_string_path) {
+	void TooltipWnd::initDictionary(const std::string& dict_string_path) {
 		const std::filesystem::path dict_folder_path_path = dict_string_path;
 		std::filesystem::path       dict_file_path{dict_folder_path_path};
 		dict_file_path /= dict_file_path.filename();
@@ -464,7 +467,7 @@ namespace ocr {
 
 		wnd->initDirectWrite();
 
-		wnd->loadDictionary(dict_folder_path);
+		wnd->initDictionary(dict_folder_path);
 
 		return wnd;
 	}
@@ -489,9 +492,6 @@ namespace ocr {
 				webview          = wv;
 				inited_web_view2 = true;
 
-				dict_loading_task = std::make_unique<task<void> >(loadDictHTML());
-				dict_loading_task->start();
-
 
 				const HRESULT nav_subscribe_err = webview->add_NavigationCompleted(
 					Microsoft::WRL::Callback<ICoreWebView2NavigationCompletedEventHandler>(
@@ -503,6 +503,9 @@ namespace ocr {
 					nullptr
 				);
 				log(nav_subscribe_err, "ICoreWebView2::add_NavigationCompleted", ERR_LEVEL::WARN);
+				if (!is_hovering) {
+					ShowWindow(hwnd, SW_HIDE);
+				}
 			}
 		);
 		wv_init->try_init_env();
@@ -574,7 +577,7 @@ namespace ocr {
 
 			const cv::Point mouse_pos{win_mouse_pos.x, win_mouse_pos.y};
 			if (rect.contains(mouse_pos)) {
-				if (is_hovering && cv::pointPolygonTest(prev_hover_rect, mouse_pos, false) > 0) {
+				if (is_hovering && cv::pointPolygonTest(hover_word->rect, mouse_pos, false) > 0) {
 					// caching previous rect in case (optimisation)
 				} else {
 					const auto intersect_iter = std::ranges::find_if(
@@ -594,10 +597,9 @@ namespace ocr {
 						);
 						if (word_iter != intersect_iter->results.end()) {
 							is_hovering     = true;
-							prev_hover_rect = word_iter->rect;
-							hover_text      = word_iter->text;
-							hover_block     = &*intersect_iter;
-							refreshWindow();
+							hover_word = word_iter;
+							hover_block     = intersect_iter;
+							need_refresh = true;
 						} else {
 							is_hovering = false;
 						}
@@ -619,6 +621,9 @@ namespace ocr {
 				}
 				UpdateWindow(hwnd);
 			}
+		}
+		if (need_refresh) {
+			refreshWindow();
 		}
 
 		MSG msg;
@@ -665,7 +670,7 @@ namespace ocr {
 			case WM_CONTEXTMENU: {
 				const auto x = GET_X_LPARAM(lparam);
 				const int  y = GET_Y_LPARAM(lparam);
-				createContextMenu(x, y, hover_text);
+				createContextMenu(x, y, hover_word->text);
 				break;
 			}
 			case WM_SIZE: {
@@ -695,7 +700,7 @@ namespace ocr {
 					render_target->BeginDraw();
 					render_target->Clear(D2D1::ColorF(D2D1::ColorF::White));
 
-					const std::u16string w_hover_text = utf8::utf8to16(hover_text);
+					const std::u16string w_hover_text = utf8::utf8to16(hover_word->text);
 					direct_write_text_format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
 					render_target->DrawText(
 						reinterpret_cast<const wchar_t*>(w_hover_text.c_str()),
