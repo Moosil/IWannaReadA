@@ -25,7 +25,6 @@
 
 #include "implwebview2.h"
 #include "log.h"
-#include "task.h"
 #include "util.h"
 
 
@@ -48,13 +47,13 @@ namespace ocr {
 			);
 			if (parsed.contains("key")) {
 				const auto key = parsed.at("key").get<std::string>();
-				if (key == "mousedown") {
-					// pass
-				} else if (key == "contextmenu") {
+				if (key == "contextmenu") {
 					const int  x    = parsed.at("x").get<int>();
 					const int  y    = parsed.at("y").get<int>();
 					const auto word = parsed.at("word").get<std::string>();
 					createContextMenu(x, y, word);
+				} else if (key == "mousedown") {
+					// pass
 				} else {
 					// pass
 				}
@@ -113,13 +112,13 @@ namespace ocr {
 			const auto it = dictionary_data.find(hover_word->text);
 			if (it == dictionary_data.end()) {
 				initCurrDictHTML();
-				if (!dict_loading_task) {
-					dict_loading_task = std::make_unique<task<void> >(emptyDictStack());
-					dict_loading_task->start();
-				}
+				need_refresh = true;
 			} else {
 				std::string total_website;
-				auto&       [entries, sorted] = it->second;
+				auto&       [entries, sorted, webpage_width] = it->second;
+				if (webpage_width == -1) {
+					webpage_width = max_webpage_width;
+				}
 
 				if (!sorted) {
 					std::ranges::sort(
@@ -130,7 +129,7 @@ namespace ocr {
 					);
 				}
 
-				for (const auto [entry, html, webpage_width] : entries) {
+				for (const auto& [entry, html] : entries) {
 					// Shadow DOM template to isolate duplicated HTML ids
 					total_website += fmt::format(
 						R"(<div id="{}"><template shadowrootmode="open"><style>{}</style>{}</template></div>)",
@@ -148,7 +147,7 @@ namespace ocr {
 				const std::wstring   total_website_wstr(total_website_u16.begin(), total_website_u16.end());
 
 				const HRESULT err = webview->NavigateToString(total_website_wstr.c_str());
-				log(err, "ICoreWebView2.NavigateToString", ERR_LEVEL::FATAL);
+				log(err, "ICoreWebView2::NavigateToString", ERR_LEVEL::FATAL);
 			}
 		}
 	}
@@ -180,7 +179,7 @@ namespace ocr {
             )",
 			Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
 				[this](HRESULT errorCode, LPCWSTR resultObjectAsJson) -> HRESULT {
-					log(errorCode, "ICoreWebView2ExecuteScriptCompletedHandler::Invoke", ERR_LEVEL::WARN);
+					log(errorCode, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
 					EventRegistrationToken token = {};
 
 					const HRESULT add_msg_err = webview->add_WebMessageReceived(
@@ -196,6 +195,34 @@ namespace ocr {
 			).Get()
 		);
 		log(script_err, "ICoreWebView2::ExecuteScript", ERR_LEVEL::FATAL);
+
+		const auto dict_data_it = dictionary_data.find(hover_word->text);
+		if (dict_data_it != dictionary_data.end()) {
+			const HRESULT err = webview->ExecuteScript(
+				LR"(
+	                (() => {
+	                    const html = document.documentElement;
+	                    const body = document.body;
+	                    return Math.max(html.scrollWidth, body.scrollWidth);
+	                })();
+	            )",
+				Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+					[this](HRESULT errorCode, LPCWSTR result) -> HRESULT {
+						log(errorCode, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
+						if (SUCCEEDED(errorCode) && result) {
+							const auto curr_dict_data_it = dictionary_data.find(hover_word->text);
+							const int webpage_width = _wtoi(result);
+							if (curr_dict_data_it != dictionary_data.end()) {
+								curr_dict_data_it->second.width = webpage_width + scroll_bar_width;
+							}
+							max_webpage_width = std::max(webpage_width + scroll_bar_width, max_webpage_width);
+						}
+						return S_OK;
+					}
+				).Get()
+			);
+			log(err, "ICoreWebView2::ExecuteScript", ERR_LEVEL::WARN);
+		}
 
 		updateWindowSize();
 
@@ -248,6 +275,7 @@ namespace ocr {
 	void TooltipWnd::initCurrDictHTML() {
 		const auto result_it = hover_block;
 		std::string lookup_string;
+		const std::string first_char = hover_word->text;
 		for (auto word_it = hover_word; word_it != result_it->results.end(); ++word_it) {
 			lookup_string += word_it->text;
 
@@ -257,42 +285,9 @@ namespace ocr {
 			}
 			const std::string strip_dict_html = trim_copy(dict_html);
 			const std::string static_lookup_string(lookup_string);
-			dict_stack.emplace(static_lookup_string, strip_dict_html);
+
+			dictionary_data[first_char].entries.emplace_back(static_lookup_string, strip_dict_html);
 		}
-	}
-
-	task<void> TooltipWnd::emptyDictStack() {
-		while (!dict_stack.empty()) {
-			const auto [entry, strip_dict_html] = dict_stack.top();
-			dict_stack.pop();
-			const std::string dict_html_wrapped = "<html><head><style>" + css_data + "</style></head><body>" +
-												  strip_dict_html + "</body></html>";
-
-			const std::u16string dict_html_16 = utf8::utf8to16(dict_html_wrapped);
-			const std::wstring   dict_html_w(dict_html_16.begin(), dict_html_16.end());
-			co_await WebView2::Navigate{webview.get(), dict_html_w.c_str()};
-
-			auto [err, widthStr] = co_await WebView2::ExecuteScript{
-				webview.get(),
-				LR"(
-                    (() => {
-                        const html = document.documentElement;
-                        const body = document.body;
-                        return Math.max(html.scrollWidth, body.scrollWidth);
-                    })();
-                )"
-			};
-
-			const int webpage_width = _wtoi(widthStr.c_str()) + scroll_bar_width;
-
-			auto        start      = entry.begin();
-			char32_t    first_char = utf8::next(start, entry.end());
-			std::string first_char_str;
-			utf8::append(first_char, std::back_inserter(first_char_str));
-			dictionary_data[first_char_str].entries.emplace_back(entry, strip_dict_html, webpage_width);
-			need_refresh = true;
-		}
-		dict_loading_task.reset();
 	}
 
 	void TooltipWnd::processOCRResults(

@@ -2,7 +2,6 @@
 
 #include <WebView2.h>
 
-#include <coroutine>
 #include <functional>
 
 
@@ -56,33 +55,4 @@ namespace WebView2 {
 
 		HRESULT QueryInterface(const IID& riid, LPVOID* ppv) noexcept override;
 	};
-
-	struct Navigate {
-		ICoreWebView2* webview;
-		const wchar_t* html;
-		EventRegistrationToken token;
-		HRESULT result = E_FAIL;
-
-		bool await_ready() const noexcept { return false; }
-
-		void await_suspend(std::coroutine_handle<> h);
-
-		HRESULT await_resume() const noexcept { return result; }
-	};
-
-	struct ExecuteScript {
-		ICoreWebView2* webview;
-		std::wstring script;
-		std::wstring resultJson;
-		HRESULT result = E_FAIL;
-
-		bool await_ready() const noexcept { return false; }
-
-		void await_suspend(std::coroutine_handle<> h);
-
-		auto await_resume() const {
-			return std::tuple{ result, resultJson };
-		}
-	};
-
 }

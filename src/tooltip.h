@@ -10,7 +10,6 @@
 #include <clipper2/clipper.core.h>
 
 #include "common.h"
-#include "task.h"
 
 struct ID2D1Factory;
 struct ID2D1HwndRenderTarget;
@@ -31,12 +30,12 @@ namespace ocr {
 	struct DictionaryEntry {
 		std::string entry;
 		std::string entry_html;
-		int         width;
 	};
 
 	struct DictionaryData {
 		std::vector<DictionaryEntry> entries;
 		bool                         sorted{false};
+		int                          width{-1};
 	};
 
 	struct OCRBlock {
@@ -66,7 +65,7 @@ namespace ocr {
 		std::unique_ptr<mdict::Mdict>                   mdict;
 		std::string                                     css_data;
 		std::unordered_map<std::string, DictionaryData> dictionary_data;
-		std::vector<EventRegistrationToken>             dict_init_nav_tokens;
+		int max_webpage_width{scroll_bar_width};
 
 		wil::com_ptr<ID2D1Factory>          d2d1_factory             = nullptr;
 		wil::com_ptr<ID2D1HwndRenderTarget> render_target            = nullptr;
@@ -74,12 +73,10 @@ namespace ocr {
 		wil::com_ptr<IDWriteFactory>        direct_write_factory     = nullptr;
 		wil::com_ptr<IDWriteTextFormat>     direct_write_text_format = nullptr;
 
-		std::unique_ptr<WebView2::Impl>                  wv_init;
-		wil::com_ptr<ICoreWebView2Controller>            wv_controller;
-		wil::com_ptr<ICoreWebView2>                      webview;
-		bool                                             inited_web_view2{false};
-		std::unique_ptr<task<void> >                     dict_loading_task;
-		std::stack<std::pair<std::string, std::string> > dict_stack;
+		std::unique_ptr<WebView2::Impl>       wv_init;
+		wil::com_ptr<ICoreWebView2Controller> wv_controller;
+		wil::com_ptr<ICoreWebView2>           webview;
+		bool                                  inited_web_view2{false};
 
 
 		bool initDirectWrite();
@@ -103,8 +100,6 @@ namespace ocr {
 		void createContextMenu(int x, int y, const std::string& phrase) const;
 
 		void initCurrDictHTML();
-
-		task<void> emptyDictStack();
 
 		[[nodiscard]] std::pair<float, float> getTextSize(
 			const std::u16string& w_hover_text,

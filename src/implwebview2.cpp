@@ -133,36 +133,4 @@ namespace WebView2 {
 
 		return E_NOINTERFACE;
 	}
-
-	void Navigate::await_suspend(std::coroutine_handle<> h)  {
-		auto self = std::shared_ptr<Navigate>(this, [](Navigate*){});
-
-		webview->NavigateToString(html);
-		webview->add_NavigationCompleted(
-			Microsoft::WRL::Callback<ICoreWebView2NavigationCompletedEventHandler>(
-				[self, h](ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
-					self->result = S_OK;
-					self->webview->remove_NavigationCompleted(self->token);
-					h.resume();
-					return S_OK;
-				}
-			).Get(),
-			&self->token);
-	}
-
-	void ExecuteScript::await_suspend(std::coroutine_handle<> h)  {
-		auto self = std::shared_ptr<ExecuteScript>(this, [](ExecuteScript*){});
-
-		webview->ExecuteScript(
-			script.c_str(),
-			Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
-				[self, h](HRESULT errorCode, LPCWSTR res) -> HRESULT {
-					self->result = errorCode;
-					if (SUCCEEDED(errorCode))
-						self->resultJson = res;
-					h.resume();
-					return S_OK;
-				}
-			).Get());
-	}
 }
