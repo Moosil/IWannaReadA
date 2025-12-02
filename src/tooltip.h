@@ -131,6 +131,8 @@ namespace ocr {
 			const std::string&            dict_folder_path
 		);
 
+		void updateRectRes(const std::vector<OCRResult>& new_res, const cv::Rect& new_rect);
+
 		void updateLoop();
 	};
 }

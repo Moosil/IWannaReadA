@@ -223,4 +223,11 @@ namespace ocr {
 	Config::file_path Config::getRecParamPath() {
 		return getPath(ModelType::Rec, FileType::Param);
 	}
+
+	bool Config::getRefresh() {
+		if (node["refresh"]) {
+			return node["refresh"].as<bool>();
+		}
+		return false;
+	}
 } // ocr

@@ -27,6 +27,7 @@ namespace ocr {
 
 		file_path getRecParamPath();
 
+		bool getRefresh();
 	private:
 		enum class ModelType {
 			Rec,

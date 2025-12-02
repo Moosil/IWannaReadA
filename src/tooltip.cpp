@@ -114,45 +114,55 @@ namespace ocr {
 				initCurrDictHTML();
 				need_refresh = true;
 			} else {
-				std::string total_website;
-				auto&       [entries, sorted, webpage_width] = it->second;
-				if (webpage_width == -1) {
-					webpage_width = max_webpage_width;
+				if (it->second.entries.empty()) {
+					const HRESULT err = webview->NavigateToString(L"");
+					log(err, "ICoreWebView2::NavigateToString", ERR_LEVEL::FATAL);
+				} else {
+					std::string total_website;
+					auto&       [entries, sorted, webpage_width] = it->second;
+					if (webpage_width == -1) {
+						webpage_width = max_webpage_width;
+					}
+
+					if (!sorted) {
+						std::ranges::sort(
+							entries,
+							[](const DictionaryEntry& a, const DictionaryEntry& b) {
+								return utf8::utf8to16(a.entry).size() > utf8::utf8to16(b.entry).size();
+							}
+						);
+					}
+
+					for (const auto& [entry, html] : entries) {
+						// Shadow DOM template to isolate duplicated HTML ids
+						total_website += fmt::format(
+							R"(<div id="{}"><template shadowrootmode="open"><style>{}</style>{}</template></div>)",
+							entry,
+							css_data,
+							html
+						);
+						width = std::max(width, webpage_width);
+					}
+					total_website = "<html lang=\"en\"><head><title>" + hover_word->text + "</title></head><body>" +
+									total_website
+									+
+									"</body></html>";
+
+					const std::u16string total_website_u16 = utf8::utf8to16(total_website);
+					const std::wstring   total_website_wstr(total_website_u16.begin(), total_website_u16.end());
+
+					const HRESULT err = webview->NavigateToString(total_website_wstr.c_str());
+					log(err, "ICoreWebView2::NavigateToString", ERR_LEVEL::FATAL);
 				}
-
-				if (!sorted) {
-					std::ranges::sort(
-						entries,
-						[](const DictionaryEntry& a, const DictionaryEntry& b) {
-							return utf8::utf8to16(a.entry).size() > utf8::utf8to16(b.entry).size();
-						}
-					);
-				}
-
-				for (const auto& [entry, html] : entries) {
-					// Shadow DOM template to isolate duplicated HTML ids
-					total_website += fmt::format(
-						R"(<div id="{}"><template shadowrootmode="open"><style>{}</style>{}</template></div>)",
-						entry,
-						css_data,
-						html
-					);
-					width = std::max(width, webpage_width);
-				}
-				total_website = "<html lang=\"en\"><head><title>" + hover_word->text + "</title></head><body>" + total_website
-				                +
-				                "</body></html>";
-
-				const std::u16string total_website_u16 = utf8::utf8to16(total_website);
-				const std::wstring   total_website_wstr(total_website_u16.begin(), total_website_u16.end());
-
-				const HRESULT err = webview->NavigateToString(total_website_wstr.c_str());
-				log(err, "ICoreWebView2::NavigateToString", ERR_LEVEL::FATAL);
 			}
 		}
 	}
 
 	void TooltipWnd::onWebsiteChanged() {
+		if (!is_hovering) {
+			return;
+		}
+
 		const HRESULT script_err = webview->ExecuteScript(
 			LR"(
 				for (const host of document.body.children) {
@@ -209,9 +219,9 @@ namespace ocr {
 				Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
 					[this](HRESULT errorCode, LPCWSTR result) -> HRESULT {
 						log(errorCode, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
-						if (SUCCEEDED(errorCode) && result) {
+						if (SUCCEEDED(errorCode) && result && is_hovering) {
 							const auto curr_dict_data_it = dictionary_data.find(hover_word->text);
-							const int webpage_width = _wtoi(result);
+							const int  webpage_width     = _wtoi(result);
 							if (curr_dict_data_it != dictionary_data.end()) {
 								curr_dict_data_it->second.width = webpage_width + scroll_bar_width;
 							}
@@ -273,9 +283,10 @@ namespace ocr {
 	}
 
 	void TooltipWnd::initCurrDictHTML() {
-		const auto result_it = hover_block;
-		std::string lookup_string;
+		const auto        result_it = hover_block;
+		std::string       lookup_string;
 		const std::string first_char = hover_word->text;
+		dictionary_data[first_char] = {};
 		for (auto word_it = hover_word; word_it != result_it->results.end(); ++word_it) {
 			lookup_string += word_it->text;
 
@@ -434,11 +445,7 @@ namespace ocr {
 		}
 
 		wnd->rect = rect;
-		std::thread(
-			[&wnd, res, rect]() {
-				processOCRResults(res, cv::Point{rect.x, rect.y}, wnd->results);
-			}
-		).detach();
+		processOCRResults(res, cv::Point{wnd->rect.x, wnd->rect.y}, wnd->results);
 
 		constexpr int style           = WS_POPUP;
 		constexpr int extended_styles = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_TRANSPARENT;
@@ -465,6 +472,18 @@ namespace ocr {
 		wnd->initDictionary(dict_folder_path);
 
 		return wnd;
+	}
+
+	void TooltipWnd::updateRectRes(const std::vector<OCRResult>& new_res, const cv::Rect& new_rect) {
+		rect = new_rect;
+		is_hovering = false;
+
+		if (inited_web_view2) {
+			ShowWindow(hwnd, SW_HIDE);
+		}
+		UpdateWindow(hwnd);
+
+		processOCRResults(new_res, cv::Point{rect.x, rect.y}, results);
 	}
 
 	void TooltipWnd::initWebView2() {
@@ -591,9 +610,9 @@ namespace ocr {
 							}
 						);
 						if (word_iter != intersect_iter->results.end()) {
-							is_hovering     = true;
-							hover_word = word_iter;
-							hover_block     = intersect_iter;
+							is_hovering  = true;
+							hover_word   = word_iter;
+							hover_block  = intersect_iter;
 							need_refresh = true;
 						} else {
 							is_hovering = false;

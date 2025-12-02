@@ -3,25 +3,34 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 
+#include <future>
+#include <thread>
 #include <ranges>
 #include <spdlog/spdlog.h>
 #include <Windows.h>
 
+#include "config.h"
 #include "ocr_engine.h"
 #include "screenshot.h"
 #include "tooltip.h"
 
 using namespace ocr;
+using s_time = std::chrono::time_point<std::chrono::steady_clock>;
+
+std::future<std::vector<OCRResult>> runOCR(
+	const OCREngine&                        engine,
+	const cv::Mat&                          image
+);
 
 [[noreturn]] int main() {
+	Config yaml{"../config.yaml"};
+	const bool refresh = yaml.getRefresh();
 	try {
 		SetConsoleOutputCP(CP_UTF8);
 		SetConsoleCP(CP_UTF8);
 		spdlog::set_pattern("%v");
 
-		const auto engine = OCREngine(
-			"../config.yaml"
-		);
+		const auto engine = OCREngine(yaml);
 
 		if (RegisterHotKey(
 			nullptr,
@@ -37,6 +46,8 @@ using namespace ocr;
 		std::unique_ptr<TooltipWnd>    tt_wnd;
 		cv::Mat                        ss;
 		cv::Rect                       rect;
+		std::future<std::vector<OCRResult>> pending_result;
+		s_time prev = std::chrono::steady_clock::now();
 		while (true) {
 			if (ss_wnd) {
 				ss_wnd->update();
@@ -53,6 +64,7 @@ using namespace ocr;
 							rect.y + rect.height
 						);
 						tt_wnd = TooltipWnd::initTooltip(output, rect, "../dictionaries/hanyingcidian(disanban)");
+						prev = std::chrono::steady_clock::now();
 					}
 				}
 			} else {
@@ -73,10 +85,41 @@ using namespace ocr;
 
 				if (tt_wnd) {
 					tt_wnd->updateLoop();
+
+					if (pending_result.valid() && pending_result.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+						const std::vector<OCRResult> results = pending_result.get();
+						tt_wnd->updateRectRes(results, rect);
+						prev = std::chrono::steady_clock::now();
+					}
+
+					if (refresh && !pending_result.valid()) {
+						s_time now = std::chrono::steady_clock::now();
+						auto milliseconds_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - prev);
+						if ((milliseconds_duration).count() > 1000/*ms*/) {
+							if (!rect.empty() && tt_wnd) {
+								ss = ScreenshotWnd::hBitmap2cvMat(ScreenshotWnd::captureScreenRegion(rect));
+								pending_result = runOCR(engine, ss);
+							} else {
+								prev = std::chrono::steady_clock::now();
+							}
+						}
+					}
 				}
 			}
 		}
 	} catch (std::exception &e) {
 		spdlog::critical("Exception: {}", e.what());
 	}
+}
+
+std::future<std::vector<OCRResult>> runOCR(
+	const OCREngine&                        engine,
+	const cv::Mat&                          image
+) {
+	const cv::Mat img = image.clone();
+	return std::async(
+		[&engine, img]() {
+			return engine.run(img);
+		}
+	);
 }

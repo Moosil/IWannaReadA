@@ -50,7 +50,7 @@ namespace ocr {
 		const std::size_t length = images.size();
 		std::vector<Text> text_lines{length};
 
-		//#pragma omp parallel for num_threads(1) schedule(dynamic)
+		#pragma omp parallel for num_threads(10) schedule(dynamic)
 		for (int i = 0; i < length; ++i) {
 			text_lines[i] = _run(images[i]);
 		}
@@ -131,7 +131,9 @@ namespace ocr {
 		for (auto& length : text_lengths) {
 			length = {std::get<0>(length) + add, std::get<1>(length) + add};
 		}
-		text_lengths[0] = {std::get<0>(text_lengths[0]) - add, std::get<1>(text_lengths[0])};
+		if (!text_lengths.empty()) {
+			text_lengths[0] = {std::get<0>(text_lengths[0]) - add, std::get<1>(text_lengths[0])};
+		}
 
 		return {
 			.text = strip(text),

@@ -14,3 +14,5 @@ rec:
   params: "PP-OCRv5_mobile_rec"
 
 key: "ppocr_keys_v5.txt"
+
+refresh: on
