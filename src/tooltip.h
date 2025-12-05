@@ -1,15 +1,19 @@
 #pragma once
 
 #include <Windows.h>
-#include <wil/com.h>
 
-#include <mdict.h>
 #include <stack>
 #include <unordered_map>
-#include <WebView2.h>
-#include <clipper2/clipper.core.h>
+#include <chrono>
+
+#include <mdict.h>
+#include <wrl/client.h>
 
 #include "common.h"
+#include "impl_document_container.h"
+
+namespace ocr {
+}
 
 struct ID2D1Factory;
 struct ID2D1HwndRenderTarget;
@@ -22,26 +26,27 @@ struct ICoreWebView2;
 struct EventRegistrationToken;
 struct ICoreWebView2WebMessageReceivedEventHandler;
 
-namespace WebView2 {
-	class Impl;
+namespace litehtml {
+	class document;
 }
 
 namespace ocr {
+	class HTMLDocument;
+
 	struct DictionaryEntry {
-		std::string entry;
-		std::string entry_html;
+		std::string entry{};
+		std::string entry_html{};
 	};
 
 	struct DictionaryData {
-		std::vector<DictionaryEntry> entries;
-		bool                         sorted{false};
+		std::vector<DictionaryEntry> entries{};
 		int                          width{-1};
 	};
 
 	struct OCRBlock {
-		std::vector<OCRResultPacked> results;
+		std::vector<OCRResultPacked> results{};
 		bool                         horizontal;
-		std::vector<cv::Point>       poly;
+		std::vector<cv::Point>       poly{};
 	};
 
 	class TooltipWnd {
@@ -59,29 +64,23 @@ namespace ocr {
 		std::ranges::borrowed_iterator_t<std::vector<OCRBlock>&>        hover_block;
 		std::ranges::borrowed_iterator_t<std::vector<OCRResultPacked>&> hover_word;
 		bool                                                            need_refresh{false};
+		std::optional<std::chrono::time_point<std::chrono::steady_clock>> start;
 
-		std::vector<OCRBlock>                           results;
+		std::vector<OCRBlock>                           results{};
 		std::size_t                                     results_size{};
 		std::unique_ptr<mdict::Mdict>                   mdict;
 		std::string                                     css_data;
-		std::unordered_map<std::string, DictionaryData> dictionary_data;
+		std::unordered_map<std::string, DictionaryData> dictionary_data{};
 		int max_webpage_width{scroll_bar_width};
 
-		wil::com_ptr<ID2D1Factory>          d2d1_factory             = nullptr;
-		wil::com_ptr<ID2D1HwndRenderTarget> render_target            = nullptr;
-		wil::com_ptr<ID2D1SolidColorBrush>  brush                    = nullptr;
-		wil::com_ptr<IDWriteFactory>        direct_write_factory     = nullptr;
-		wil::com_ptr<IDWriteTextFormat>     direct_write_text_format = nullptr;
+		Microsoft::WRL::ComPtr<ID2D1Factory>          d2d1_factory             = nullptr;
+		Microsoft::WRL::ComPtr<ID2D1HwndRenderTarget> render_target            = nullptr;
+		Microsoft::WRL::ComPtr<IDWriteFactory>        direct_write_factory     = nullptr;
 
-		std::unique_ptr<WebView2::Impl>       wv_init;
-		wil::com_ptr<ICoreWebView2Controller> wv_controller;
-		wil::com_ptr<ICoreWebView2>           webview;
-		bool                                  inited_web_view2{false};
+		std::shared_ptr<litehtml::document> html_renderer;
+		std::unique_ptr<HTMLDocument> html_doc_impl;
 
-
-		bool initDirectWrite();
-
-		void initWebView2();
+		void initDirectWrite();
 
 		void cleanupDirectWrite();
 
@@ -95,17 +94,9 @@ namespace ocr {
 
 		void onWebsiteChanged();
 
-		HRESULT onWebMessageReceived(ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args);
-
 		void createContextMenu(int x, int y, const std::string& phrase) const;
 
 		void initCurrDictHTML();
-
-		[[nodiscard]] std::pair<float, float> getTextSize(
-			const std::u16string& w_hover_text,
-			float                 p_width  = FLT_MAX,
-			float                 p_height = FLT_MAX
-		) const;
 
 		static void processOCRResults(
 			const std::vector<OCRResult>& res,
@@ -134,5 +125,7 @@ namespace ocr {
 		void updateRectRes(const std::vector<OCRResult>& new_res, const cv::Rect& new_rect);
 
 		void updateLoop();
+
+		std::pair<int, int> getExtent() const;
 	};
 }
