@@ -24,6 +24,9 @@ endif()
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /O2")
 set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG")
 
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} /fp:contract /GA /Qpar")
+set(TARGET lto PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+
 add_subdirectory(third_party/mdict)
 add_subdirectory(third_party/utfcpp)
 

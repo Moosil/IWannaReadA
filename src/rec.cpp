@@ -51,7 +51,7 @@ namespace ocr {
 		std::vector<Text> text_lines{length};
 
 		#pragma omp parallel for num_threads(10) schedule(dynamic)
-		for (int i = 0; i < length; ++i) {
+		for (int i = 0; i < static_cast<int>(length); i++) {
 			text_lines[i] = _run(images[i]);
 		}
 

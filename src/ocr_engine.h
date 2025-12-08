@@ -9,8 +9,11 @@
 namespace ocr {
 	class OCREngine {
 	private:
-		Det det;
-		Rec rec;
+		Det            det;
+		Rec            rec;
+		mutable std::size_t    run_count{0};
+		mutable double total_run_time{0};
+
 	public:
 		OCREngine(
 			const std::string& det_model_path,
