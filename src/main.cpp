@@ -1,13 +1,12 @@
-#define NOMINMAX
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 
 #include <future>
-#include <thread>
-#include <ranges>
 #include <spdlog/spdlog.h>
 #include <Windows.h>
+#include <shellscalingapi.h>
+#pragma comment(lib,"Shcore.lib")
 
 #include "config.h"
 #include "ocr_engine.h"
@@ -23,6 +22,9 @@ std::future<std::vector<OCRResult>> runOCR(
 );
 
 [[noreturn]] int main() {
+	// fixes scaling of screenshots on monitors with DPI
+	SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+
 	Config yaml{"../config.yaml"};
 	const bool refresh = yaml.getRefresh();
 	try {
