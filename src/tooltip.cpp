@@ -15,7 +15,6 @@
 #pragma comment(lib,"dwrite")
 
 #include <filesystem>
-#include <regex>
 #include <Windowsx.h>
 #include <spdlog/spdlog.h>
 #include <opencv2/imgproc.hpp>
@@ -31,36 +30,6 @@
 namespace ocr {
 	TooltipWnd::~TooltipWnd() {
 		mdict.reset();
-	}
-
-	HRESULT TooltipWnd::onWebMessageReceived(ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) {
-		LPWSTR        msg = nullptr;
-		const HRESULT err = args->get_WebMessageAsJson(&msg);
-		log(
-			err,
-			"ICoreWebView2WebMessageReceivedEventArgs::get_WebMessageAsJson",
-			ERR_LEVEL::WARN
-		);
-		if (SUCCEEDED(err) && msg) {
-			const nlohmann::json parsed = nlohmann::json::parse(
-				static_cast<std::u16string>(reinterpret_cast<const char16_t*>(msg))
-			);
-			if (parsed.contains("key")) {
-				const auto key = parsed.at("key").get<std::string>();
-				if (key == "contextmenu") {
-					const int  x    = parsed.at("x").get<int>();
-					const int  y    = parsed.at("y").get<int>();
-					const auto word = parsed.at("word").get<std::string>();
-					createContextMenu(x, y, word);
-				} else if (key == "mousedown") {
-					// pass
-				} else {
-					// pass
-				}
-			}
-			CoTaskMemFree(msg);
-		}
-		return S_OK;
 	}
 
 	void TooltipWnd::updateWindowSize() const {
@@ -86,10 +55,10 @@ namespace ocr {
 			top = getBottom(hover_word->rect);
 		}
 		int        left;
-		const auto screen_width = getScreenSize().first;
+		const int screen_width = getScreenSize().first;
 		if (getRight(hover_word->rect) + width > screen_width) {
 			// window is too width (it goes past right of screen)
-			left = static_cast<int>(screen_width) - width;
+			left = screen_width - width;
 		} else {
 			// window can extend right and is left of screen edge
 			left = getLeft(hover_word->rect);
@@ -102,11 +71,12 @@ namespace ocr {
 		if (!is_hovering) {
 			return;
 		}
+		if (!start.has_value()) {
+			start = std::chrono::steady_clock::now();
+		}
 
-		const auto w_hover_text = utf8::utf8to16(hover_word->text);
-		const auto [title_text_width, title_text_height] = getTextSize(w_hover_text);
-		height = std::max(static_cast<int>(std::ceil(title_text_height)), min_height);
-		width = std::max(static_cast<int>(std::ceil(title_text_width)), min_width);
+		height = min_height;
+		width = min_width;
 
 		if (inited_web_view2) {
 			const auto it = dictionary_data.find(hover_word->text);
@@ -119,18 +89,9 @@ namespace ocr {
 					log(err, "ICoreWebView2::NavigateToString", ERR_LEVEL::FATAL);
 				} else {
 					std::string total_website;
-					auto&       [entries, sorted, webpage_width] = it->second;
+					auto&       [entries, webpage_width] = it->second;
 					if (webpage_width == -1) {
 						webpage_width = max_webpage_width;
-					}
-
-					if (!sorted) {
-						std::ranges::sort(
-							entries,
-							[](const DictionaryEntry& a, const DictionaryEntry& b) {
-								return utf8::utf8to16(a.entry).size() > utf8::utf8to16(b.entry).size();
-							}
-						);
 					}
 
 					for (const auto& [entry, html] : entries) {
@@ -237,6 +198,30 @@ namespace ocr {
 		updateWindowSize();
 
 		updateWindowPosition();
+
+		if (start.has_value()) {
+			const auto end = std::chrono::steady_clock::now();
+			const auto duration = std::chrono::duration<double, std::milli>(end - start.value());
+			spdlog::info("website navigate duration: {}ms", duration.count());
+
+			start.reset();
+		}
+	}
+
+	HRESULT TooltipWnd::onWebMessageReceived(ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) {
+		wchar_t* json_string;
+		const HRESULT err = args->get_WebMessageAsJson(&json_string);
+		log(err, "ICoreWebView2WebMessageReceivedEventArgs::get_WebMessageAsJson", ERR_LEVEL::WARN);
+
+		nlohmann::json json = nlohmann::json::parse(wideToUtf8(json_string));
+		if (const auto it = json.find("key"); it != json.end()) {
+			if (it.value() == "contextmenu") {
+				createContextMenu(it.value().at("x"), it.value().at("y"), it.value().at("word"));
+			} else {
+				//mousedown && errors
+			}
+		}
+		return S_OK;
 	}
 
 	void TooltipWnd::createContextMenu(const int x, const int y, const std::string& phrase) const {
@@ -299,6 +284,7 @@ namespace ocr {
 
 			dictionary_data[first_char].entries.emplace_back(static_lookup_string, strip_dict_html);
 		}
+		std::ranges::reverse(dictionary_data[first_char].entries);
 	}
 
 	void TooltipWnd::processOCRResults(
@@ -525,11 +511,9 @@ namespace ocr {
 		wv_init->try_init_env();
 	}
 
-	bool TooltipWnd::initDirectWrite() {
+	void TooltipWnd::initDirectWrite() {
 		auto err = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &d2d1_factory);
 		log(err, "D2D1CreateFactory", ERR_LEVEL::FATAL);
-		if (FAILED(err))
-			return false;
 
 		err = DWriteCreateFactory(
 			DWRITE_FACTORY_TYPE_SHARED,
@@ -537,8 +521,6 @@ namespace ocr {
 			reinterpret_cast<IUnknown**>(&direct_write_factory)
 		);
 		log(err, "ID2D1Factory.DWriteCreateFactory", ERR_LEVEL::FATAL);
-		if (FAILED(err))
-			return false;
 
 		err = direct_write_factory->CreateTextFormat(
 			L"KaiTi",
@@ -551,8 +533,6 @@ namespace ocr {
 			&direct_write_text_format
 		);
 		log(err, "IDWriteFactory.CreateTextFormat", ERR_LEVEL::FATAL);
-		if (FAILED(err))
-			return false;
 
 		const D2D1_RENDER_TARGET_PROPERTIES rtProps = D2D1::RenderTargetProperties(
 			D2D1_RENDER_TARGET_TYPE_DEFAULT,
@@ -565,15 +545,9 @@ namespace ocr {
 
 		err = d2d1_factory->CreateHwndRenderTarget(rtProps, hwndProps, &render_target);
 		log(err, "ID2D1Factory.CreateHwndRenderTarget", ERR_LEVEL::FATAL);
-		if (FAILED(err))
-			return false;
 
 		err = render_target->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black), &brush);
 		log(err, "ID2D1HwndRenderTarget.CreateSolidColorBrush", ERR_LEVEL::FATAL);
-		if (FAILED(err))
-			return false;
-
-		return true;
 	}
 
 	void TooltipWnd::cleanupDirectWrite() {
@@ -647,28 +621,6 @@ namespace ocr {
 		}
 	}
 
-	std::pair<float, float> TooltipWnd::getTextSize(
-		const std::u16string& w_hover_text,
-		const float           p_width,
-		const float           p_height
-	) const {
-		wil::com_ptr<IDWriteTextLayout> text_layout;
-		direct_write_factory->CreateTextLayout(
-			reinterpret_cast<const wchar_t*>(w_hover_text.c_str()),
-			static_cast<UINT32>(w_hover_text.length()),
-			direct_write_text_format.get(),
-			p_width,
-			p_height,
-			&text_layout
-		);
-
-		DWRITE_TEXT_METRICS text_metrics{};
-		text_layout->GetMetrics(&text_metrics);
-		text_layout->Release();
-
-		return {text_metrics.width, text_metrics.height};
-	}
-
 	LRESULT TooltipWnd::wndProc(const UINT msg, const WPARAM wparam, const LPARAM lparam) {
 		switch (msg) {
 			case WM_CREATE: {
@@ -694,7 +646,6 @@ namespace ocr {
 				if (wv_controller) {
 					RECT rc;
 					GetClientRect(hwnd, &rc);
-					rc.top += title_bar_height;
 					const HRESULT err = wv_controller->put_Bounds(rc);
 					log(err, "ICoreWebView2Controller.put_Bounds", ERR_LEVEL::WARN);
 				};
@@ -710,21 +661,6 @@ namespace ocr {
 				if (is_hovering) {
 					PAINTSTRUCT ps;
 					BeginPaint(hwnd, &ps);
-
-					render_target->BeginDraw();
-					render_target->Clear(D2D1::ColorF(D2D1::ColorF::White));
-
-					const std::u16string w_hover_text = utf8::utf8to16(hover_word->text);
-					direct_write_text_format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-					render_target->DrawText(
-						reinterpret_cast<const wchar_t*>(w_hover_text.c_str()),
-						static_cast<UINT32>(w_hover_text.length()),
-						direct_write_text_format.get(),
-						D2D1::RectF(0, 0, static_cast<float>(width), static_cast<float>(height)),
-						brush.get()
-					);
-
-					render_target->EndDraw();
 
 					EndPaint(hwnd, &ps);
 					return 0;

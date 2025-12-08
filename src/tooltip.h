@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <Windows.h>
 #include <wil/com.h>
 
@@ -34,7 +35,6 @@ namespace ocr {
 
 	struct DictionaryData {
 		std::vector<DictionaryEntry> entries;
-		bool                         sorted{false};
 		int                          width{-1};
 	};
 
@@ -59,13 +59,14 @@ namespace ocr {
 		std::ranges::borrowed_iterator_t<std::vector<OCRBlock>&>        hover_block;
 		std::ranges::borrowed_iterator_t<std::vector<OCRResultPacked>&> hover_word;
 		bool                                                            need_refresh{false};
+		std::optional<std::chrono::steady_clock::time_point>            start;
 
 		std::vector<OCRBlock>                           results;
 		std::size_t                                     results_size{};
 		std::unique_ptr<mdict::Mdict>                   mdict;
 		std::string                                     css_data;
 		std::unordered_map<std::string, DictionaryData> dictionary_data;
-		int max_webpage_width{scroll_bar_width};
+		int                                             max_webpage_width{scroll_bar_width};
 
 		wil::com_ptr<ID2D1Factory>          d2d1_factory             = nullptr;
 		wil::com_ptr<ID2D1HwndRenderTarget> render_target            = nullptr;
@@ -79,7 +80,7 @@ namespace ocr {
 		bool                                  inited_web_view2{false};
 
 
-		bool initDirectWrite();
+		void initDirectWrite();
 
 		void initWebView2();
 
@@ -100,12 +101,6 @@ namespace ocr {
 		void createContextMenu(int x, int y, const std::string& phrase) const;
 
 		void initCurrDictHTML();
-
-		[[nodiscard]] std::pair<float, float> getTextSize(
-			const std::u16string& w_hover_text,
-			float                 p_width  = FLT_MAX,
-			float                 p_height = FLT_MAX
-		) const;
 
 		static void processOCRResults(
 			const std::vector<OCRResult>& res,

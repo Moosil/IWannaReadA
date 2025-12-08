@@ -233,6 +233,12 @@ namespace ocr {
 		return wcstr;
 	}
 
+	std::string wideToUtf8(const std::wstring& wstr) {
+		const std::u16string u16str = reinterpret_cast<const char16_t*>(wstr.c_str());
+		const auto str = utf8::utf16to8(u16str);
+		return str;
+	}
+
 	std::pair<float, float> getTextSize(
 		const std::wstring&                              text,
 		const Microsoft::WRL::ComPtr<IDWriteTextFormat>& direct_write_text_format,

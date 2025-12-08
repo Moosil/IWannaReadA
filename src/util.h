@@ -101,6 +101,8 @@ namespace ocr {
 
 	std::wstring utf8ToWide(const std::string& str);
 
+	std::string wideToUtf8(const std::wstring& wstr);
+
 	std::pair<float, float> getTextSize(
 		const std::wstring&                              text,
 		const Microsoft::WRL::ComPtr<IDWriteTextFormat>& direct_write_text_format,
