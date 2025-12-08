@@ -98,15 +98,11 @@ namespace ocr {
 		std::vector<std::vector<cv::Point> > contours;
 		cv::findContours(bitmap, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
 
-		// cap number of contours to max number
-		const std::size_t num_contours = std::min(contours.size(), max_candidates);
-		// or contours.resize(num_contours);
-
 		std::vector<TextRect> output;
-		for (std::size_t i = 0; i < num_contours; i++) {
+		for (const auto& contour : contours) {
 			// get the smallest rect that covers the contour
 			// if longest side is too small, continue
-			cv::RotatedRect min_area_rect = cv::minAreaRect(contours[i]);
+			cv::RotatedRect min_area_rect = cv::minAreaRect(contour);
 			if (const float max_side_length = std::max(min_area_rect.size.width, min_area_rect.size.height);
 				max_side_length < min_size) {
 				continue;

@@ -96,8 +96,8 @@ std::future<std::vector<OCRResult>> runOCR(
 
 					if (refresh && !pending_result.valid()) {
 						s_time now = std::chrono::steady_clock::now();
-						auto milliseconds_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - prev);
-						if ((milliseconds_duration).count() > 1000/*ms*/) {
+						const auto milliseconds_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - prev);
+						if ((milliseconds_duration).count() > 100/*ms*/) {
 							if (!rect.empty() && tt_wnd) {
 								ss = ScreenshotWnd::hBitmap2cvMat(ScreenshotWnd::captureScreenRegion(rect));
 								pending_result = runOCR(engine, ss);

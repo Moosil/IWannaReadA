@@ -21,6 +21,8 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
 endif()
 
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} /fp:contract /GA /Qpar")
+set(TARGET lto PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 add_subdirectory(third_party/mdict)
 add_subdirectory(third_party/utfcpp)
