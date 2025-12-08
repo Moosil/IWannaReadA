@@ -178,7 +178,6 @@ namespace ocr {
 		const auto        result_it = hover_block;
 		std::string       lookup_string;
 		const std::string first_char = hover_word->text;
-		std::vector<std::string> htmls{};
 		for (auto word_it = hover_word; word_it != result_it->results.end(); ++word_it) {
 			lookup_string += word_it->text;
 
