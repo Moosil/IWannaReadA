@@ -8,7 +8,6 @@
 #include <stack>
 #include <unordered_map>
 #include <WebView2.h>
-#include <clipper2/clipper.core.h>
 
 #include "common.h"
 
@@ -46,6 +45,31 @@ namespace ocr {
 
 	class TooltipWnd {
 	private:
+		static constexpr auto boilerplate_html = LR"(<html><body><div id="root"></div><script>
+document.addEventListener("contextmenu", e => {
+    const host = e.target.getRootNode().host;
+    if (host) {
+        window.chrome.webview.postMessage({
+            key: "contextmenu",
+            x: e.screenX,
+            y: e.screenY,
+            word: host.id
+        });
+        e.preventDefault();
+    }
+});
+
+document.addEventListener("mousedown", e => {
+    const host = e.target.getRootNode().host;
+    if (host) {
+        window.chrome.webview.postMessage({
+            key: "mousedown",
+            x: e.screenX,
+            y: e.screenY
+        });
+    }
+});</script></body></html>)";
+
 		static inline const std::string className        = "TooltipWnd";
 		static inline bool              isInitialised    = false;
 		static constexpr int            title_bar_height = 32;
@@ -119,6 +143,8 @@ namespace ocr {
 		TooltipWnd() = default;
 
 		~TooltipWnd();
+
+		HRESULT onNavigationComplete();
 
 		static std::unique_ptr<TooltipWnd> initTooltip(
 			const std::vector<OCRResult>& res,

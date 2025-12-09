@@ -68,60 +68,66 @@ namespace ocr {
 
 	void TooltipWnd::refreshWindow() {
 		need_refresh = false;
-		if (!is_hovering) {
+		if (!is_hovering)
 			return;
-		}
-		if (!start.has_value()) {
-			start = std::chrono::steady_clock::now();
-		}
 
 		height = min_height;
 		width = min_width;
 
-		if (inited_web_view2) {
-			const auto it = dictionary_data.find(hover_word->text);
-			if (it == dictionary_data.end()) {
-				initCurrDictHTML();
-				need_refresh = true;
-			} else {
-				if (it->second.entries.empty()) {
-					const HRESULT err = webview->NavigateToString(L"");
-					log(err, "ICoreWebView2::NavigateToString", ERR_LEVEL::FATAL);
-				} else {
-					std::string total_website;
-					auto&       [entries, webpage_width] = it->second;
-					if (webpage_width == -1) {
-						webpage_width = max_webpage_width;
-					}
+		if (!inited_web_view2)
+			return;
 
-					for (const auto& [entry, html] : entries) {
-						// Shadow DOM template to isolate duplicated HTML ids
-						total_website += fmt::format(
-							R"(<div id="{}"><template shadowrootmode="open"><style>{}</style>{}</template></div>)",
-							entry,
-							css_data,
-							html
-						);
-						width = std::max(width, webpage_width);
-					}
-					total_website = "<html lang=\"en\"><head><title>" + hover_word->text + "</title></head><body>" +
-									total_website
-									+
-									"</body></html>";
-
-					const std::u16string total_website_u16 = utf8::utf8to16(total_website);
-					const std::wstring   total_website_wstr(total_website_u16.begin(), total_website_u16.end());
-
-					const HRESULT err = webview->NavigateToString(total_website_wstr.c_str());
-					log(err, "ICoreWebView2::NavigateToString", ERR_LEVEL::FATAL);
-				}
-			}
+		if (!start.has_value()) {
+			start = std::chrono::steady_clock::now();
 		}
+
+		const auto it = dictionary_data.find(hover_word->text);
+		if (it == dictionary_data.end()) {
+			initCurrDictHTML();
+			need_refresh = true;
+			return;
+		}
+
+		if (it->second.entries.empty()) {
+			const HRESULT err = webview->NavigateToString(L"");
+			log(err, "ICoreWebView2::NavigateToString", ERR_LEVEL::FATAL);
+			return;
+		}
+
+		std::string total_website;
+		auto&       [entries, webpage_width] = it->second;
+
+		for (const auto& [entry, html] : entries) {
+			// Shadow DOM template to isolate duplicated HTML ids
+			total_website += fmt::format(
+				R"(<div id="{}"><template shadowrootmode="open"><style>{}</style>{}</template></div>)",
+				entry,
+				css_data,
+				html
+			);
+		}
+		width = std::max(min_width, webpage_width);
+		total_website = "<html><body>" +
+						total_website
+						+
+						"</body></html>";
+
+
+		const HRESULT err = webview->NavigateToString(utf8ToWide(total_website).c_str());
+		log(err, "ICoreWebView2::NavigateToString", ERR_LEVEL::FATAL);
 	}
 
 	void TooltipWnd::onWebsiteChanged() {
 		if (!is_hovering) {
 			return;
+		}
+
+		if (start.has_value()) {
+			const auto end = std::chrono::steady_clock::now();
+			const auto duration = std::chrono::duration<double, std::milli>(end - start.value());
+			spdlog::info("website navigate duration: {}ms", duration.count());
+
+			start.reset();
 		}
 
 		const HRESULT script_err = webview->ExecuteScript(
@@ -168,7 +174,7 @@ namespace ocr {
 		log(script_err, "ICoreWebView2::ExecuteScript", ERR_LEVEL::FATAL);
 
 		const auto dict_data_it = dictionary_data.find(hover_word->text);
-		if (dict_data_it != dictionary_data.end()) {
+		if (dict_data_it != dictionary_data.end() && dict_data_it->second.width != -1) {
 			const HRESULT err = webview->ExecuteScript(
 				LR"(
 	                (() => {
@@ -198,14 +204,6 @@ namespace ocr {
 		updateWindowSize();
 
 		updateWindowPosition();
-
-		if (start.has_value()) {
-			const auto end = std::chrono::steady_clock::now();
-			const auto duration = std::chrono::duration<double, std::milli>(end - start.value());
-			spdlog::info("website navigate duration: {}ms", duration.count());
-
-			start.reset();
-		}
 	}
 
 	HRESULT TooltipWnd::onWebMessageReceived(ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) {
@@ -218,7 +216,7 @@ namespace ocr {
 			if (it.value() == "contextmenu") {
 				createContextMenu(it.value().at("x"), it.value().at("y"), it.value().at("word"));
 			} else {
-				//mousedown && errors
+				//mousedown
 			}
 		}
 		return S_OK;
@@ -271,7 +269,7 @@ namespace ocr {
 		const auto        result_it = hover_block;
 		std::string       lookup_string;
 		const std::string first_char = hover_word->text;
-		dictionary_data[first_char] = {};
+		dictionary_data[first_char]  = {};
 		for (auto word_it = hover_word; word_it != result_it->results.end(); ++word_it) {
 			lookup_string += word_it->text;
 
@@ -461,7 +459,7 @@ namespace ocr {
 	}
 
 	void TooltipWnd::updateRectRes(const std::vector<OCRResult>& new_res, const cv::Rect& new_rect) {
-		rect = new_rect;
+		rect        = new_rect;
 		is_hovering = false;
 
 		if (inited_web_view2) {
@@ -491,7 +489,6 @@ namespace ocr {
 				wv_controller    = controller;
 				webview          = wv;
 				inited_web_view2 = true;
-
 
 				const HRESULT nav_subscribe_err = webview->add_NavigationCompleted(
 					Microsoft::WRL::Callback<ICoreWebView2NavigationCompletedEventHandler>(
