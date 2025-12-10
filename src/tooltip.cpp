@@ -28,241 +28,107 @@
 
 
 namespace ocr {
-	TooltipWnd::~TooltipWnd() {
-		mdict.reset();
-	}
+	void TooltipWnd::initDirectWrite() {
+		auto err = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &d2d1_factory);
+		log(err, "D2D1CreateFactory", ERR_LEVEL::FATAL);
 
-	void TooltipWnd::updateWindowSize() const {
-		SetWindowPos(
+		err = DWriteCreateFactory(
+			DWRITE_FACTORY_TYPE_SHARED,
+			__uuidof(IDWriteFactory),
+			reinterpret_cast<IUnknown**>(&direct_write_factory)
+		);
+		log(err, "ID2D1Factory.DWriteCreateFactory", ERR_LEVEL::FATAL);
+
+		err = direct_write_factory->CreateTextFormat(
+			L"KaiTi",
+			nullptr,
+			DWRITE_FONT_WEIGHT_BOLD,
+			DWRITE_FONT_STYLE_NORMAL,
+			DWRITE_FONT_STRETCH_NORMAL,
+			24.0f,
+			L"zh-CN",
+			&direct_write_text_format
+		);
+		log(err, "IDWriteFactory.CreateTextFormat", ERR_LEVEL::FATAL);
+
+		const D2D1_RENDER_TARGET_PROPERTIES rtProps = D2D1::RenderTargetProperties(
+			D2D1_RENDER_TARGET_TYPE_DEFAULT,
+			D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)
+		);
+		const D2D1_HWND_RENDER_TARGET_PROPERTIES hwndProps = D2D1::HwndRenderTargetProperties(
 			hwnd,
-			HWND_TOPMOST,
-			0,
-			0,
-			width,
-			height,
-			SWP_NOZORDER | SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOREDRAW
+			D2D1::SizeU(static_cast<unsigned int>(width), static_cast<unsigned int>(height))
 		);
-		InvalidateRect(hwnd, nullptr, FALSE);
+
+		err = d2d1_factory->CreateHwndRenderTarget(rtProps, hwndProps, &render_target);
+		log(err, "ID2D1Factory.CreateHwndRenderTarget", ERR_LEVEL::FATAL);
+
+		err = render_target->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black), &brush);
+		log(err, "ID2D1HwndRenderTarget.CreateSolidColorBrush", ERR_LEVEL::FATAL);
 	}
 
-	void TooltipWnd::updateWindowPosition() const {
-		int top;
-		if (height < getTop(hover_word->rect)) {
-			// window is too tall (it goes above top of screen)
-			top = getTop(hover_word->rect);
-		} else {
-			// window can extend up and is below screen
-			top = getBottom(hover_word->rect);
+	void TooltipWnd::initWebView2() {
+		HRESULT err = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+		log(err, "CoInitializeEx", ERR_LEVEL::FATAL);
+		wchar_t* version;
+		err = GetAvailableCoreWebView2BrowserVersionString(nullptr, &version);
+		log(err, "GetAvailableCoreWebView2BrowserVersionString", ERR_LEVEL::WARN);
+		if (SUCCEEDED(err)) {
+			CoTaskMemFree(version);
 		}
-		int        left;
-		const int screen_width = getScreenSize().first;
-		if (getRight(hover_word->rect) + width > screen_width) {
-			// window is too width (it goes past right of screen)
-			left = screen_width - width;
-		} else {
-			// window can extend right and is left of screen edge
-			left = getLeft(hover_word->rect);
-		}
-		SetWindowPos(hwnd, HWND_TOPMOST, left, top - height, -1, -1, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-	}
-
-	void TooltipWnd::refreshWindow() {
-		need_refresh = false;
-		if (!is_hovering)
-			return;
-
-		height = min_height;
-		width = min_width;
-
-		if (!inited_web_view2)
-			return;
-
-		if (!start.has_value()) {
-			start = std::chrono::steady_clock::now();
-		}
-
-		const auto it = dictionary_data.find(hover_word->text);
-		if (it == dictionary_data.end()) {
-			initCurrDictHTML();
-			need_refresh = true;
-			return;
-		}
-
-		if (it->second.entries.empty()) {
-			const HRESULT err = webview->NavigateToString(L"");
-			log(err, "ICoreWebView2::NavigateToString", ERR_LEVEL::FATAL);
-			return;
-		}
-
-		std::string total_website;
-		auto&       [entries, webpage_width] = it->second;
-
-		for (const auto& [entry, html] : entries) {
-			// Shadow DOM template to isolate duplicated HTML ids
-			total_website += fmt::format(
-				R"(<div id="{}"><template shadowrootmode="open"><style>{}</style>{}</template></div>)",
-				entry,
-				css_data,
-				html
-			);
-		}
-		width = std::max(min_width, webpage_width);
-		total_website = "<html><body>" +
-						total_website
-						+
-						"</body></html>";
-
-
-		const HRESULT err = webview->NavigateToString(utf8ToWide(total_website).c_str());
-		log(err, "ICoreWebView2::NavigateToString", ERR_LEVEL::FATAL);
-	}
-
-	void TooltipWnd::onWebsiteChanged() {
-		if (!is_hovering) {
-			return;
-		}
-
-		if (start.has_value()) {
-			const auto end = std::chrono::steady_clock::now();
-			const auto duration = std::chrono::duration<double, std::milli>(end - start.value());
-			spdlog::info("website navigate duration: {}ms", duration.count());
-
-			start.reset();
-		}
-
-		const HRESULT script_err = webview->ExecuteScript(
-			LR"(
-				for (const host of document.body.children) {
-					const shadow = host.shadowRoot;
-					shadow.addEventListener('contextmenu', function (event) {
-	                    let jsonObject = {
-	                        key: 'contextmenu',
-	                        x: event.screenX,
-							y: event.screenY,
-							word: host.id
-	                    };
-	                    window.chrome.webview.postMessage(jsonObject);
-	                    event.preventDefault();
-	                });
-	                shadow.addEventListener('mousedown', function (event) {
-	                    let jsonObject = {
-	                        key: 'mousedown',
-	                        x: event.screenX,
-							y: event.screenY
-	                    };
-	                    window.chrome.webview.postMessage(jsonObject);
-	                });
+		wv_init = std::make_unique<WebView2::Impl>(
+			hwnd,
+			RECT{0, title_bar_height, width, height},
+			[this](ICoreWebView2Controller* controller, ICoreWebView2* wv) {
+				if (!controller || !wv) {
+					return;
 				}
-            )",
-			Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
-				[this](HRESULT errorCode, LPCWSTR resultObjectAsJson) -> HRESULT {
-					log(errorCode, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
-					EventRegistrationToken token = {};
+				wv_controller = controller;
+				webview       = wv;
 
-					const HRESULT add_msg_err = webview->add_WebMessageReceived(
-						Microsoft::WRL::Callback<ICoreWebView2WebMessageReceivedEventHandler>(
-							this,
-							&TooltipWnd::onWebMessageReceived
-						).Get(),
-						&token
-					);
-					log(add_msg_err, "ICoreWebView2::add_WebMessageReceived", ERR_LEVEL::WARN);
-					return S_OK;
-				}
-			).Get()
-		);
-		log(script_err, "ICoreWebView2::ExecuteScript", ERR_LEVEL::FATAL);
-
-		const auto dict_data_it = dictionary_data.find(hover_word->text);
-		if (dict_data_it != dictionary_data.end() && dict_data_it->second.width != -1) {
-			const HRESULT err = webview->ExecuteScript(
-				LR"(
-	                (() => {
-	                    const html = document.documentElement;
-	                    const body = document.body;
-	                    return Math.max(html.scrollWidth, body.scrollWidth);
-	                })();
-	            )",
-				Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
-					[this](HRESULT errorCode, LPCWSTR result) -> HRESULT {
-						log(errorCode, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
-						if (SUCCEEDED(errorCode) && result && is_hovering) {
-							const auto curr_dict_data_it = dictionary_data.find(hover_word->text);
-							const int  webpage_width     = _wtoi(result);
-							if (curr_dict_data_it != dictionary_data.end()) {
-								curr_dict_data_it->second.width = webpage_width + scroll_bar_width;
-							}
-							max_webpage_width = std::max(webpage_width + scroll_bar_width, max_webpage_width);
+				const HRESULT nav_subscribe_err = webview->add_NavigationCompleted(
+					Microsoft::WRL::Callback<ICoreWebView2NavigationCompletedEventHandler>(
+						[this](ICoreWebView2* sender, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
+							inited_web_view2 = true;
+							onNavigationComplete();
+							return S_OK;
 						}
-						return S_OK;
-					}
-				).Get()
-			);
-			log(err, "ICoreWebView2::ExecuteScript", ERR_LEVEL::WARN);
-		}
+					).Get(),
+					nullptr
+				);
+				log(nav_subscribe_err, "ICoreWebView2::add_NavigationCompleted", ERR_LEVEL::WARN);
 
-		updateWindowSize();
+				const HRESULT nav_err = webview->NavigateToString(
+					utf8ToWide(fmt::format(html_skeleton, css_data, css_data, css_data, css_data, css_data)).c_str()
+				);
+				log(nav_err, "ICoreWebView2::NavigateToString", ERR_LEVEL::FATAL);
 
-		updateWindowPosition();
-	}
-
-	HRESULT TooltipWnd::onWebMessageReceived(ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) {
-		wchar_t* json_string;
-		const HRESULT err = args->get_WebMessageAsJson(&json_string);
-		log(err, "ICoreWebView2WebMessageReceivedEventArgs::get_WebMessageAsJson", ERR_LEVEL::WARN);
-
-		nlohmann::json json = nlohmann::json::parse(wideToUtf8(json_string));
-		if (const auto it = json.find("key"); it != json.end()) {
-			if (it.value() == "contextmenu") {
-				createContextMenu(it.value().at("x"), it.value().at("y"), it.value().at("word"));
-			} else {
-				//mousedown
+				if (!is_hovering) {
+					ShowWindow(hwnd, SW_HIDE);
+				}
 			}
-		}
-		return S_OK;
-	}
-
-	void TooltipWnd::createContextMenu(const int x, const int y, const std::string& phrase) const {
-		HMENU menu = CreatePopupMenu();
-		AppendMenu(menu, MF_STRING, 1, "Copy character");
-		AppendMenu(menu, MF_STRING, 2, "Copy phrase");
-		AppendMenu(menu, MF_STRING, 3, "Copy sentence");
-		const int selected = TrackPopupMenu(
-			menu,
-			TPM_LEFTALIGN | TPM_BOTTOMALIGN | TPM_RETURNCMD | TPM_LEFTBUTTON | TPM_NOANIMATION,
-			x,
-			y,
-			0,
-			hwnd,
-			nullptr
 		);
-		DestroyMenu(menu);
-		switch (selected) {
-			case 1: {
-				if (is_hovering) {
-					clip::set_text(hover_word->text);
-				}
-				break;
+		wv_init->try_init_env();
+	}
+
+	void TooltipWnd::initDictionary(const std::string& dict_string_path) {
+		const std::filesystem::path dict_folder_path_path = dict_string_path;
+		std::filesystem::path       dict_file_path{dict_folder_path_path};
+		dict_file_path /= dict_file_path.filename();
+		dict_file_path += ".mdx";
+		for (const auto& dir_item : std::filesystem::directory_iterator{dict_folder_path_path}) {
+			if (dir_item.path().extension() == ".css") {
+				std::ifstream     in(dir_item.path());
+				const std::string contents(
+					(std::istreambuf_iterator(in)),
+					std::istreambuf_iterator<char>()
+				);
+				css_data += contents;
 			}
-			case 2: {
-				if (is_hovering) {
-					clip::set_text(phrase);
-				}
-				break;
-			}
-			case 3: {
-				if (is_hovering) {
-					std::string copy{};
-					for (const auto& [_, block_text] : hover_block->results) {
-						copy.append(block_text);
-					}
-					clip::set_text(copy);
-				}
-				break;
-			}
-			default:
-				break;
 		}
+
+		mdict = std::make_unique<mdict::Mdict>(dict_file_path.string());
+		mdict->init();
 	}
 
 	void TooltipWnd::initCurrDictHTML() {
@@ -389,164 +255,6 @@ namespace ocr {
 		}
 	}
 
-	void TooltipWnd::initDictionary(const std::string& dict_string_path) {
-		const std::filesystem::path dict_folder_path_path = dict_string_path;
-		std::filesystem::path       dict_file_path{dict_folder_path_path};
-		dict_file_path /= dict_file_path.filename();
-		dict_file_path += ".mdx";
-		for (const auto& dir_item : std::filesystem::directory_iterator{dict_folder_path_path}) {
-			if (dir_item.path().extension() == ".css") {
-				std::ifstream     in(dir_item.path());
-				const std::string contents(
-					(std::istreambuf_iterator(in)),
-					std::istreambuf_iterator<char>()
-				);
-				css_data += contents;
-			}
-		}
-
-		mdict = std::make_unique<mdict::Mdict>(dict_file_path.string());
-		mdict->init();
-	}
-
-	std::unique_ptr<TooltipWnd> TooltipWnd::initTooltip(
-		const std::vector<OCRResult>& res,
-		const cv::Rect&               rect,
-		const std::string&            dict_folder_path
-	) {
-		auto wnd = std::make_unique<TooltipWnd>();
-		if (!isInitialised) {
-			WNDCLASS wc{};
-			wc.lpfnWndProc   = &wndProcSetup;
-			wc.hInstance     = GetModuleHandle(nullptr);
-			wc.lpszClassName = className.c_str();
-			wc.hbrBackground = reinterpret_cast<HBRUSH>((COLOR_WINDOW));
-			if (!RegisterClassA(&wc)) {
-				spdlog::error("registering window class failed");
-				return nullptr;
-			}
-			isInitialised = true;
-		}
-
-		wnd->rect = rect;
-		processOCRResults(res, cv::Point{wnd->rect.x, wnd->rect.y}, wnd->results);
-
-		constexpr int style           = WS_POPUP;
-		constexpr int extended_styles = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_TRANSPARENT;
-		wnd->width                    = min_width;
-		wnd->height                   = min_height;
-
-		wnd->hwnd = CreateWindowEx(
-			extended_styles,
-			className.c_str(),
-			"tt",
-			style,
-			0,
-			0,
-			wnd->width,
-			wnd->height,
-			nullptr,
-			nullptr,
-			GetModuleHandle(nullptr),
-			wnd.get()
-		);
-
-		wnd->initDirectWrite();
-
-		wnd->initDictionary(dict_folder_path);
-
-		return wnd;
-	}
-
-	void TooltipWnd::updateRectRes(const std::vector<OCRResult>& new_res, const cv::Rect& new_rect) {
-		rect        = new_rect;
-		is_hovering = false;
-
-		if (inited_web_view2) {
-			ShowWindow(hwnd, SW_HIDE);
-		}
-		UpdateWindow(hwnd);
-
-		processOCRResults(new_res, cv::Point{rect.x, rect.y}, results);
-	}
-
-	void TooltipWnd::initWebView2() {
-		HRESULT err = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-		log(err, "CoInitializeEx", ERR_LEVEL::FATAL);
-		wchar_t* version;
-		err = GetAvailableCoreWebView2BrowserVersionString(nullptr, &version);
-		log(err, "GetAvailableCoreWebView2BrowserVersionString", ERR_LEVEL::WARN);
-		if (SUCCEEDED(err)) {
-			CoTaskMemFree(version);
-		}
-		wv_init = std::make_unique<WebView2::Impl>(
-			hwnd,
-			RECT{0, title_bar_height, width, height},
-			[this](ICoreWebView2Controller* controller, ICoreWebView2* wv) {
-				if (!controller || !wv) {
-					return;
-				}
-				wv_controller    = controller;
-				webview          = wv;
-				inited_web_view2 = true;
-
-				const HRESULT nav_subscribe_err = webview->add_NavigationCompleted(
-					Microsoft::WRL::Callback<ICoreWebView2NavigationCompletedEventHandler>(
-						[this](ICoreWebView2* sender, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
-							onWebsiteChanged();
-							return S_OK;
-						}
-					).Get(),
-					nullptr
-				);
-				log(nav_subscribe_err, "ICoreWebView2::add_NavigationCompleted", ERR_LEVEL::WARN);
-				if (!is_hovering) {
-					ShowWindow(hwnd, SW_HIDE);
-				}
-			}
-		);
-		wv_init->try_init_env();
-	}
-
-	void TooltipWnd::initDirectWrite() {
-		auto err = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &d2d1_factory);
-		log(err, "D2D1CreateFactory", ERR_LEVEL::FATAL);
-
-		err = DWriteCreateFactory(
-			DWRITE_FACTORY_TYPE_SHARED,
-			__uuidof(IDWriteFactory),
-			reinterpret_cast<IUnknown**>(&direct_write_factory)
-		);
-		log(err, "ID2D1Factory.DWriteCreateFactory", ERR_LEVEL::FATAL);
-
-		err = direct_write_factory->CreateTextFormat(
-			L"KaiTi",
-			nullptr,
-			DWRITE_FONT_WEIGHT_BOLD,
-			DWRITE_FONT_STYLE_NORMAL,
-			DWRITE_FONT_STRETCH_NORMAL,
-			24.0f,
-			L"zh-CN",
-			&direct_write_text_format
-		);
-		log(err, "IDWriteFactory.CreateTextFormat", ERR_LEVEL::FATAL);
-
-		const D2D1_RENDER_TARGET_PROPERTIES rtProps = D2D1::RenderTargetProperties(
-			D2D1_RENDER_TARGET_TYPE_DEFAULT,
-			D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)
-		);
-		const D2D1_HWND_RENDER_TARGET_PROPERTIES hwndProps = D2D1::HwndRenderTargetProperties(
-			hwnd,
-			D2D1::SizeU(static_cast<unsigned int>(width), static_cast<unsigned int>(height))
-		);
-
-		err = d2d1_factory->CreateHwndRenderTarget(rtProps, hwndProps, &render_target);
-		log(err, "ID2D1Factory.CreateHwndRenderTarget", ERR_LEVEL::FATAL);
-
-		err = render_target->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black), &brush);
-		log(err, "ID2D1HwndRenderTarget.CreateSolidColorBrush", ERR_LEVEL::FATAL);
-	}
-
 	void TooltipWnd::cleanupDirectWrite() {
 		direct_write_text_format.reset();
 		brush.reset();
@@ -555,66 +263,200 @@ namespace ocr {
 		d2d1_factory.reset();
 	}
 
-	void TooltipWnd::updateLoop() {
-		if (GetAsyncKeyState(VK_SHIFT) & (1 << 15)) {
-			POINT win_mouse_pos;
-			GetCursorPos(&win_mouse_pos);
+	void TooltipWnd::updateWindowSize() const {
+		SetWindowPos(
+			hwnd,
+			HWND_TOPMOST,
+			0,
+			0,
+			width,
+			height,
+			SWP_NOZORDER | SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOREDRAW
+		);
+		InvalidateRect(hwnd, nullptr, FALSE);
+	}
 
-			const cv::Point mouse_pos{win_mouse_pos.x, win_mouse_pos.y};
-			if (rect.contains(mouse_pos)) {
-				if (is_hovering && cv::pointPolygonTest(hover_word->rect, mouse_pos, false) > 0) {
-					// caching previous rect in case (optimisation)
-				} else {
-					const auto intersect_iter = std::ranges::find_if(
-						results,
-						[&mouse_pos](const auto& res) {
-							// returns positive (inside), negative (outside), or zero (on an edge) value
-							return cv::pointPolygonTest(res.poly, mouse_pos, false) > 0;
-						}
-					);
-					if (intersect_iter != results.end()) {
-						const auto word_iter = std::ranges::find_if(
-							intersect_iter->results,
-							[&mouse_pos](const auto& res) {
-								// returns positive (inside), negative (outside), or zero (on an edge) value
-								return cv::pointPolygonTest(res.rect, mouse_pos, false) > 0;
-							}
-						);
-						if (word_iter != intersect_iter->results.end()) {
-							is_hovering  = true;
-							hover_word   = word_iter;
-							hover_block  = intersect_iter;
-							need_refresh = true;
-						} else {
-							is_hovering = false;
-						}
-					} else {
-						// mouse isn't in any of the OCR areas
-						is_hovering = false;
+	void TooltipWnd::updateWindowPosition() const {
+		int top;
+		if (height < getTop(hover_word->rect)) {
+			// window is too tall (it goes above top of screen)
+			top = getTop(hover_word->rect);
+		} else {
+			// window can extend up and is below screen
+			top = getBottom(hover_word->rect);
+		}
+		int       left;
+		const int screen_width = getScreenSize().first;
+		if (getRight(hover_word->rect) + width > screen_width) {
+			// window is too width (it goes past right of screen)
+			left = screen_width - width;
+		} else {
+			// window can extend right and is left of screen edge
+			left = getLeft(hover_word->rect);
+		}
+		SetWindowPos(hwnd, HWND_TOPMOST, left, top - height, -1, -1, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+	}
+
+	void TooltipWnd::refreshWindow() {
+		need_refresh = false;
+		if (!is_hovering)
+			return;
+
+		height = min_height;
+		width  = min_width;
+
+		if (!inited_web_view2)
+			return;
+
+		const auto it = dictionary_data.find(hover_word->text);
+		if (it == dictionary_data.end()) {
+			initCurrDictHTML();
+			need_refresh = true;
+			return;
+		}
+
+		if (it->second.entries.empty()) {
+			const HRESULT err = webview->ExecuteScript(
+				reset_webpage_script,
+				Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+					[](HRESULT errorCode, LPCWSTR resultObjectAsJson) -> HRESULT {
+						log(errorCode, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
+						return S_OK;
 					}
-				}
-			} else {
-				// if mouse is in the captured rect
-				is_hovering = false;
-			}
-			if (is_hovering) {
-				ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-				UpdateWindow(hwnd);
-			} else {
-				if (inited_web_view2) {
-					ShowWindow(hwnd, SW_HIDE);
-				}
-				UpdateWindow(hwnd);
-			}
-		}
-		if (need_refresh) {
-			refreshWindow();
+				).Get()
+			);
+			log(err, "ICoreWebView2::ExecuteScript", ERR_LEVEL::WARN);
+			return;
 		}
 
-		MSG msg;
-		while (PeekMessage(&msg, hwnd, 0, 0, PM_REMOVE)) {
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
+		std::string script;
+		auto&       [entries] = it->second;
+
+		for (int i = 0; i < entries.size(); i++) {
+			// Shadow DOM template to isolate duplicated HTML ids
+			script += fmt::format(
+				fill_webpage_script,
+				i,
+				entries[i].entry,
+				entries[i].entry_html
+			);
+		}
+		width = std::max(min_width, max_webpage_width);
+
+		const HRESULT err = webview->ExecuteScript(
+			utf8ToWide(script).c_str(),
+			Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+				[this](HRESULT errorCode, LPCWSTR resultObjectAsJson) -> HRESULT {
+					log(errorCode, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
+					const HRESULT err = webview->ExecuteScript(
+						get_width_script,
+						Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+							[this](HRESULT errorCode, LPCWSTR result) -> HRESULT {
+								log(errorCode, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
+								if (SUCCEEDED(errorCode) && result && is_hovering) {
+									const int calc_webpage_width = _wtoi(result) + scroll_bar_width;
+									max_webpage_width            = std::max(calc_webpage_width, max_webpage_width);
+									width                        = std::max(min_width, calc_webpage_width);
+								}
+								return S_OK;
+							}
+						).Get()
+					);
+					log(err, "ICoreWebView2::ExecuteScript", ERR_LEVEL::WARN);
+
+					updateWindowSize();
+
+					updateWindowPosition();
+					return S_OK;
+				}
+			).Get()
+		);
+		log(err, "ICoreWebView2::ExecuteScript", ERR_LEVEL::FATAL);
+	}
+
+	void TooltipWnd::onNavigationComplete() {
+		if (!is_hovering) {
+			return;
+		}
+
+		const HRESULT script_err = webview->ExecuteScript(
+			add_context_menu_script,
+			Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+				[this](HRESULT errorCode, LPCWSTR resultObjectAsJson) -> HRESULT {
+					log(errorCode, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
+					EventRegistrationToken token = {};
+
+					const HRESULT add_msg_err = webview->add_WebMessageReceived(
+						Microsoft::WRL::Callback<ICoreWebView2WebMessageReceivedEventHandler>(
+							this,
+							&TooltipWnd::onWebMessageReceived
+						).Get(),
+						&token
+					);
+					log(add_msg_err, "ICoreWebView2::add_WebMessageReceived", ERR_LEVEL::WARN);
+					return S_OK;
+				}
+			).Get()
+		);
+		log(script_err, "ICoreWebView2::ExecuteScript", ERR_LEVEL::FATAL);
+	}
+
+	HRESULT TooltipWnd::onWebMessageReceived(ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) {
+		wchar_t*      json_string;
+		const HRESULT err = args->get_WebMessageAsJson(&json_string);
+		log(err, "ICoreWebView2WebMessageReceivedEventArgs::get_WebMessageAsJson", ERR_LEVEL::WARN);
+
+		nlohmann::json json = nlohmann::json::parse(wideToUtf8(json_string));
+		if (const auto it = json.find("key"); it != json.end()) {
+			if (it.value() == "contextmenu") {
+				createContextMenu(it.value().at("x"), it.value().at("y"), it.value().at("word"));
+			} else {
+				//mousedown
+			}
+		}
+		return S_OK;
+	}
+
+	void TooltipWnd::createContextMenu(const int x, const int y, const std::string& phrase) const {
+		HMENU menu = CreatePopupMenu();
+		AppendMenu(menu, MF_STRING, 1, "Copy character");
+		AppendMenu(menu, MF_STRING, 2, "Copy phrase");
+		AppendMenu(menu, MF_STRING, 3, "Copy sentence");
+		const int selected = TrackPopupMenu(
+			menu,
+			TPM_LEFTALIGN | TPM_BOTTOMALIGN | TPM_RETURNCMD | TPM_LEFTBUTTON | TPM_NOANIMATION,
+			x,
+			y,
+			0,
+			hwnd,
+			nullptr
+		);
+		DestroyMenu(menu);
+		switch (selected) {
+			case 1: {
+				if (is_hovering) {
+					clip::set_text(hover_word->text);
+				}
+				break;
+			}
+			case 2: {
+				if (is_hovering) {
+					clip::set_text(phrase);
+				}
+				break;
+			}
+			case 3: {
+				if (is_hovering) {
+					std::string copy{};
+					for (const auto& [_, block_text] : hover_block->results) {
+						copy.append(block_text);
+					}
+					clip::set_text(copy);
+				}
+				break;
+			}
+			default:
+				break;
 		}
 	}
 
@@ -700,5 +542,130 @@ namespace ocr {
 			return self->wndProc(msg, wparam, lparam);
 		}
 		return DefWindowProc(hwnd, msg, wparam, lparam);
+	}
+
+	TooltipWnd::~TooltipWnd() {
+		mdict.reset();
+	}
+
+	std::unique_ptr<TooltipWnd> TooltipWnd::initTooltip(
+		const std::vector<OCRResult>& res,
+		const cv::Rect&               rect,
+		const std::string&            dict_folder_path
+	) {
+		auto wnd = std::make_unique<TooltipWnd>();
+		if (!isInitialised) {
+			WNDCLASS wc{};
+			wc.lpfnWndProc   = &wndProcSetup;
+			wc.hInstance     = GetModuleHandle(nullptr);
+			wc.lpszClassName = className.c_str();
+			wc.hbrBackground = reinterpret_cast<HBRUSH>((COLOR_WINDOW));
+			if (!RegisterClassA(&wc)) {
+				spdlog::error("registering window class failed");
+				return nullptr;
+			}
+			isInitialised = true;
+		}
+
+		wnd->rect = rect;
+		processOCRResults(res, cv::Point{wnd->rect.x, wnd->rect.y}, wnd->results);
+
+		constexpr int style           = WS_POPUP;
+		constexpr int extended_styles = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_TRANSPARENT;
+		wnd->width                    = min_width;
+		wnd->height                   = min_height;
+
+		wnd->hwnd = CreateWindowEx(
+			extended_styles,
+			className.c_str(),
+			"tt",
+			style,
+			0,
+			0,
+			wnd->width,
+			wnd->height,
+			nullptr,
+			nullptr,
+			GetModuleHandle(nullptr),
+			wnd.get()
+		);
+
+		wnd->initDirectWrite();
+
+		wnd->initDictionary(dict_folder_path);
+
+		return wnd;
+	}
+
+	void TooltipWnd::updateRectRes(const std::vector<OCRResult>& new_res, const cv::Rect& new_rect) {
+		rect        = new_rect;
+		is_hovering = false;
+
+		UpdateWindow(hwnd);
+
+		processOCRResults(new_res, cv::Point{rect.x, rect.y}, results);
+	}
+
+	void TooltipWnd::updateLoop() {
+		if (GetAsyncKeyState(VK_SHIFT) & (1 << 15)) {
+			POINT win_mouse_pos;
+			GetCursorPos(&win_mouse_pos);
+
+			const cv::Point mouse_pos{win_mouse_pos.x, win_mouse_pos.y};
+			if (rect.contains(mouse_pos)) {
+				if (is_hovering && cv::pointPolygonTest(hover_word->rect, mouse_pos, false) > 0) {
+					// caching previous rect in case (optimisation)
+				} else {
+					const auto intersect_iter = std::ranges::find_if(
+						results,
+						[&mouse_pos](const auto& res) {
+							// returns positive (inside), negative (outside), or zero (on an edge) value
+							return cv::pointPolygonTest(res.poly, mouse_pos, false) > 0;
+						}
+					);
+					if (intersect_iter != results.end()) {
+						const auto word_iter = std::ranges::find_if(
+							intersect_iter->results,
+							[&mouse_pos](const auto& res) {
+								// returns positive (inside), negative (outside), or zero (on an edge) value
+								return cv::pointPolygonTest(res.rect, mouse_pos, false) > 0;
+							}
+						);
+						if (word_iter != intersect_iter->results.end()) {
+							is_hovering  = true;
+							hover_word   = word_iter;
+							hover_block  = intersect_iter;
+							need_refresh = true;
+						} else {
+							is_hovering = false;
+						}
+					} else {
+						// mouse isn't in any of the OCR areas
+						is_hovering = false;
+					}
+				}
+			} else {
+				// if mouse is in the captured rect
+				is_hovering = false;
+			}
+			if (is_hovering) {
+				ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+				UpdateWindow(hwnd);
+			} else {
+				if (inited_web_view2) {
+					ShowWindow(hwnd, SW_HIDE);
+				}
+				UpdateWindow(hwnd);
+			}
+		}
+		if (need_refresh) {
+			refreshWindow();
+		}
+
+		MSG msg;
+		while (PeekMessage(&msg, hwnd, 0, 0, PM_REMOVE)) {
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
 	}
 }

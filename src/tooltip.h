@@ -34,7 +34,6 @@ namespace ocr {
 
 	struct DictionaryData {
 		std::vector<DictionaryEntry> entries;
-		int                          width{-1};
 	};
 
 	struct OCRBlock {
@@ -76,14 +75,64 @@ document.addEventListener("mousedown", e => {
 		static constexpr int            min_width        = 256;
 		static constexpr int            min_height       = 256;
 		static constexpr int            scroll_bar_width = 16;
-
+		static constexpr char html_skeleton[] = ""
+		"<html><body>"
+			"<div id=\"0\"><template shadowrootmode=\"open\"><style>{}</style><div></div></template></div>"
+			"<div id=\"1\"><template shadowrootmode=\"open\"><style>{}</style><div></div></template></div>"
+			"<div id=\"2\"><template shadowrootmode=\"open\"><style>{}</style><div></div></template></div>"
+			"<div id=\"3\"><template shadowrootmode=\"open\"><style>{}</style><div></div></template></div>"
+			"<div id=\"4\"><template shadowrootmode=\"open\"><style>{}</style><div></div></template></div>"
+		"</body></html>";
+		static constexpr char fill_webpage_script[] = ""
+		"(() => {{"
+			"const host = document.getElementById(\"{}\");"
+			"const shadow = host.shadowRoot;"
+			"const div = shadow.lastChild;"
+			"div.id = `{}`;"
+			"div.innerHTML = `{}`;"
+		"}})();";
+		static constexpr wchar_t reset_webpage_script[] = L""
+		"for (const host of document.body.children) {"
+			"const div = host.shadowRoot.lastChild;"
+			"div.id=\"\";"
+			"div.innerHTML=\"\";"
+		"};";
+		static constexpr wchar_t get_width_script[] = L""
+		"(() => {{"
+			"const html = document.documentElement;"
+			"const body = document.body;"
+			"return Math.max(html.scrollWidth, body.scrollWidth);"
+		"}})();";
+		static constexpr wchar_t add_context_menu_script[] = L""
+			"for (const host of document.body.children) {"
+				"const shadow = host.shadowRoot;"
+				"shadow.addEventListener(\"contextmenu\", function (event) {"
+					"let jsonObject = {"
+						"key: \"contextmenu\","
+						"x: event.screenX,"
+						"y: event.screenY,"
+						"word: host.id"
+					"};"
+					"window.chrome.webview.postMessage(jsonObject);"
+					"event.preventDefault();"
+				"});"
+				"shadow.addEventListener(\"mousedown\", function (event) {"
+					"let jsonObject = {"
+						"key: 'mousedown',"
+						"x: event.screenX,"
+						"y: event.screenY"
+					"};"
+					"window.chrome.webview.postMessage(jsonObject);"
+				"});"
+			"}"
+		")";
+		
 		int                                                             width{}, height{};
 		bool                                                            is_hovering{};
 		cv::Rect                                                        rect;
 		std::ranges::borrowed_iterator_t<std::vector<OCRBlock>&>        hover_block;
 		std::ranges::borrowed_iterator_t<std::vector<OCRResultPacked>&> hover_word;
 		bool                                                            need_refresh{false};
-		std::optional<std::chrono::steady_clock::time_point>            start;
 
 		std::vector<OCRBlock>                           results;
 		std::size_t                                     results_size{};
@@ -103,26 +152,11 @@ document.addEventListener("mousedown", e => {
 		wil::com_ptr<ICoreWebView2>           webview;
 		bool                                  inited_web_view2{false};
 
-
 		void initDirectWrite();
 
 		void initWebView2();
 
-		void cleanupDirectWrite();
-
 		void initDictionary(const std::string& dict_string_path);
-
-		void updateWindowSize() const;
-
-		void updateWindowPosition() const;
-
-		void refreshWindow();
-
-		void onWebsiteChanged();
-
-		HRESULT onWebMessageReceived(ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args);
-
-		void createContextMenu(int x, int y, const std::string& phrase) const;
 
 		void initCurrDictHTML();
 
@@ -132,9 +166,23 @@ document.addEventListener("mousedown", e => {
 			std::vector<OCRBlock>&        out
 		);
 
-		static LRESULT CALLBACK wndProcSetup(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
+		void cleanupDirectWrite();
+
+		void updateWindowSize() const;
+
+		void updateWindowPosition() const;
+
+		void refreshWindow();
+
+		void onNavigationComplete();
+
+		HRESULT onWebMessageReceived(ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args);
+
+		void createContextMenu(int x, int y, const std::string& phrase) const;
 
 		LRESULT CALLBACK wndProc(UINT msg, WPARAM wparam, LPARAM lparam);
+
+		static LRESULT CALLBACK wndProcSetup(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 
 	public:
 		HWND hwnd{};
@@ -143,8 +191,6 @@ document.addEventListener("mousedown", e => {
 		TooltipWnd() = default;
 
 		~TooltipWnd();
-
-		HRESULT onNavigationComplete();
 
 		static std::unique_ptr<TooltipWnd> initTooltip(
 			const std::vector<OCRResult>& res,

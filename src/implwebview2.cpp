@@ -101,11 +101,11 @@ namespace WebView2 {
 			}
 		}
 
-		wil::com_ptr<ICoreWebView2Settings> settings;
-		err = webview->get_Settings(&settings);
-		ocr::log(err, "ICoreWebView2::get_Settings", ocr::ERR_LEVEL::WARN);
-		err = settings->put_AreDefaultContextMenusEnabled(false);
-		ocr::log(err, "ICoreWebView2Settings::put_AreDefaultContextMenusEnabled", ocr::ERR_LEVEL::WARN);
+		// wil::com_ptr<ICoreWebView2Settings> settings;
+		// err = webview->get_Settings(&settings);
+		// ocr::log(err, "ICoreWebView2::get_Settings", ocr::ERR_LEVEL::WARN);
+		// err = settings->put_AreDefaultContextMenusEnabled(false);
+		// ocr::log(err, "ICoreWebView2Settings::put_AreDefaultContextMenusEnabled", ocr::ERR_LEVEL::WARN);
 
 		callback(controller, webview.get());
 		return S_OK;
