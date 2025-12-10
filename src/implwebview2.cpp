@@ -76,16 +76,6 @@ namespace WebView2 {
 		err = controller->put_Bounds(extent);
 		ocr::log(err, "ICoreWebView2Controller::put_Bounds", ocr::ERR_LEVEL::WARN);
 
-		// wil::com_ptr<ICoreWebView2Controller2> controller2;
-		// err = controller->QueryInterface(IID_PPV_ARGS(&controller2));
-		// ocr::log(err, "ICoreWebView2Controller::QueryInterface", ocr::ERR_LEVEL::WARN);
-		//
-		// if (SUCCEEDED(err)) {
-		// 	constexpr COREWEBVIEW2_COLOR color = {255, 255, 255, 255};
-		// 	err                                = controller2->put_DefaultBackgroundColor(color);
-		// 	ocr::log(err, "controller2::put_DefaultBackgroundColor", ocr::ERR_LEVEL::WARN);
-		// }
-
 		wil::com_ptr<ICoreWebView2_13> webview13;
 		err = webview->QueryInterface(IID_PPV_ARGS(&webview13));
 		ocr::log(err, "ICoreWebView2::QueryInterface", ocr::ERR_LEVEL::WARN);
@@ -101,11 +91,11 @@ namespace WebView2 {
 			}
 		}
 
-		// wil::com_ptr<ICoreWebView2Settings> settings;
-		// err = webview->get_Settings(&settings);
-		// ocr::log(err, "ICoreWebView2::get_Settings", ocr::ERR_LEVEL::WARN);
-		// err = settings->put_AreDefaultContextMenusEnabled(false);
-		// ocr::log(err, "ICoreWebView2Settings::put_AreDefaultContextMenusEnabled", ocr::ERR_LEVEL::WARN);
+		wil::com_ptr<ICoreWebView2Settings> settings;
+		err = webview->get_Settings(&settings);
+		ocr::log(err, "ICoreWebView2::get_Settings", ocr::ERR_LEVEL::WARN);
+		err = settings->put_AreDefaultContextMenusEnabled(false);
+		ocr::log(err, "ICoreWebView2Settings::put_AreDefaultContextMenusEnabled", ocr::ERR_LEVEL::WARN);
 
 		callback(controller, webview.get());
 		return S_OK;
