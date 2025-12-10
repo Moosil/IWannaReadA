@@ -13,7 +13,6 @@ find_package(turbobase64 CONFIG REQUIRED)
 find_package(unofficial-webview2 CONFIG REQUIRED)
 find_package(clip CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
-find_path(RAPIDXML_INCLUDE_DIRS "rapidxml/rapidxml.hpp")
 find_package(ZLIB REQUIRED)
 
 if(MSVC)
@@ -24,25 +23,31 @@ endif()
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} /fp:contract /GA /Qpar")
 set(TARGET lto PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 
-add_subdirectory(third_party/mdict)
+add_subdirectory(third_party/mdict-cpp)
 add_subdirectory(third_party/utfcpp)
 
 add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/ocr_engine.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/ocr_engine.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/det.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/det.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/util.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/util.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/rec.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/rec.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/config.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/config.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/screenshot.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/screenshot.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/tooltip.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/tooltip.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/implwebview2.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/implwebview2.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/log.h
 )
 
-target_include_directories(${PROJECT_NAME} PUBLIC src
-        ${RAPIDXML_INCLUDE_DIRS}
-)
+target_include_directories(${PROJECT_NAME} PUBLIC src)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
         yaml-cpp::yaml-cpp

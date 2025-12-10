@@ -170,17 +170,6 @@ namespace ocr {
 		return text_image;
 	}
 
-	std::string strip(std::string& text) {
-		std::locale loc;
-		std::erase_if(
-			text,
-			[loc](const unsigned char ch) -> bool {
-				return std::isspace(ch, loc);
-			}
-		);
-		return text;
-	}
-
 	std::pair<int, int> getMonitorDPI() {
 		HMONITOR hMon = MonitorFromWindow(nullptr, MONITOR_DEFAULTTOPRIMARY);
 		UINT dpi_x, dpi_y;

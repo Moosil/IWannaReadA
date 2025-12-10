@@ -7,6 +7,8 @@
 #include <spdlog/spdlog.h>
 #include <format>
 
+#include "util.h"
+
 namespace ocr {
 	Config::Config(const std::filesystem::path& path) :
 		node{YAML::LoadFile(path.string())},
@@ -225,9 +227,29 @@ namespace ocr {
 	}
 
 	bool Config::getRefresh() {
-		if (node["refresh"]) {
-			return node["refresh"].as<bool>();
-		}
+		for (const auto& refresh : refresh_alias)
+			if (node[refresh])
+				return node[refresh].as<bool>();
 		return false;
+	}
+
+	int Config::getRefreshIntervalMs() {
+		std::string string_duration = getRefreshIntervalAsString();
+		trim(string_duration);
+		int value{};
+		if (auto [ptr, ec] = std::from_chars(string_duration.data(), string_duration.data() + string_duration.size(), value); ec != std::errc{}) {
+			std::string extra{ptr};
+			if (extra.empty())
+				return value * 1000;
+			if (extra == "ms")
+				return value;
+		}
+		return -1;
+	}
+
+	std::string Config::getRefreshIntervalAsString() {
+		for (const auto& interval : refresh_interval_alias)
+			return node[interval].as<std::string>();
+		return "-1";
 	}
 } // ocr

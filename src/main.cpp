@@ -27,6 +27,7 @@ std::future<std::vector<OCRResult>> runOCR(
 
 	Config yaml{"../config.yaml"};
 	const bool refresh = yaml.getRefresh();
+	const int refresh_interval = yaml.getRefreshIntervalMs();
 	try {
 		SetConsoleOutputCP(CP_UTF8);
 		SetConsoleCP(CP_UTF8);
@@ -97,7 +98,7 @@ std::future<std::vector<OCRResult>> runOCR(
 					if (refresh && !pending_result.valid()) {
 						s_time now = std::chrono::steady_clock::now();
 						const auto milliseconds_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - prev);
-						if ((milliseconds_duration).count() > 100/*ms*/) {
+						if ((milliseconds_duration).count() > refresh_interval/*ms*/) {
 							if (!rect.empty() && tt_wnd) {
 								ss = ScreenshotWnd::hBitmap2cvMat(ScreenshotWnd::captureScreenRegion(rect));
 								pending_result = runOCR(engine, ss);

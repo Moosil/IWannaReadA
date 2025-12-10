@@ -79,8 +79,6 @@ namespace ocr {
 
 	cv::Mat cropImage(const cv::Mat& image, Poly2I rect);
 
-	std::string strip(std::string& text);
-
 	std::pair<int, int> getMonitorDPI();
 
 	std::pair<int, int> getScreenSize();

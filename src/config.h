@@ -28,6 +28,8 @@ namespace ocr {
 		file_path getRecParamPath();
 
 		bool getRefresh();
+
+		int getRefreshIntervalMs();
 	private:
 		enum class ModelType {
 			Rec,
@@ -86,12 +88,17 @@ namespace ocr {
 			"chars"
 		};
 
+		static inline const std::vector<std::string> refresh_alias = {"refresh"};
+		static inline const std::vector<std::string> refresh_interval_alias = {"refresh_interval", "refresh-interval", "interval", "refresh_duration", "refresh-duration", "duration"};
+
 		static inline const std::vector<std::string> connectors = {"", "-", "_"};
 
 		file_path config_path;
 		file_path file_root;
 
 		file_path getPath(ModelType model_type, FileType file_type);
+
+		std::string getRefreshIntervalAsString();
 
 		static std::string enum2String(ModelType model_type);
 

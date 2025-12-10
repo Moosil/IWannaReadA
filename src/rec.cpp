@@ -88,9 +88,9 @@ namespace ocr {
 			return Text{};
 		}
 
-		std::string                            text;
-		std::vector<float>                     text_scores;
-		std::vector<std::pair<float, float>> text_lengths;
+		std::string                           text;
+		std::vector<float>                    text_scores;
+		std::vector<std::pair<float, float> > text_lengths;
 
 		std::size_t   prev_index  = -1;
 		constexpr int blank_idx   = 0;
@@ -136,7 +136,7 @@ namespace ocr {
 		}
 
 		return {
-			.text = strip(text),
+			.text = trim(text),
 			.char_lengths = text_lengths,
 			.scores = text_scores
 		};
