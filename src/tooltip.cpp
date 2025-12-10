@@ -1,21 +1,12 @@
 #include "tooltip.h"
 
 #include <ranges>
-
-#include <gdiplus.h>
-#include <dcomp.h>
-#include <d2d1.h>
-#include <wrl.h>
-#include <dwrite.h>
-#include <WebView2.h>
-#pragma comment(lib,"gdiplus")
-#pragma comment(lib,"dxgi")
-#pragma comment(lib,"dcomp")
-#pragma comment(lib,"d2d1")
-#pragma comment(lib,"dwrite")
-
 #include <filesystem>
+
 #include <Windowsx.h>
+#include <wrl/event.h>
+#include <WebView2.h>
+
 #include <spdlog/spdlog.h>
 #include <opencv2/imgproc.hpp>
 #include <utf8/cpp20.h>
@@ -28,45 +19,6 @@
 
 
 namespace ocr {
-	void TooltipWnd::initDirectWrite() {
-		auto err = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &d2d1_factory);
-		log(err, "D2D1CreateFactory", ERR_LEVEL::FATAL);
-
-		err = DWriteCreateFactory(
-			DWRITE_FACTORY_TYPE_SHARED,
-			__uuidof(IDWriteFactory),
-			reinterpret_cast<IUnknown**>(&direct_write_factory)
-		);
-		log(err, "ID2D1Factory.DWriteCreateFactory", ERR_LEVEL::FATAL);
-
-		err = direct_write_factory->CreateTextFormat(
-			L"KaiTi",
-			nullptr,
-			DWRITE_FONT_WEIGHT_BOLD,
-			DWRITE_FONT_STYLE_NORMAL,
-			DWRITE_FONT_STRETCH_NORMAL,
-			24.0f,
-			L"zh-CN",
-			&direct_write_text_format
-		);
-		log(err, "IDWriteFactory.CreateTextFormat", ERR_LEVEL::FATAL);
-
-		const D2D1_RENDER_TARGET_PROPERTIES rtProps = D2D1::RenderTargetProperties(
-			D2D1_RENDER_TARGET_TYPE_DEFAULT,
-			D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)
-		);
-		const D2D1_HWND_RENDER_TARGET_PROPERTIES hwndProps = D2D1::HwndRenderTargetProperties(
-			hwnd,
-			D2D1::SizeU(static_cast<unsigned int>(width), static_cast<unsigned int>(height))
-		);
-
-		err = d2d1_factory->CreateHwndRenderTarget(rtProps, hwndProps, &render_target);
-		log(err, "ID2D1Factory.CreateHwndRenderTarget", ERR_LEVEL::FATAL);
-
-		err = render_target->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black), &brush);
-		log(err, "ID2D1HwndRenderTarget.CreateSolidColorBrush", ERR_LEVEL::FATAL);
-	}
-
 	void TooltipWnd::initWebView2() {
 		HRESULT err = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 		log(err, "CoInitializeEx", ERR_LEVEL::FATAL);
@@ -78,7 +30,7 @@ namespace ocr {
 		}
 		wv_init = std::make_unique<WebView2::Impl>(
 			hwnd,
-			RECT{0, title_bar_height, width, height},
+			RECT{0, 0, width, height},
 			[this](ICoreWebView2Controller* controller, ICoreWebView2* wv) {
 				if (!controller || !wv) {
 					return;
@@ -253,14 +205,6 @@ namespace ocr {
 				}
 			}
 		}
-	}
-
-	void TooltipWnd::cleanupDirectWrite() {
-		direct_write_text_format.reset();
-		brush.reset();
-		render_target.reset();
-		direct_write_factory.reset();
-		d2d1_factory.reset();
 	}
 
 	void TooltipWnd::updateWindowSize() const {
@@ -488,12 +432,6 @@ namespace ocr {
 					const HRESULT err = wv_controller->put_Bounds(rc);
 					log(err, "ICoreWebView2Controller.put_Bounds", ERR_LEVEL::WARN);
 				};
-				if (render_target) {
-					const HRESULT err = render_target->Resize(
-						D2D1::SizeU(static_cast<unsigned int>(width), static_cast<unsigned int>(height))
-					);
-					log(err, "ID2D1HwndRenderTarget.Resize", ERR_LEVEL::WARN);
-				}
 				break;
 			}
 			case WM_PAINT: {
@@ -507,7 +445,6 @@ namespace ocr {
 				break;
 			}
 			case WM_DESTROY: {
-				cleanupDirectWrite();
 				break;
 			}
 			case WM_NCDESTROY: {
@@ -589,8 +526,6 @@ namespace ocr {
 			GetModuleHandle(nullptr),
 			wnd.get()
 		);
-
-		wnd->initDirectWrite();
 
 		wnd->initDictionary(dict_folder_path);
 

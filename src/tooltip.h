@@ -1,26 +1,19 @@
 #pragma once
 
-#include <chrono>
-#include <Windows.h>
-#include <wil/com.h>
-
 #include <mdict.h>
 #include <stack>
 #include <unordered_map>
-#include <WebView2.h>
+
+#include <Windows.h>
+#include <wrl/client.h>
 
 #include "common.h"
-
-struct ID2D1Factory;
-struct ID2D1HwndRenderTarget;
-struct ID2D1SolidColorBrush;
-struct IDWriteFactory;
-struct IDWriteTextFormat;
 
 struct ICoreWebView2Controller;
 struct ICoreWebView2;
 struct EventRegistrationToken;
 struct ICoreWebView2WebMessageReceivedEventHandler;
+struct ICoreWebView2WebMessageReceivedEventArgs;
 
 namespace WebView2 {
 	class Impl;
@@ -71,7 +64,6 @@ document.addEventListener("mousedown", e => {
 
 		static inline const std::string className        = "TooltipWnd";
 		static inline bool              isInitialised    = false;
-		static constexpr int            title_bar_height = 32;
 		static constexpr int            min_width        = 256;
 		static constexpr int            min_height       = 256;
 		static constexpr int            scroll_bar_width = 16;
@@ -141,18 +133,10 @@ document.addEventListener("mousedown", e => {
 		std::unordered_map<std::string, DictionaryData> dictionary_data;
 		int                                             max_webpage_width{scroll_bar_width};
 
-		wil::com_ptr<ID2D1Factory>          d2d1_factory             = nullptr;
-		wil::com_ptr<ID2D1HwndRenderTarget> render_target            = nullptr;
-		wil::com_ptr<ID2D1SolidColorBrush>  brush                    = nullptr;
-		wil::com_ptr<IDWriteFactory>        direct_write_factory     = nullptr;
-		wil::com_ptr<IDWriteTextFormat>     direct_write_text_format = nullptr;
-
-		std::unique_ptr<WebView2::Impl>       wv_init;
-		wil::com_ptr<ICoreWebView2Controller> wv_controller;
-		wil::com_ptr<ICoreWebView2>           webview;
-		bool                                  inited_web_view2{false};
-
-		void initDirectWrite();
+		std::unique_ptr<WebView2::Impl>                 wv_init;
+		Microsoft::WRL::ComPtr<ICoreWebView2Controller> wv_controller;
+		Microsoft::WRL::ComPtr<ICoreWebView2>           webview;
+		bool                                            inited_web_view2{false};
 
 		void initWebView2();
 
@@ -165,8 +149,6 @@ document.addEventListener("mousedown", e => {
 			const cv::Point&              topleft,
 			std::vector<OCRBlock>&        out
 		);
-
-		void cleanupDirectWrite();
 
 		void updateWindowSize() const;
 
