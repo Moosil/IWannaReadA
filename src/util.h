@@ -6,8 +6,13 @@
 #include <clipper2/clipper.h>
 #include <opencv2/core/types.hpp>
 #include <spdlog/spdlog.h>
+#include <wrl/client.h>
 
 #include "common.h"
+
+
+struct IDWriteTextFormat;
+struct IDWriteFactory;
 
 namespace ocr {
 	Poly2F rotatedRect2Poly2F(const cv::RotatedRect& rect);
@@ -76,7 +81,9 @@ namespace ocr {
 
 	std::string strip(std::string& text);
 
-	std::pair<unsigned long, unsigned long> getScreenSize();
+	std::pair<int, int> getMonitorDPI();
+
+	std::pair<int, int> getScreenSize();
 
 	int lerpi(int a, int b, float t);
 
@@ -90,6 +97,15 @@ namespace ocr {
 	std::string& trim(std::string& str);
 
 	std::string trim_copy(const std::string& str);
-
 	// End attribution
+
+	std::wstring utf8ToWide(const std::string& str);
+
+	std::string wideToUtf8(const std::wstring& wstr);
+
+	std::pair<float, float> getTextSize(
+		const std::wstring&                              text,
+		const Microsoft::WRL::ComPtr<IDWriteTextFormat>& direct_write_text_format,
+		const Microsoft::WRL::ComPtr<IDWriteFactory>&    direct_write_factory
+	);
 } // ocr

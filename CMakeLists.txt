@@ -21,6 +21,8 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
 endif()
 
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} /fp:contract /GA /Qpar")
+set(TARGET lto PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 add_subdirectory(third_party/mdict)
 add_subdirectory(third_party/utfcpp)
@@ -36,7 +38,6 @@ add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/tooltip.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/implwebview2.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/log.h
-        src/task.h
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC src
