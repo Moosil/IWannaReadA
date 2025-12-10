@@ -56,6 +56,8 @@ namespace ocr {
 
 
 	std::vector<OCRResult> OCREngine::run(const cv::Mat& image) const {
+		spdlog::info("image size: {}x{}", image.cols, image.rows);
+
 		// det
 		std::vector<TextRect> text_boxes = det.run(image);
 
