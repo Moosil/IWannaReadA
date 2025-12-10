@@ -1,3 +1,6 @@
 [submodule "third_party/utfcpp"]
 	path = third_party/utfcpp
 	url = https://github.com/Moosil/utfcpp.git
+[submodule "third_party/mdict-cpp"]
+	path = third_party/mdict-cpp
+	url = https://github.com/Moosil/mdict-cpp.git
