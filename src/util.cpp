@@ -4,16 +4,8 @@
 
 #include "util.h"
 
-#include <d2d1helper.h>
-#include <dwrite.h>
 #include <opencv2/imgproc.hpp>
-#include <windows.h>
-#include <shellscalingapi.h>
-#pragma comment(lib,"Shcore.lib")
-#include <utf8/cpp20.h>
-#include <wrl/client.h>
-
-#include "log.h"
+#include <Windows.h>
 
 
 namespace ocr {
@@ -126,7 +118,7 @@ namespace ocr {
 			point.y -= bottom;
 		}
 
-		// get width and height of rectangle when it's not rotated
+		// get width and height of rectangle when its not rotated
 		const float crop_w = distance(rect[0], rect[1]);
 		const float crop_h = distance(rect[0], rect[3]);
 
@@ -181,17 +173,11 @@ namespace ocr {
 		return text;
 	}
 
-	std::pair<int, int> getMonitorDPI() {
-		HMONITOR hMon = MonitorFromWindow(nullptr, MONITOR_DEFAULTTOPRIMARY);
-		UINT dpi_x, dpi_y;
-		const HRESULT err = GetDpiForMonitor(hMon, MDT_EFFECTIVE_DPI, &dpi_x, &dpi_y);
-		log(err, "GetDpiForMonitor", ERR_LEVEL::WARN);
-		return {dpi_x, dpi_y};
-	}
-
-	std::pair<int, int> getScreenSize() {
-		const auto [dpi_x, dpi_y] = getMonitorDPI();
-		return { GetSystemMetricsForDpi(SM_CXSCREEN, dpi_x), GetSystemMetricsForDpi(SM_CYSCREEN, dpi_y)};
+	std::pair<unsigned long, unsigned long> getScreenSize() {
+		DEVMODE devMode{};
+		devMode.dmSize = sizeof(DEVMODEA);
+		EnumDisplaySettings(nullptr, ENUM_CURRENT_SETTINGS, &devMode);
+		return {devMode.dmPelsWidth, devMode.dmPelsHeight};
 	}
 
 	int lerpi(const int a, const int b, const float t) {
@@ -225,35 +211,5 @@ namespace ocr {
 	std::string trim_copy(const std::string& str) {
 		auto s = str;
 		return ltrim(rtrim(s));
-	}
-
-	std::wstring utf8ToWide(const std::string& str) {
-		const std::u16string u16str = utf8::utf8to16(str);
-		const auto wcstr = reinterpret_cast<const wchar_t*>(u16str.c_str());
-		return wcstr;
-	}
-
-	std::pair<float, float> getTextSize(
-		const std::wstring&                              text,
-		const Microsoft::WRL::ComPtr<IDWriteTextFormat>& direct_write_text_format,
-		const Microsoft::WRL::ComPtr<IDWriteFactory>& direct_write_factory
-	) {
-		Microsoft::WRL::ComPtr<IDWriteTextLayout> text_layout;
-		HRESULT err = direct_write_factory->CreateTextLayout(
-			text.c_str(),
-			static_cast<UINT32>(text.length()),
-			direct_write_text_format.Get(),
-			100,
-			100,
-			&text_layout
-		);
-		log(err, "IDWriteFactory::CreateTextLayout", ERR_LEVEL::WARN);
-
-		DWRITE_TEXT_METRICS text_metrics{};
-		err = text_layout->GetMetrics(&text_metrics);
-		log(err, "IDWriteTextLayout::GetMetrics", ERR_LEVEL::WARN);
-		text_layout->Release();
-
-		return {text_metrics.width, text_metrics.height};
 	}
 }

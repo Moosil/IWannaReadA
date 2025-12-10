@@ -27,13 +27,13 @@
     "name" : "turbobase64",
     "version>=" : "2023.8#2"
   }, {
+    "name" : "webview2",
+    "version>=" : "1.0.3240.44"
+  }, {
     "name" : "dacap-clip",
     "version>=" : "1.13"
   }, {
     "name" : "nlohmann-json",
     "version>=" : "3.12.0#1"
-  }, {
-    "name" : "litehtml",
-    "version>=" : "0.9.0"
   } ]
 }

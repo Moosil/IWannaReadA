@@ -58,7 +58,7 @@ namespace ocr {
 	HBITMAP ScreenshotWnd::captureEntireScreen() {
 		const auto [width, height] = getScreenSize();
 
-		return captureScreenRegion(cv::Rect(0, 0, width, height));
+		return captureScreenRegion(cv::Rect(0, 0, static_cast<int>(width), static_cast<int>((height))));
 	}
 
 	HBITMAP ScreenshotWnd::captureScreenRegion(const cv::Rect rect) {

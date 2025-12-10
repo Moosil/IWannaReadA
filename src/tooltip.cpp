@@ -4,9 +4,10 @@
 
 #include <gdiplus.h>
 #include <dcomp.h>
-#include <d2d1helper.h>
+#include <d2d1.h>
 #include <wrl.h>
 #include <dwrite.h>
+#include <WebView2.h>
 #pragma comment(lib,"gdiplus")
 #pragma comment(lib,"dxgi")
 #pragma comment(lib,"dcomp")
@@ -14,15 +15,15 @@
 #pragma comment(lib,"dwrite")
 
 #include <filesystem>
+#include <regex>
 #include <Windowsx.h>
 #include <spdlog/spdlog.h>
 #include <opencv2/imgproc.hpp>
 #include <utf8/cpp20.h>
 #include <clip.h>
 #include <nlohmann/json.hpp>
-#include <litehtml.h>
 
-#include "impl_document_container.h"
+#include "implwebview2.h"
 #include "log.h"
 #include "util.h"
 
@@ -30,6 +31,36 @@
 namespace ocr {
 	TooltipWnd::~TooltipWnd() {
 		mdict.reset();
+	}
+
+	HRESULT TooltipWnd::onWebMessageReceived(ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) {
+		LPWSTR        msg = nullptr;
+		const HRESULT err = args->get_WebMessageAsJson(&msg);
+		log(
+			err,
+			"ICoreWebView2WebMessageReceivedEventArgs::get_WebMessageAsJson",
+			ERR_LEVEL::WARN
+		);
+		if (SUCCEEDED(err) && msg) {
+			const nlohmann::json parsed = nlohmann::json::parse(
+				static_cast<std::u16string>(reinterpret_cast<const char16_t*>(msg))
+			);
+			if (parsed.contains("key")) {
+				const auto key = parsed.at("key").get<std::string>();
+				if (key == "contextmenu") {
+					const int  x    = parsed.at("x").get<int>();
+					const int  y    = parsed.at("y").get<int>();
+					const auto word = parsed.at("word").get<std::string>();
+					createContextMenu(x, y, word);
+				} else if (key == "mousedown") {
+					// pass
+				} else {
+					// pass
+				}
+			}
+			CoTaskMemFree(msg);
+		}
+		return S_OK;
 	}
 
 	void TooltipWnd::updateWindowSize() const {
@@ -55,10 +86,10 @@ namespace ocr {
 			top = getBottom(hover_word->rect);
 		}
 		int        left;
-		const int screen_width = getScreenSize().first;
+		const auto screen_width = getScreenSize().first;
 		if (getRight(hover_word->rect) + width > screen_width) {
 			// window is too width (it goes past right of screen)
-			left = screen_width - width;
+			left = static_cast<int>(screen_width) - width;
 		} else {
 			// window can extend right and is left of screen edge
 			left = getLeft(hover_word->rect);
@@ -71,64 +102,141 @@ namespace ocr {
 		if (!is_hovering) {
 			return;
 		}
-		if (!start.has_value()) {
-			start = std::chrono::steady_clock::now();
-		}
 
-		height = min_height;
-		width = min_width;
+		const auto w_hover_text = utf8::utf8to16(hover_word->text);
+		const auto [title_text_width, title_text_height] = getTextSize(w_hover_text);
+		height = std::max(static_cast<int>(std::ceil(title_text_height)), min_height);
+		width = std::max(static_cast<int>(std::ceil(title_text_width)), min_width);
 
-		const auto it = dictionary_data.find(hover_word->text);
-		if (it == dictionary_data.end()) {
-			initCurrDictHTML();
-			need_refresh = true;
-		} else {
-			std::string total_website;
-			auto&       [entries, webpage_width] = it->second;
-			if (webpage_width == -1) {
-				webpage_width = max_webpage_width;
+		if (inited_web_view2) {
+			const auto it = dictionary_data.find(hover_word->text);
+			if (it == dictionary_data.end()) {
+				initCurrDictHTML();
+				need_refresh = true;
+			} else {
+				if (it->second.entries.empty()) {
+					const HRESULT err = webview->NavigateToString(L"");
+					log(err, "ICoreWebView2::NavigateToString", ERR_LEVEL::FATAL);
+				} else {
+					std::string total_website;
+					auto&       [entries, sorted, webpage_width] = it->second;
+					if (webpage_width == -1) {
+						webpage_width = max_webpage_width;
+					}
+
+					if (!sorted) {
+						std::ranges::sort(
+							entries,
+							[](const DictionaryEntry& a, const DictionaryEntry& b) {
+								return utf8::utf8to16(a.entry).size() > utf8::utf8to16(b.entry).size();
+							}
+						);
+					}
+
+					for (const auto& [entry, html] : entries) {
+						// Shadow DOM template to isolate duplicated HTML ids
+						total_website += fmt::format(
+							R"(<div id="{}"><template shadowrootmode="open"><style>{}</style>{}</template></div>)",
+							entry,
+							css_data,
+							html
+						);
+						width = std::max(width, webpage_width);
+					}
+					total_website = "<html lang=\"en\"><head><title>" + hover_word->text + "</title></head><body>" +
+									total_website
+									+
+									"</body></html>";
+
+					const std::u16string total_website_u16 = utf8::utf8to16(total_website);
+					const std::wstring   total_website_wstr(total_website_u16.begin(), total_website_u16.end());
+
+					const HRESULT err = webview->NavigateToString(total_website_wstr.c_str());
+					log(err, "ICoreWebView2::NavigateToString", ERR_LEVEL::FATAL);
+				}
 			}
-
-			for (const auto& [entry, html] : entries) {
-				// Shadow DOM template to isolate duplicated HTML ids
-				total_website += fmt::format(
-					R"(<div id="{}">{}</div>)",
-					entry,
-					html
-				);
-				width = std::max(width, webpage_width);
-			}
-
-			const std::string wrapped_html = fmt::format(
-				R"(<html><head><style>{}</style></head><body>{}</body></html>)",
-				css_data,
-				total_website
-			);
-
-			html_renderer = litehtml::document::createFromString(wrapped_html.c_str(), html_doc_impl.get());
-
-			onWebsiteChanged();
 		}
 	}
 
 	void TooltipWnd::onWebsiteChanged() {
+		if (!is_hovering) {
+			return;
+		}
+
+		const HRESULT script_err = webview->ExecuteScript(
+			LR"(
+				for (const host of document.body.children) {
+					const shadow = host.shadowRoot;
+					shadow.addEventListener('contextmenu', function (event) {
+	                    let jsonObject = {
+	                        key: 'contextmenu',
+	                        x: event.screenX,
+							y: event.screenY,
+							word: host.id
+	                    };
+	                    window.chrome.webview.postMessage(jsonObject);
+	                    event.preventDefault();
+	                });
+	                shadow.addEventListener('mousedown', function (event) {
+	                    let jsonObject = {
+	                        key: 'mousedown',
+	                        x: event.screenX,
+							y: event.screenY
+	                    };
+	                    window.chrome.webview.postMessage(jsonObject);
+	                });
+				}
+            )",
+			Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+				[this](HRESULT errorCode, LPCWSTR resultObjectAsJson) -> HRESULT {
+					log(errorCode, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
+					EventRegistrationToken token = {};
+
+					const HRESULT add_msg_err = webview->add_WebMessageReceived(
+						Microsoft::WRL::Callback<ICoreWebView2WebMessageReceivedEventHandler>(
+							this,
+							&TooltipWnd::onWebMessageReceived
+						).Get(),
+						&token
+					);
+					log(add_msg_err, "ICoreWebView2::add_WebMessageReceived", ERR_LEVEL::WARN);
+					return S_OK;
+				}
+			).Get()
+		);
+		log(script_err, "ICoreWebView2::ExecuteScript", ERR_LEVEL::FATAL);
+
 		const auto dict_data_it = dictionary_data.find(hover_word->text);
 		if (dict_data_it != dictionary_data.end()) {
-			const int best_width = html_renderer->render(width);
-			dict_data_it->second.width = best_width;
-			max_webpage_width = std::max(max_webpage_width, best_width + scroll_bar_width);
+			const HRESULT err = webview->ExecuteScript(
+				LR"(
+	                (() => {
+	                    const html = document.documentElement;
+	                    const body = document.body;
+	                    return Math.max(html.scrollWidth, body.scrollWidth);
+	                })();
+	            )",
+				Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+					[this](HRESULT errorCode, LPCWSTR result) -> HRESULT {
+						log(errorCode, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
+						if (SUCCEEDED(errorCode) && result && is_hovering) {
+							const auto curr_dict_data_it = dictionary_data.find(hover_word->text);
+							const int  webpage_width     = _wtoi(result);
+							if (curr_dict_data_it != dictionary_data.end()) {
+								curr_dict_data_it->second.width = webpage_width + scroll_bar_width;
+							}
+							max_webpage_width = std::max(webpage_width + scroll_bar_width, max_webpage_width);
+						}
+						return S_OK;
+					}
+				).Get()
+			);
+			log(err, "ICoreWebView2::ExecuteScript", ERR_LEVEL::WARN);
 		}
 
 		updateWindowSize();
 
 		updateWindowPosition();
-		if (start.has_value()) {
-			const auto end = std::chrono::steady_clock::now();
-			const auto duration = std::chrono::duration<double, std::milli>(end - start.value());
-			spdlog::info("website navigate duration: {}ms", duration.count());
-
-			start.reset();
-		}
 	}
 
 	void TooltipWnd::createContextMenu(const int x, const int y, const std::string& phrase) const {
@@ -178,7 +286,7 @@ namespace ocr {
 		const auto        result_it = hover_block;
 		std::string       lookup_string;
 		const std::string first_char = hover_word->text;
-		std::vector<std::string> htmls{};
+		dictionary_data[first_char] = {};
 		for (auto word_it = hover_word; word_it != result_it->results.end(); ++word_it) {
 			lookup_string += word_it->text;
 
@@ -191,7 +299,6 @@ namespace ocr {
 
 			dictionary_data[first_char].entries.emplace_back(static_lookup_string, strip_dict_html);
 		}
-		std::ranges::reverse(dictionary_data[first_char].entries);
 	}
 
 	void TooltipWnd::processOCRResults(
@@ -362,9 +469,6 @@ namespace ocr {
 
 		wnd->initDirectWrite();
 
-		wnd->html_doc_impl = std::make_unique<HTMLDocument>(HTMLDocument{*wnd, wnd->direct_write_factory, wnd->render_target});
-
-
 		wnd->initDictionary(dict_folder_path);
 
 		return wnd;
@@ -374,22 +478,81 @@ namespace ocr {
 		rect = new_rect;
 		is_hovering = false;
 
-		ShowWindow(hwnd, SW_HIDE);
+		if (inited_web_view2) {
+			ShowWindow(hwnd, SW_HIDE);
+		}
 		UpdateWindow(hwnd);
 
 		processOCRResults(new_res, cv::Point{rect.x, rect.y}, results);
 	}
 
-	void TooltipWnd::initDirectWrite() {
-		HRESULT err = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, d2d1_factory.GetAddressOf());
+	void TooltipWnd::initWebView2() {
+		HRESULT err = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+		log(err, "CoInitializeEx", ERR_LEVEL::FATAL);
+		wchar_t* version;
+		err = GetAvailableCoreWebView2BrowserVersionString(nullptr, &version);
+		log(err, "GetAvailableCoreWebView2BrowserVersionString", ERR_LEVEL::WARN);
+		if (SUCCEEDED(err)) {
+			CoTaskMemFree(version);
+		}
+		wv_init = std::make_unique<WebView2::Impl>(
+			hwnd,
+			RECT{0, title_bar_height, width, height},
+			[this](ICoreWebView2Controller* controller, ICoreWebView2* wv) {
+				if (!controller || !wv) {
+					return;
+				}
+				wv_controller    = controller;
+				webview          = wv;
+				inited_web_view2 = true;
+
+
+				const HRESULT nav_subscribe_err = webview->add_NavigationCompleted(
+					Microsoft::WRL::Callback<ICoreWebView2NavigationCompletedEventHandler>(
+						[this](ICoreWebView2* sender, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
+							onWebsiteChanged();
+							return S_OK;
+						}
+					).Get(),
+					nullptr
+				);
+				log(nav_subscribe_err, "ICoreWebView2::add_NavigationCompleted", ERR_LEVEL::WARN);
+				if (!is_hovering) {
+					ShowWindow(hwnd, SW_HIDE);
+				}
+			}
+		);
+		wv_init->try_init_env();
+	}
+
+	bool TooltipWnd::initDirectWrite() {
+		auto err = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &d2d1_factory);
 		log(err, "D2D1CreateFactory", ERR_LEVEL::FATAL);
+		if (FAILED(err))
+			return false;
 
 		err = DWriteCreateFactory(
 			DWRITE_FACTORY_TYPE_SHARED,
 			__uuidof(IDWriteFactory),
-			reinterpret_cast<IUnknown**>(direct_write_factory.GetAddressOf())
+			reinterpret_cast<IUnknown**>(&direct_write_factory)
 		);
-		log(err, "ID2D1Factory::DWriteCreateFactory", ERR_LEVEL::FATAL);
+		log(err, "ID2D1Factory.DWriteCreateFactory", ERR_LEVEL::FATAL);
+		if (FAILED(err))
+			return false;
+
+		err = direct_write_factory->CreateTextFormat(
+			L"KaiTi",
+			nullptr,
+			DWRITE_FONT_WEIGHT_BOLD,
+			DWRITE_FONT_STYLE_NORMAL,
+			DWRITE_FONT_STRETCH_NORMAL,
+			24.0f,
+			L"zh-CN",
+			&direct_write_text_format
+		);
+		log(err, "IDWriteFactory.CreateTextFormat", ERR_LEVEL::FATAL);
+		if (FAILED(err))
+			return false;
 
 		const D2D1_RENDER_TARGET_PROPERTIES rtProps = D2D1::RenderTargetProperties(
 			D2D1_RENDER_TARGET_TYPE_DEFAULT,
@@ -400,14 +563,25 @@ namespace ocr {
 			D2D1::SizeU(static_cast<unsigned int>(width), static_cast<unsigned int>(height))
 		);
 
-		err = d2d1_factory->CreateHwndRenderTarget(rtProps, hwndProps, render_target.GetAddressOf());
-		log(err, "ID2D1Factory::CreateHwndRenderTarget", ERR_LEVEL::FATAL);
+		err = d2d1_factory->CreateHwndRenderTarget(rtProps, hwndProps, &render_target);
+		log(err, "ID2D1Factory.CreateHwndRenderTarget", ERR_LEVEL::FATAL);
+		if (FAILED(err))
+			return false;
+
+		err = render_target->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black), &brush);
+		log(err, "ID2D1HwndRenderTarget.CreateSolidColorBrush", ERR_LEVEL::FATAL);
+		if (FAILED(err))
+			return false;
+
+		return true;
 	}
 
 	void TooltipWnd::cleanupDirectWrite() {
-		render_target.Reset();
-		direct_write_factory.Reset();
-		d2d1_factory.Reset();
+		direct_write_text_format.reset();
+		brush.reset();
+		render_target.reset();
+		direct_write_factory.reset();
+		d2d1_factory.reset();
 	}
 
 	void TooltipWnd::updateLoop() {
@@ -456,7 +630,9 @@ namespace ocr {
 				ShowWindow(hwnd, SW_SHOWNOACTIVATE);
 				UpdateWindow(hwnd);
 			} else {
-				ShowWindow(hwnd, SW_HIDE);
+				if (inited_web_view2) {
+					ShowWindow(hwnd, SW_HIDE);
+				}
 				UpdateWindow(hwnd);
 			}
 		}
@@ -471,13 +647,35 @@ namespace ocr {
 		}
 	}
 
-	std::pair<int, int> TooltipWnd::getExtent() const {
-		return {width, height};
+	std::pair<float, float> TooltipWnd::getTextSize(
+		const std::u16string& w_hover_text,
+		const float           p_width,
+		const float           p_height
+	) const {
+		wil::com_ptr<IDWriteTextLayout> text_layout;
+		direct_write_factory->CreateTextLayout(
+			reinterpret_cast<const wchar_t*>(w_hover_text.c_str()),
+			static_cast<UINT32>(w_hover_text.length()),
+			direct_write_text_format.get(),
+			p_width,
+			p_height,
+			&text_layout
+		);
+
+		DWRITE_TEXT_METRICS text_metrics{};
+		text_layout->GetMetrics(&text_metrics);
+		text_layout->Release();
+
+		return {text_metrics.width, text_metrics.height};
 	}
 
 	LRESULT TooltipWnd::wndProc(const UINT msg, const WPARAM wparam, const LPARAM lparam) {
 		switch (msg) {
 			case WM_CREATE: {
+				if (!inited_web_view2) {
+					ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+					initWebView2();
+				}
 				break;
 			}
 			// case WM_KEYDOWN: {
@@ -493,9 +691,13 @@ namespace ocr {
 				width  = LOWORD(lparam);
 				height = HIWORD(lparam);
 
-				if (html_renderer) {
-					html_renderer->render(width);
-				}
+				if (wv_controller) {
+					RECT rc;
+					GetClientRect(hwnd, &rc);
+					rc.top += title_bar_height;
+					const HRESULT err = wv_controller->put_Bounds(rc);
+					log(err, "ICoreWebView2Controller.put_Bounds", ERR_LEVEL::WARN);
+				};
 				if (render_target) {
 					const HRESULT err = render_target->Resize(
 						D2D1::SizeU(static_cast<unsigned int>(width), static_cast<unsigned int>(height))
@@ -512,10 +714,15 @@ namespace ocr {
 					render_target->BeginDraw();
 					render_target->Clear(D2D1::ColorF(D2D1::ColorF::White));
 
-					if (html_renderer) {
-						const litehtml::position pos = {0, 0, width, height};
-							html_renderer->draw(reinterpret_cast<litehtml::uint_ptr>(render_target.Get()), 0, 0, &pos);
-					}
+					const std::u16string w_hover_text = utf8::utf8to16(hover_word->text);
+					direct_write_text_format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+					render_target->DrawText(
+						reinterpret_cast<const wchar_t*>(w_hover_text.c_str()),
+						static_cast<UINT32>(w_hover_text.length()),
+						direct_write_text_format.get(),
+						D2D1::RectF(0, 0, static_cast<float>(width), static_cast<float>(height)),
+						brush.get()
+					);
 
 					render_target->EndDraw();
 
