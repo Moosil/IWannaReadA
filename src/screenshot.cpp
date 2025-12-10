@@ -1,12 +1,9 @@
-//
-// Created by rowan on 20/11/2025.
-//
-
 #include "screenshot.h"
+
+#include <Windowsx.h>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/core/mat.hpp>
 #include <spdlog/spdlog.h>
-#include <Windowsx.h>
 
 #include "util.h"
 

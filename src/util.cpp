@@ -1,14 +1,10 @@
-//
-// Created by rowan on 13/11/2025.
-//
-
 #include "util.h"
 
 #include <d2d1helper.h>
 #include <dwrite.h>
-#include <opencv2/imgproc.hpp>
-#include <windows.h>
 #include <shellscalingapi.h>
+#include <windows.h>
+#include <opencv2/imgproc.hpp>
 #pragma comment(lib,"Shcore.lib")
 #include <utf8/cpp20.h>
 #include <wrl/client.h>
@@ -146,7 +142,6 @@ namespace ocr {
 			cv::Point2f(0.f, crop_h)
 		};
 
-		// TODO benchmark different solve methods
 		const cv::Mat transform_mat = cv::getPerspectiveTransform(src_rect, dst_rect, cv::DECOMP_LU);
 
 		// transform image according to transformation matrix
@@ -159,11 +154,9 @@ namespace ocr {
 			cv::BORDER_REPLICATE
 		);
 
-		// TODO: we can know this earlier (dst_rect)
 		// if text is vertical, rotate it
 		if (static_cast<float>(text_image.rows) >= static_cast<float>(text_image.cols) * 1.5f) {
 			cv::Mat dst;
-			// TODO check if correct
 			cv::rotate(text_image, dst, cv::ROTATE_90_COUNTERCLOCKWISE);
 			return dst;
 		}

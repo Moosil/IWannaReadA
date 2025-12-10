@@ -3,9 +3,9 @@
 #endif
 
 #include <future>
-#include <spdlog/spdlog.h>
-#include <Windows.h>
 #include <shellscalingapi.h>
+#include <Windows.h>
+#include <spdlog/spdlog.h>
 #pragma comment(lib,"Shcore.lib")
 
 #include "config.h"

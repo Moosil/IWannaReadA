@@ -1,11 +1,6 @@
-//
-// Created by rowan on 14/11/2025.
-//
-
 #pragma once
-#include <array>
-#include <filesystem>
 
+#include <filesystem>
 #include <yaml-cpp/yaml.h>
 
 namespace ocr {

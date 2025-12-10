@@ -1,11 +1,7 @@
-//
-// Created by rowan on 14/11/2025.
-//
-
 #include "config.h"
 
-#include <spdlog/spdlog.h>
 #include <format>
+#include <spdlog/spdlog.h>
 
 #include "util.h"
 

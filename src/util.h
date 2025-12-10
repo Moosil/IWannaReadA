@@ -1,8 +1,5 @@
-//
-// Created by rowan on 13/11/2025.
-//
-
 #pragma once
+
 #include <clipper2/clipper.h>
 #include <opencv2/core/types.hpp>
 #include <spdlog/spdlog.h>
@@ -82,8 +79,6 @@ namespace ocr {
 	std::pair<int, int> getMonitorDPI();
 
 	std::pair<int, int> getScreenSize();
-
-	int lerpi(int a, int b, float t);
 
 	// Source - https://stackoverflow.com/a
 	// Posted by g-217, modified by community. See post 'Timeline' for change history

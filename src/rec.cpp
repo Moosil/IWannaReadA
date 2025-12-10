@@ -1,14 +1,9 @@
-//
-// Created by rowan on 14/11/2025.
-//
-
 #define NOMINMAX // catching windows min max thingy
 #include "rec.h"
 
 #include <format>
 #include <fstream>
 #include <ranges>
-
 #include <opencv2/core/mat.hpp>
 
 #include "util.h"

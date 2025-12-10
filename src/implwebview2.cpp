@@ -1,14 +1,14 @@
 #include <memory>
-#include <utility>
 #include <Shlobj.h>
+#include <utility>
 #pragma comment(lib, "Shell32.lib")
 
 #include <spdlog/spdlog.h>
 #include <wil/com.h>
 #include <wrl/event.h>
 
-#include "log.h"
 #include "implwebview2.h"
+#include "log.h"
 
 namespace WebView2 {
 	Impl::Impl(

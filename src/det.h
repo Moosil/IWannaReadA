@@ -1,8 +1,7 @@
 #pragma once
 
-
-#include "ncnn/net.h"
 #include "common.h"
+#include "ncnn/net.h"
 
 namespace ocr {
 	class Det {

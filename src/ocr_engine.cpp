@@ -3,12 +3,12 @@
 #include <filesystem>
 #include <ranges>
 #include <vector>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/core/mat.hpp>
 #include <spdlog/spdlog.h>
 
 #include "config.h"
 #include "util.h"
-#include "opencv2/imgcodecs.hpp"
-#include "opencv2/core/mat.hpp"
 
 
 namespace ocr {

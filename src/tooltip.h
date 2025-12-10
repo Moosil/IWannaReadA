@@ -3,7 +3,6 @@
 #include <mdict.h>
 #include <stack>
 #include <unordered_map>
-
 #include <Windows.h>
 #include <wrl/client.h>
 

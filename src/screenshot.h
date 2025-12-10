@@ -1,7 +1,8 @@
 #pragma once
+
+#include <Windows.h>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/types.hpp>
-#include <Windows.h>
 
 namespace ocr {
 	class ScreenshotWnd {

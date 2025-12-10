@@ -1,17 +1,15 @@
 #include "tooltip.h"
 
-#include <ranges>
-#include <filesystem>
-
-#include <Windowsx.h>
-#include <wrl/event.h>
-#include <WebView2.h>
-
-#include <spdlog/spdlog.h>
-#include <opencv2/imgproc.hpp>
-#include <utf8/cpp20.h>
 #include <clip.h>
+#include <filesystem>
+#include <ranges>
+#include <WebView2.h>
+#include <Windowsx.h>
 #include <nlohmann/json.hpp>
+#include <opencv2/imgproc.hpp>
+#include <spdlog/spdlog.h>
+#include <utf8/cpp20.h>
+#include <wrl/event.h>
 
 #include "implwebview2.h"
 #include "log.h"
@@ -134,10 +132,10 @@ namespace ocr {
 						continue;
 					}
 					Poly2I char_rect{
-						cv::Point{lerpi(moved_rect[0].x, moved_rect[1].x, lower), moved_rect[0].y},
-						cv::Point{lerpi(moved_rect[0].x, moved_rect[1].x, upper), moved_rect[1].y},
-						cv::Point{lerpi(moved_rect[3].x, moved_rect[2].x, upper), moved_rect[2].y},
-						cv::Point{lerpi(moved_rect[3].x, moved_rect[2].x, lower), moved_rect[3].y}
+						cv::Point{static_cast<int>(std::lerp(moved_rect[0].x, moved_rect[1].x, lower)), moved_rect[0].y},
+						cv::Point{static_cast<int>(std::lerp(moved_rect[0].x, moved_rect[1].x, upper)), moved_rect[1].y},
+						cv::Point{static_cast<int>(std::lerp(moved_rect[3].x, moved_rect[2].x, upper)), moved_rect[2].y},
+						cv::Point{static_cast<int>(std::lerp(moved_rect[3].x, moved_rect[2].x, lower)), moved_rect[3].y}
 					};
 					split_line.emplace_back(char_rect, utf16i);
 				}
@@ -175,10 +173,10 @@ namespace ocr {
 						continue;
 					}
 					Poly2I char_rect{
-						cv::Point{moved_rect[0].x, lerpi(moved_rect[0].y, moved_rect[3].y, lower)},
-						cv::Point{moved_rect[1].x, lerpi(moved_rect[1].y, moved_rect[2].y, lower)},
-						cv::Point{moved_rect[2].x, lerpi(moved_rect[1].y, moved_rect[2].y, upper)},
-						cv::Point{moved_rect[3].x, lerpi(moved_rect[0].y, moved_rect[3].y, upper)}
+						cv::Point{moved_rect[0].x, static_cast<int>(std::lerp(moved_rect[0].y, moved_rect[3].y, lower))},
+						cv::Point{moved_rect[1].x, static_cast<int>(std::lerp(moved_rect[1].y, moved_rect[2].y, lower))},
+						cv::Point{moved_rect[2].x, static_cast<int>(std::lerp(moved_rect[1].y, moved_rect[2].y, upper))},
+						cv::Point{moved_rect[3].x, static_cast<int>(std::lerp(moved_rect[0].y, moved_rect[3].y, upper))}
 					};
 					split_line.emplace_back(char_rect, utf16i);
 				}

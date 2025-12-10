@@ -5,9 +5,9 @@
 #include <filesystem>
 #include <numeric>
 #include <ranges>
+#include <opencv2/imgproc.hpp>
 
 #include "util.h"
-#include <opencv2/imgproc.hpp>
 
 
 namespace ocr {

@@ -1,13 +1,10 @@
-//
-// Created by rowan on 14/11/2025.
-//
-
 #pragma once
+
 #include <memory>
 #include <vector>
+#include <ncnn/net.h>
 
 #include "common.h"
-#include "ncnn/net.h"
 
 
 namespace ocr {

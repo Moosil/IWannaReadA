@@ -1,9 +1,4 @@
-//
-// Created by rowan on 25/11/2025.
-//
-
 #pragma once
-#include <intsafe.h>
 #include <string>
 #include <spdlog/spdlog.h>
 
