@@ -94,7 +94,7 @@ namespace ocr {
 	) {
 		const int width = bitmap.cols, height = bitmap.rows;
 
-		// get contours of bitmap. as in strips that cover the "white" parts
+		// Get contours of bitmap. As in strips that cover the "white" parts
 		std::vector<std::vector<cv::Point> > contours;
 		cv::findContours(bitmap, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
 

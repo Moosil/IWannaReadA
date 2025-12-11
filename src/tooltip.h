@@ -36,44 +36,77 @@ namespace ocr {
 
 	class TooltipWnd {
 	private:
-		static constexpr auto boilerplate_html = LR"(<html><body><div id="root"></div><script>
-document.addEventListener("contextmenu", e => {
-    const host = e.target.getRootNode().host;
-    if (host) {
-        window.chrome.webview.postMessage({
-            key: "contextmenu",
-            x: e.screenX,
-            y: e.screenY,
-            word: host.id
-        });
-        e.preventDefault();
-    }
-});
-
-document.addEventListener("mousedown", e => {
-    const host = e.target.getRootNode().host;
-    if (host) {
-        window.chrome.webview.postMessage({
-            key: "mousedown",
-            x: e.screenX,
-            y: e.screenY
-        });
-    }
-});</script></body></html>)";
+		static constexpr auto boilerplate_html = L""
+		"<html>"
+			"<body>"
+				"<div id=\"root\"></div>"
+				"<script>"
+					"document.addEventListener(\"contextmenu\", e => {"
+						"const host = e.target.getRootNode().host;"
+						"if (host) {"
+							"window.chrome.webview.postMessage({"
+								"key: \"contextmenu\","
+								"x: e.screenX,"
+								"y: e.screenY,"
+								"word: host.id"
+							"});"
+							"e.preventDefault();"
+						"}"
+					"});"
+					"document.addEventListener(\"mousedown\", e => {"
+						"const host = e.target.getRootNode().host;"
+						"if (host) {"
+							"window.chrome.webview.postMessage({"
+								"key: \"mousedown\","
+								"x: e.screenX,"
+								"y: e.screenY"
+							"});"
+						"}"
+					"});"
+				"</script>"
+			"</body>"
+		"</html>";
 
 		static inline const std::string className        = "TooltipWnd";
 		static inline bool              isInitialised    = false;
 		static constexpr int            min_width        = 256;
 		static constexpr int            min_height       = 256;
 		static constexpr int            scroll_bar_width = 16;
-		static constexpr char html_skeleton[] = ""
-		"<html><body>"
-			"<div id=\"0\"><template shadowrootmode=\"open\"><style>{}</style><div></div></template></div>"
-			"<div id=\"1\"><template shadowrootmode=\"open\"><style>{}</style><div></div></template></div>"
-			"<div id=\"2\"><template shadowrootmode=\"open\"><style>{}</style><div></div></template></div>"
-			"<div id=\"3\"><template shadowrootmode=\"open\"><style>{}</style><div></div></template></div>"
-			"<div id=\"4\"><template shadowrootmode=\"open\"><style>{}</style><div></div></template></div>"
-		"</body></html>";
+		static constexpr char           html_skeleton[]  = ""
+		"<html>"
+			"<body>"
+				"<div id=\"0\">"
+					"<template shadowrootmode=\"open\">"
+						"<style>{}</style>"
+						"<div></div>"
+					"</template>"
+				"</div>"
+				"<div id=\"1\">"
+					"<template shadowrootmode=\"open\">"
+						"<style>{}</style>"
+						"<div></div>"
+					"</template>"
+				"</div>"
+				"<div id=\"2\">"
+					"<template shadowrootmode=\"open\">"
+						"<style>{}</style>"
+						"<div></div>"
+					"</template>"
+				"</div>"
+				"<div id=\"3\">"
+					"<template shadowrootmode=\"open\">"
+						"<style>{}</style>"
+						"<div></div>"
+					"</template>"
+				"</div>"
+				"<div id=\"4\">"
+					"<template shadowrootmode=\"open\">"
+						"<style>{}</style>"
+						"<div></div>"
+					"</template>"
+				"</div>"
+			"</body>"
+		"</html>";
 		static constexpr char fill_webpage_script[] = ""
 		"(() => {{"
 			"const host = document.getElementById(\"{}\");"
@@ -87,7 +120,7 @@ document.addEventListener("mousedown", e => {
 			"const div = host.shadowRoot.lastChild;"
 			"div.id=\"\";"
 			"div.innerHTML=\"\";"
-		"};";
+		"}";
 		static constexpr wchar_t get_width_script[] = L""
 		"(() => {{"
 			"const html = document.documentElement;"
@@ -95,34 +128,36 @@ document.addEventListener("mousedown", e => {
 			"return Math.max(html.scrollWidth, body.scrollWidth);"
 		"}})();";
 		static constexpr wchar_t add_context_menu_script[] = L""
-			"for (const host of document.body.children) {"
-				"const shadow = host.shadowRoot;"
-				"shadow.addEventListener(\"contextmenu\", function (event) {"
-					"let jsonObject = {"
-						"key: \"contextmenu\","
-						"x: event.screenX,"
-						"y: event.screenY,"
-						"word: host.id"
-					"};"
-					"window.chrome.webview.postMessage(jsonObject);"
-					"event.preventDefault();"
-				"});"
-				"shadow.addEventListener(\"mousedown\", function (event) {"
-					"let jsonObject = {"
-						"key: 'mousedown',"
-						"x: event.screenX,"
-						"y: event.screenY"
-					"};"
-					"window.chrome.webview.postMessage(jsonObject);"
-				"});"
-			"}"
-		")";
-		
+		"for (const host of document.body.children) {"
+			"const shadow = host.shadowRoot;"
+			"const div = host.shadowRoot.lastChild;"
+			"shadow.addEventListener(\"contextmenu\", function (event) {"
+				"let jsonObject = {"
+					"key: \"contextmenu\","
+					"x: event.screenX,"
+					"y: event.screenY,"
+					"word: div.id"
+				"};"
+				"window.chrome.webview.postMessage(jsonObject);"
+				"event.preventDefault();"
+			"});"
+			"shadow.addEventListener(\"mousedown\", function (event) {"
+				"let jsonObject = {"
+					"key: 'mousedown',"
+					"x: event.screenX,"
+					"y: event.screenY"
+				"};"
+				"window.chrome.webview.postMessage(jsonObject);"
+			"});"
+		"}";
+
 		int                                                             width{}, height{};
 		bool                                                            is_hovering{};
 		cv::Rect                                                        rect;
-		std::ranges::borrowed_iterator_t<std::vector<OCRBlock>&>        hover_block;
-		std::ranges::borrowed_iterator_t<std::vector<OCRResultPacked>&> hover_word;
+		std::ranges::borrowed_iterator_t<std::vector<OCRBlock>&>        hover_block_it;
+		std::vector<OCRResultPacked>                                    hover_block_results;
+		std::ranges::borrowed_iterator_t<std::vector<OCRResultPacked>&> hover_word_it;
+		std::string                                                     hover_word_text;
 		bool                                                            need_refresh{false};
 
 		std::vector<OCRBlock>                           results;

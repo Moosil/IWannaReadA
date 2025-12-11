@@ -82,11 +82,11 @@ namespace ocr {
 	}
 
 	void TooltipWnd::initCurrDictHTML() {
-		const auto        result_it = hover_block;
+		const auto        result_it = hover_block_it;
 		std::string       lookup_string;
-		const std::string first_char = hover_word->text;
+		const std::string first_char = hover_word_text;
 		dictionary_data[first_char]  = {};
-		for (auto word_it = hover_word; word_it != result_it->results.end(); ++word_it) {
+		for (auto word_it = hover_word_it; word_it != result_it->results.end(); ++word_it) {
 			lookup_string += word_it->text;
 
 			const std::string dict_html = mdict->lookup(lookup_string);
@@ -220,21 +220,21 @@ namespace ocr {
 
 	void TooltipWnd::updateWindowPosition() const {
 		int top;
-		if (height < getTop(hover_word->rect)) {
+		if (height < getTop(hover_word_it->rect)) {
 			// window is too tall (it goes above top of screen)
-			top = getTop(hover_word->rect);
+			top = getTop(hover_word_it->rect);
 		} else {
 			// window can extend up and is below screen
-			top = getBottom(hover_word->rect);
+			top = getBottom(hover_word_it->rect);
 		}
 		int       left;
 		const int screen_width = getScreenSize().first;
-		if (getRight(hover_word->rect) + width > screen_width) {
+		if (getRight(hover_word_it->rect) + width > screen_width) {
 			// window is too width (it goes past right of screen)
 			left = screen_width - width;
 		} else {
 			// window can extend right and is left of screen edge
-			left = getLeft(hover_word->rect);
+			left = getLeft(hover_word_it->rect);
 		}
 		SetWindowPos(hwnd, HWND_TOPMOST, left, top - height, -1, -1, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 	}
@@ -250,7 +250,7 @@ namespace ocr {
 		if (!inited_web_view2)
 			return;
 
-		const auto it = dictionary_data.find(hover_word->text);
+		const auto it = dictionary_data.find(hover_word_text);
 		if (it == dictionary_data.end()) {
 			initCurrDictHTML();
 			need_refresh = true;
@@ -317,10 +317,6 @@ namespace ocr {
 	}
 
 	void TooltipWnd::onNavigationComplete() {
-		if (!is_hovering) {
-			return;
-		}
-
 		const HRESULT script_err = webview->ExecuteScript(
 			add_context_menu_script,
 			Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
@@ -343,6 +339,7 @@ namespace ocr {
 		log(script_err, "ICoreWebView2::ExecuteScript", ERR_LEVEL::FATAL);
 	}
 
+	// ReSharper disable once CppMemberFunctionMayBeConst
 	HRESULT TooltipWnd::onWebMessageReceived(ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) {
 		wchar_t*      json_string;
 		const HRESULT err = args->get_WebMessageAsJson(&json_string);
@@ -351,7 +348,7 @@ namespace ocr {
 		nlohmann::json json = nlohmann::json::parse(wideToUtf8(json_string));
 		if (const auto it = json.find("key"); it != json.end()) {
 			if (it.value() == "contextmenu") {
-				createContextMenu(it.value().at("x"), it.value().at("y"), it.value().at("word"));
+				createContextMenu(json.at("x"), json.at("y"), json.at("word"));
 			} else {
 				//mousedown
 			}
@@ -376,25 +373,19 @@ namespace ocr {
 		DestroyMenu(menu);
 		switch (selected) {
 			case 1: {
-				if (is_hovering) {
-					clip::set_text(hover_word->text);
-				}
+				clip::set_text(hover_word_text);
 				break;
 			}
 			case 2: {
-				if (is_hovering) {
-					clip::set_text(phrase);
-				}
+				clip::set_text(phrase);
 				break;
 			}
 			case 3: {
-				if (is_hovering) {
-					std::string copy{};
-					for (const auto& [_, block_text] : hover_block->results) {
-						copy.append(block_text);
-					}
-					clip::set_text(copy);
+				std::string copy{};
+				for (const auto& [_, block_text] : hover_block_results) {
+					copy.append(block_text);
 				}
+				clip::set_text(copy);
 				break;
 			}
 			default:
@@ -417,7 +408,7 @@ namespace ocr {
 			case WM_CONTEXTMENU: {
 				const auto x = GET_X_LPARAM(lparam);
 				const int  y = GET_Y_LPARAM(lparam);
-				createContextMenu(x, y, hover_word->text);
+				createContextMenu(x, y, hover_word_text);
 				break;
 			}
 			case WM_SIZE: {
@@ -546,8 +537,8 @@ namespace ocr {
 
 			const cv::Point mouse_pos{win_mouse_pos.x, win_mouse_pos.y};
 			if (rect.contains(mouse_pos)) {
-				if (is_hovering && cv::pointPolygonTest(hover_word->rect, mouse_pos, false) > 0) {
-					// caching previous rect in case (optimisation)
+				if (is_hovering && cv::pointPolygonTest(hover_word_it->rect, mouse_pos, false) > 0) {
+					// caching previous rect (optimisation)
 				} else {
 					const auto intersect_iter = std::ranges::find_if(
 						results,
@@ -566,8 +557,10 @@ namespace ocr {
 						);
 						if (word_iter != intersect_iter->results.end()) {
 							is_hovering  = true;
-							hover_word   = word_iter;
-							hover_block  = intersect_iter;
+							hover_word_it   = word_iter;
+							hover_word_text = hover_word_it->text;
+							hover_block_it  = intersect_iter;
+							hover_block_results = {hover_block_it->results};
 							need_refresh = true;
 						} else {
 							is_hovering = false;
