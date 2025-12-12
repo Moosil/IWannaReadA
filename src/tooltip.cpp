@@ -82,23 +82,56 @@ namespace ocr {
 	}
 
 	void TooltipWnd::initCurrDictHTML() {
-		const auto        result_it = hover_block_it;
-		std::string       lookup_string;
-		const std::string first_char = hover_word_text;
-		dictionary_data[first_char]  = {};
-		for (auto word_it = hover_word_it; word_it != result_it->results.end(); ++word_it) {
-			lookup_string += word_it->text;
+		if (!hover_word || !hover_block || results.empty())
+			return;
 
-			const std::string dict_html = mdict->lookup(lookup_string);
-			if (dict_html.empty()) {
+		std::string       lookup_string;
+		const std::string first_char = hover_word->text;
+		dictionary_data[first_char]  = {};
+		for (const auto& [_, text] : std::span(hover_word, &hover_block->results.back())) {
+			lookup_string += text;
+
+			if (const std::string dict_html = mdict->lookup(lookup_string); !dict_html.empty()) {
+				const std::string strip_dict_html = trim_copy(dict_html);
+
+				dictionary_data[first_char].entries.emplace_back(lookup_string, strip_dict_html);
+			}
+		};
+		std::ranges::reverse(dictionary_data[first_char].entries);
+	}
+
+	std::vector<OCRResultPacked> TooltipWnd::ocrSplitText(const Poly2I& rect, const Text& text, const bool horizontal) {
+		auto                         it  = text.text.begin();
+		const auto                   end = text.text.end();
+		std::vector<OCRResultPacked> out{};
+		out.reserve(text.char_lengths.size());
+		for (const auto& [lower, upper] : text.char_lengths) {
+			std::string utf16i;
+			try {
+				utf8::append(utf8::next(it, end), utf16i);
+			} catch (const utf8::not_enough_room& _) {
 				continue;
 			}
-			const std::string strip_dict_html = trim_copy(dict_html);
-			const std::string static_lookup_string(lookup_string);
-
-			dictionary_data[first_char].entries.emplace_back(static_lookup_string, strip_dict_html);
+			Poly2I char_rect;
+			if (horizontal) {
+				char_rect = {
+					cv::Point{static_cast<int>(std::lerp(rect[0].x, rect[1].x, lower)), rect[0].y},
+					cv::Point{static_cast<int>(std::lerp(rect[0].x, rect[1].x, upper)), rect[1].y},
+					cv::Point{static_cast<int>(std::lerp(rect[3].x, rect[2].x, upper)), rect[2].y},
+					cv::Point{static_cast<int>(std::lerp(rect[3].x, rect[2].x, lower)), rect[3].y}
+				};
+			} else {
+				char_rect = {
+					cv::Point{rect[0].x, static_cast<int>(std::lerp(rect[0].y, rect[3].y, lower))},
+					cv::Point{rect[1].x, static_cast<int>(std::lerp(rect[1].y, rect[2].y, lower))},
+					cv::Point{rect[2].x, static_cast<int>(std::lerp(rect[1].y, rect[2].y, upper))},
+					cv::Point{rect[3].x, static_cast<int>(std::lerp(rect[0].y, rect[3].y, upper))}
+				};
+			}
+			out.emplace_back(char_rect, utf16i);
 		}
-		std::ranges::reverse(dictionary_data[first_char].entries);
+
+		return std::move(out);
 	}
 
 	void TooltipWnd::processOCRResults(
@@ -107,6 +140,7 @@ namespace ocr {
 		std::vector<OCRBlock>&        out
 	) {
 		out.clear();
+		out.reserve(res.size());
 		for (const auto& [rect, text] : res) {
 			const Poly2I moved_rect = {
 				rect.rect[0] + topleft,
@@ -118,38 +152,23 @@ namespace ocr {
 			const std::array ys            = {rect.rect[0].y, rect.rect[1].y, rect.rect[2].y, rect.rect[3].y};
 			const auto       [left, right] = std::minmax_element(xs.begin(), xs.end());
 			const auto       [top, bottom] = std::minmax_element(ys.begin(), ys.end());
-			const auto       width         = *right - *left;
-			const auto       height        = *bottom - *top;
-			if (width > height) {
-				auto                         it  = text.text.begin();
-				const auto                   end = text.text.end();
-				std::vector<OCRResultPacked> split_line{};
-				for (const auto& [lower, upper] : text.char_lengths) {
-					std::string utf16i;
-					try {
-						utf8::append(utf8::next(it, end), utf16i);
-					} catch (const utf8::not_enough_room& _) {
-						continue;
-					}
-					Poly2I char_rect{
-						cv::Point{static_cast<int>(std::lerp(moved_rect[0].x, moved_rect[1].x, lower)), moved_rect[0].y},
-						cv::Point{static_cast<int>(std::lerp(moved_rect[0].x, moved_rect[1].x, upper)), moved_rect[1].y},
-						cv::Point{static_cast<int>(std::lerp(moved_rect[3].x, moved_rect[2].x, upper)), moved_rect[2].y},
-						cv::Point{static_cast<int>(std::lerp(moved_rect[3].x, moved_rect[2].x, lower)), moved_rect[3].y}
-					};
-					split_line.emplace_back(char_rect, utf16i);
-				}
-				std::vector<int> intersections{};
-				for (int i = 0; i < out.size(); i++) {
-					if (out[i].horizontal && intersects(out[i].poly, moved_rect)) {
-						intersections.push_back(i);
-					}
-				}
-				if (intersections.empty()) {
-					std::vector<cv::Point> poly{};
-					poly.append_range(moved_rect);
-					out.emplace_back(split_line, true, poly);
-				} else {
+			bool             horizontal    = (*right - *left) > (*bottom - *top);
+
+			auto split_line = ocrSplitText(moved_rect, text, horizontal);
+
+			std::vector<int> intersections = std::views::iota(std::size_t{0}, out.size())
+			                                 | std::views::filter(
+				                                 [out, &moved_rect](const std::size_t i) -> int {
+					                                 return out[i].horizontal && intersects(out[i].poly, moved_rect);
+				                                 }
+			                                 )
+			                                 | std::ranges::to<std::vector<int> >();
+			if (intersections.empty()) {
+				std::vector<cv::Point> poly{};
+				poly.append_range(moved_rect);
+				out.emplace_back(split_line, horizontal, poly);
+			} else {
+				if (horizontal) {
 					std::ranges::reverse(intersections);
 					OCRBlock& first = out[intersections[0]];
 					first.results.append_range(split_line);
@@ -160,36 +179,6 @@ namespace ocr {
 						first.poly = union_(first.poly, curr.poly);
 						out.erase(out.begin() + intersections[i]);
 					}
-				}
-			} else {
-				auto                         it  = text.text.begin();
-				const auto                   end = text.text.end();
-				std::vector<OCRResultPacked> split_line{};
-				for (const auto& [lower, upper] : text.char_lengths) {
-					std::string utf16i;
-					try {
-						utf8::append(utf8::next(it, end), utf16i);
-					} catch (const utf8::not_enough_room& _) {
-						continue;
-					}
-					Poly2I char_rect{
-						cv::Point{moved_rect[0].x, static_cast<int>(std::lerp(moved_rect[0].y, moved_rect[3].y, lower))},
-						cv::Point{moved_rect[1].x, static_cast<int>(std::lerp(moved_rect[1].y, moved_rect[2].y, lower))},
-						cv::Point{moved_rect[2].x, static_cast<int>(std::lerp(moved_rect[1].y, moved_rect[2].y, upper))},
-						cv::Point{moved_rect[3].x, static_cast<int>(std::lerp(moved_rect[0].y, moved_rect[3].y, upper))}
-					};
-					split_line.emplace_back(char_rect, utf16i);
-				}
-				std::vector<int> intersections{};
-				for (int i = 0; i < out.size(); i++) {
-					if (!out[i].horizontal && intersects(out[i].poly, moved_rect)) {
-						intersections.push_back(i);
-					}
-				}
-				if (intersections.empty()) {
-					std::vector<cv::Point> poly{};
-					poly.append_range(moved_rect);
-					out.emplace_back(split_line, false, poly);
 				} else {
 					OCRBlock& first = out[intersections[0]];
 					first.results.append_range(split_line);
@@ -219,22 +208,23 @@ namespace ocr {
 	}
 
 	void TooltipWnd::updateWindowPosition() const {
+		if (!hover_word)
+			return;
 		int top;
-		if (height < getTop(hover_word_it->rect)) {
+		if (height < getTop(hover_word->rect)) {
 			// window is too tall (it goes above top of screen)
-			top = getTop(hover_word_it->rect);
+			top = getTop(hover_word->rect);
 		} else {
 			// window can extend up and is below screen
-			top = getBottom(hover_word_it->rect);
+			top = getBottom(hover_word->rect);
 		}
-		int       left;
-		const int screen_width = getScreenSize().first;
-		if (getRight(hover_word_it->rect) + width > screen_width) {
+		int left;
+		if (const int screen_width = getScreenSize().first; getRight(hover_word->rect) + width > screen_width) {
 			// window is too width (it goes past right of screen)
 			left = screen_width - width;
 		} else {
 			// window can extend right and is left of screen edge
-			left = getLeft(hover_word_it->rect);
+			left = getLeft(hover_word->rect);
 		}
 		SetWindowPos(hwnd, HWND_TOPMOST, left, top - height, -1, -1, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 	}
@@ -250,7 +240,10 @@ namespace ocr {
 		if (!inited_web_view2)
 			return;
 
-		const auto it = dictionary_data.find(hover_word_text);
+		if (!hover_word)
+			return;
+
+		const auto it = dictionary_data.find(hover_word->text);
 		if (it == dictionary_data.end()) {
 			initCurrDictHTML();
 			need_refresh = true;
@@ -261,6 +254,7 @@ namespace ocr {
 			const HRESULT err = webview->ExecuteScript(
 				reset_webpage_script,
 				Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+					// ReSharper disable once CppParameterMayBeConst
 					[](HRESULT errorCode, LPCWSTR resultObjectAsJson) -> HRESULT {
 						log(errorCode, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
 						return S_OK;
@@ -279,23 +273,28 @@ namespace ocr {
 			script += fmt::format(
 				fill_webpage_script,
 				i,
+				hover_word->text,
 				entries[i].entry,
+				getSentence(hover_block),
 				entries[i].entry_html
 			);
 		}
 		width = std::max(min_width, max_webpage_width);
 
-		const HRESULT err = webview->ExecuteScript(
+		const HRESULT err0 = webview->ExecuteScript(
 			utf8ToWide(script).c_str(),
 			Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
-				[this](HRESULT errorCode, LPCWSTR resultObjectAsJson) -> HRESULT {
-					log(errorCode, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
-					const HRESULT err = webview->ExecuteScript(
+				// ReSharper disable once CppParameterMayBeConst
+				[this](HRESULT errorCode0, LPCWSTR resultObjectAsJson) -> HRESULT {
+					log(errorCode0, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
+					const HRESULT err1 = webview->ExecuteScript(
 						get_width_script,
 						Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
-							[this](HRESULT errorCode, LPCWSTR result) -> HRESULT {
-								log(errorCode, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
-								if (SUCCEEDED(errorCode) && result && is_hovering) {
+							// ReSharper disable CppParameterMayBeConst
+							[this](HRESULT errorCode1, LPCWSTR result) -> HRESULT {
+								// ReSharper restore CppParameterMayBeConst
+								log(errorCode1, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
+								if (SUCCEEDED(errorCode1) && result && is_hovering) {
 									const int calc_webpage_width = _wtoi(result) + scroll_bar_width;
 									max_webpage_width            = std::max(calc_webpage_width, max_webpage_width);
 									width                        = std::max(min_width, calc_webpage_width);
@@ -304,7 +303,7 @@ namespace ocr {
 							}
 						).Get()
 					);
-					log(err, "ICoreWebView2::ExecuteScript", ERR_LEVEL::WARN);
+					log(err1, "ICoreWebView2::ExecuteScript", ERR_LEVEL::WARN);
 
 					updateWindowSize();
 
@@ -313,13 +312,14 @@ namespace ocr {
 				}
 			).Get()
 		);
-		log(err, "ICoreWebView2::ExecuteScript", ERR_LEVEL::FATAL);
+		log(err0, "ICoreWebView2::ExecuteScript", ERR_LEVEL::FATAL);
 	}
 
 	void TooltipWnd::onNavigationComplete() {
 		const HRESULT script_err = webview->ExecuteScript(
 			add_context_menu_script,
 			Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+				// ReSharper disable once CppParameterMayBeConst
 				[this](HRESULT errorCode, LPCWSTR resultObjectAsJson) -> HRESULT {
 					log(errorCode, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
 					EventRegistrationToken token = {};
@@ -348,7 +348,7 @@ namespace ocr {
 		nlohmann::json json = nlohmann::json::parse(wideToUtf8(json_string));
 		if (const auto it = json.find("key"); it != json.end()) {
 			if (it.value() == "contextmenu") {
-				createContextMenu(json.at("x"), json.at("y"), json.at("word"));
+				createContextMenu(json.at("x"), json.at("y"), json.at("character"), json.at("word"), json.at("sentence"));
 			} else {
 				//mousedown
 			}
@@ -356,8 +356,8 @@ namespace ocr {
 		return S_OK;
 	}
 
-	void TooltipWnd::createContextMenu(const int x, const int y, const std::string& phrase) const {
-		HMENU menu = CreatePopupMenu();
+	void TooltipWnd::createContextMenu(const int x, const int y, const std::string& character, const std::string& phrase, const std::string& sentence) const {
+		const HMENU& menu = CreatePopupMenu();
 		AppendMenu(menu, MF_STRING, 1, "Copy character");
 		AppendMenu(menu, MF_STRING, 2, "Copy phrase");
 		AppendMenu(menu, MF_STRING, 3, "Copy sentence");
@@ -370,10 +370,9 @@ namespace ocr {
 			hwnd,
 			nullptr
 		);
-		DestroyMenu(menu);
 		switch (selected) {
 			case 1: {
-				clip::set_text(hover_word_text);
+				clip::set_text(character);
 				break;
 			}
 			case 2: {
@@ -381,16 +380,20 @@ namespace ocr {
 				break;
 			}
 			case 3: {
-				std::string copy{};
-				for (const auto& [_, block_text] : hover_block_results) {
-					copy.append(block_text);
-				}
-				clip::set_text(copy);
+				clip::set_text(sentence);
 				break;
 			}
 			default:
 				break;
 		}
+		DestroyMenu(menu);
+	}
+
+	std::string TooltipWnd::getSentence(OCRBlock* hover_block) {
+		return hover_block->results
+		| std::ranges::views::transform(
+			[](auto& r) -> std::string& { return r.text; })
+		| std::views::join | std::ranges::to<std::string>();
 	}
 
 	LRESULT TooltipWnd::wndProc(const UINT msg, const WPARAM wparam, const LPARAM lparam) {
@@ -408,7 +411,9 @@ namespace ocr {
 			case WM_CONTEXTMENU: {
 				const auto x = GET_X_LPARAM(lparam);
 				const int  y = GET_Y_LPARAM(lparam);
-				createContextMenu(x, y, hover_word_text);
+				if (hover_word) {
+					createContextMenu(x, y, hover_word->text, hover_word->text, getSentence(hover_block));
+				}
 				break;
 			}
 			case WM_SIZE: {
@@ -521,59 +526,72 @@ namespace ocr {
 		return wnd;
 	}
 
+	// 40ms
 	void TooltipWnd::updateRectRes(const std::vector<OCRResult>& new_res, const cv::Rect& new_rect) {
-		rect        = new_rect;
-		is_hovering = false;
-
-		UpdateWindow(hwnd);
-
 		processOCRResults(new_res, cv::Point{rect.x, rect.y}, results);
+
+		rect = new_rect;
+		hover_block = nullptr;
+		hover_word  = nullptr;
+		refreshHovering();
+		UpdateWindow(hwnd);
+	}
+
+	void TooltipWnd::refreshHovering() {
+		POINT win_mouse_pos;
+		GetCursorPos(&win_mouse_pos);
+
+		const cv::Point mouse_pos{win_mouse_pos.x, win_mouse_pos.y};
+
+		if (results.empty())
+			return;
+
+		if (rect.contains(mouse_pos)) {
+			if (is_hovering && hover_word && !hover_word->rect.empty() && cv::pointPolygonTest(
+				    hover_word->rect,
+				    mouse_pos,
+				    false
+			    ) > 0) {
+				// caching previous rect (optimisation)
+			} else {
+				const auto intersect_iter = std::ranges::find_if(
+					results,
+					[&mouse_pos](const OCRBlock& block) -> bool {
+						// returns positive (inside), negative (outside), or zero (on an edge) value
+						if (block.poly.empty()) return false;
+						return cv::pointPolygonTest(block.poly, mouse_pos, false) > 0;
+					}
+				);
+				if (intersect_iter != results.end()) {
+					const auto word_iter = std::ranges::find_if(
+						intersect_iter->results,
+						[&mouse_pos](const OCRResultPacked& res) -> bool {
+							// returns positive (inside), negative (outside), or zero (on an edge) value
+							return cv::pointPolygonTest(res.rect, mouse_pos, false) > 0;
+						}
+					);
+					if (word_iter != intersect_iter->results.end()) {
+						is_hovering  = true;
+						hover_word   = &*word_iter;
+						hover_block  = &*intersect_iter;
+						need_refresh = true;
+					} else {
+						is_hovering = false;
+					}
+				} else {
+					// mouse isn't in any of the OCR areas
+					is_hovering = false;
+				}
+			}
+		} else {
+			// if mouse is in the captured rect
+			is_hovering = false;
+		}
 	}
 
 	void TooltipWnd::updateLoop() {
 		if (GetAsyncKeyState(VK_SHIFT) & (1 << 15)) {
-			POINT win_mouse_pos;
-			GetCursorPos(&win_mouse_pos);
-
-			const cv::Point mouse_pos{win_mouse_pos.x, win_mouse_pos.y};
-			if (rect.contains(mouse_pos)) {
-				if (is_hovering && cv::pointPolygonTest(hover_word_it->rect, mouse_pos, false) > 0) {
-					// caching previous rect (optimisation)
-				} else {
-					const auto intersect_iter = std::ranges::find_if(
-						results,
-						[&mouse_pos](const auto& res) {
-							// returns positive (inside), negative (outside), or zero (on an edge) value
-							return cv::pointPolygonTest(res.poly, mouse_pos, false) > 0;
-						}
-					);
-					if (intersect_iter != results.end()) {
-						const auto word_iter = std::ranges::find_if(
-							intersect_iter->results,
-							[&mouse_pos](const auto& res) {
-								// returns positive (inside), negative (outside), or zero (on an edge) value
-								return cv::pointPolygonTest(res.rect, mouse_pos, false) > 0;
-							}
-						);
-						if (word_iter != intersect_iter->results.end()) {
-							is_hovering  = true;
-							hover_word_it   = word_iter;
-							hover_word_text = hover_word_it->text;
-							hover_block_it  = intersect_iter;
-							hover_block_results = {hover_block_it->results};
-							need_refresh = true;
-						} else {
-							is_hovering = false;
-						}
-					} else {
-						// mouse isn't in any of the OCR areas
-						is_hovering = false;
-					}
-				}
-			} else {
-				// if mouse is in the captured rect
-				is_hovering = false;
-			}
+			refreshHovering();
 			if (is_hovering) {
 				ShowWindow(hwnd, SW_SHOWNOACTIVATE);
 				UpdateWindow(hwnd);

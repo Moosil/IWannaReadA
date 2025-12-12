@@ -97,10 +97,10 @@ namespace ocr {
 
 		// Shoelace formula start (https://en.wikipedia.org/wiki/Shoelace_formula)[Wikipedia]
 		for (std::size_t i = 0; i < max_index; i++) {
-			area += rect[i].x * rect[i + 1].y - rect[i].y * rect[i + 1].x;
+			area      += rect[i].x * rect[i + 1].y - rect[i].y * rect[i + 1].x;
 			perimeter += distance(rect[i], rect[i + 1]);
 		}
-		area += rect[max_index].x * rect[0].y - rect[max_index].y * rect[0].x;
+		area      += rect[max_index].x * rect[0].y - rect[max_index].y * rect[0].x;
 		perimeter += distance(rect[max_index], rect[0]);
 
 		area = std::abs(area / 2.f);
@@ -164,8 +164,8 @@ namespace ocr {
 	}
 
 	std::pair<int, int> getMonitorDPI() {
-		HMONITOR hMon = MonitorFromWindow(nullptr, MONITOR_DEFAULTTOPRIMARY);
-		UINT dpi_x, dpi_y;
+		HMONITOR      hMon = MonitorFromWindow(nullptr, MONITOR_DEFAULTTOPRIMARY);
+		UINT          dpi_x, dpi_y;
 		const HRESULT err = GetDpiForMonitor(hMon, MDT_EFFECTIVE_DPI, &dpi_x, &dpi_y);
 		log(err, "GetDpiForMonitor", ERR_LEVEL::WARN);
 		return {dpi_x, dpi_y};
@@ -173,7 +173,7 @@ namespace ocr {
 
 	std::pair<int, int> getScreenSize() {
 		const auto [dpi_x, dpi_y] = getMonitorDPI();
-		return { GetSystemMetricsForDpi(SM_CXSCREEN, dpi_x), GetSystemMetricsForDpi(SM_CYSCREEN, dpi_y)};
+		return {GetSystemMetricsForDpi(SM_CXSCREEN, dpi_x), GetSystemMetricsForDpi(SM_CYSCREEN, dpi_y)};
 	}
 
 	int lerpi(const int a, const int b, const float t) {
@@ -182,7 +182,8 @@ namespace ocr {
 
 	std::string& ltrim(std::string& str) {
 		const auto it2 = std::ranges::find_if(
-			str,[](const char ch) {
+			str,
+			[](const char ch) {
 				return !(std::isspace<char>(ch, std::locale::classic()) || ch == '\0');
 			}
 		);
@@ -191,7 +192,9 @@ namespace ocr {
 	}
 
 	std::string& rtrim(std::string& str) {
-		const auto it1 =  std::find_if(str.rbegin(), str.rend(),
+		const auto it1 = std::find_if(
+			str.rbegin(),
+			str.rend(),
 			[](const char ch) {
 				return !(std::isspace<char>(ch, std::locale::classic()) || ch == '\0');
 			}
@@ -211,23 +214,23 @@ namespace ocr {
 
 	std::wstring utf8ToWide(const std::string& str) {
 		const std::u16string u16str = utf8::utf8to16(str);
-		const auto wcstr = reinterpret_cast<const wchar_t*>(u16str.c_str());
+		const auto           wcstr  = reinterpret_cast<const wchar_t*>(u16str.c_str());
 		return wcstr;
 	}
 
 	std::string wideToUtf8(const std::wstring& wstr) {
 		const std::u16string u16str = reinterpret_cast<const char16_t*>(wstr.c_str());
-		const auto str = utf8::utf16to8(u16str);
+		const auto           str    = utf8::utf16to8(u16str);
 		return str;
 	}
 
 	std::pair<float, float> getTextSize(
 		const std::wstring&                              text,
 		const Microsoft::WRL::ComPtr<IDWriteTextFormat>& direct_write_text_format,
-		const Microsoft::WRL::ComPtr<IDWriteFactory>& direct_write_factory
+		const Microsoft::WRL::ComPtr<IDWriteFactory>&    direct_write_factory
 	) {
 		Microsoft::WRL::ComPtr<IDWriteTextLayout> text_layout;
-		HRESULT err = direct_write_factory->CreateTextLayout(
+		HRESULT                                   err = direct_write_factory->CreateTextLayout(
 			text.c_str(),
 			static_cast<UINT32>(text.length()),
 			direct_write_text_format.Get(),

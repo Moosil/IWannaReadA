@@ -1,5 +1,7 @@
 #pragma once
 
+#include <source_location>
+
 #include <clipper2/clipper.h>
 #include <opencv2/core/types.hpp>
 #include <spdlog/spdlog.h>
@@ -101,4 +103,18 @@ namespace ocr {
 		const Microsoft::WRL::ComPtr<IDWriteTextFormat>& direct_write_text_format,
 		const Microsoft::WRL::ComPtr<IDWriteFactory>&    direct_write_factory
 	);
+
+	static std::chrono::time_point<std::chrono::steady_clock> start_time;
+	static std::source_location start_location;
+
+
+	inline void startTimeFunction(const std::source_location& location = std::source_location::current()) {
+		start_time = std::chrono::steady_clock::now();
+		start_location = location;
+	}
+
+	inline void endTimeFunction(const std::source_location& location = std::source_location::current()) {
+		const auto end = std::chrono::steady_clock::now();
+		spdlog::info("({})->({})  ran in {}ms", start_location.function_name(), location.function_name(), std::chrono::duration<double, std::milli>(end - start_time).count());
+	}
 } // ocr

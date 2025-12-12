@@ -10,9 +10,9 @@ namespace ocr {
 	using Poly2F = std::array<cv::Point2f, 4>;
 
 	inline const cv::Point& getTopLeft(const Poly2I& poly) { return poly[0]; }
-	inline const cv::Point& getTopRight(const Poly2I& poly) { return poly[0]; }
-	inline const cv::Point& getBottomRight(const Poly2I& poly) { return poly[0]; }
-	inline const cv::Point& getBottomLeft(const Poly2I& poly) { return poly[0]; }
+	inline const cv::Point& getTopRight(const Poly2I& poly) { return poly[1]; }
+	inline const cv::Point& getBottomRight(const Poly2I& poly) { return poly[2]; }
+	inline const cv::Point& getBottomLeft(const Poly2I& poly) { return poly[3]; }
 
 	inline int getTop(const Poly2I& poly) { return std::min(getTopLeft(poly).y, getTopRight(poly).y); }
 	inline int getRight(const Poly2I& poly) { return std::max(getTopRight(poly).x, getBottomRight(poly).x); }

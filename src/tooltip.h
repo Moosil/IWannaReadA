@@ -36,42 +36,43 @@ namespace ocr {
 
 	class TooltipWnd {
 	private:
-		static constexpr auto boilerplate_html = L""
-		"<html>"
-			"<body>"
-				"<div id=\"root\"></div>"
-				"<script>"
-					"document.addEventListener(\"contextmenu\", e => {"
-						"const host = e.target.getRootNode().host;"
-						"if (host) {"
-							"window.chrome.webview.postMessage({"
-								"key: \"contextmenu\","
-								"x: e.screenX,"
-								"y: e.screenY,"
-								"word: host.id"
-							"});"
-							"e.preventDefault();"
-						"}"
-					"});"
-					"document.addEventListener(\"mousedown\", e => {"
-						"const host = e.target.getRootNode().host;"
-						"if (host) {"
-							"window.chrome.webview.postMessage({"
-								"key: \"mousedown\","
-								"x: e.screenX,"
-								"y: e.screenY"
-							"});"
-						"}"
-					"});"
-				"</script>"
-			"</body>"
-		"</html>";
-
 		static inline const std::string className        = "TooltipWnd";
 		static inline bool              isInitialised    = false;
 		static constexpr int            min_width        = 256;
 		static constexpr int            min_height       = 256;
 		static constexpr int            scroll_bar_width = 16;
+		static constexpr auto boilerplate_html = L""
+		"<html>"
+			"<body>"
+				"<div id=\"root\"></div>"
+				"<script>"
+					"for (const host of document.body.children) {"
+						"const shadow = host.shadowRoot;"
+						"const div = host.shadowRoot.lastChild;"
+						"shadow.addEventListener(\"contextmenu\", function (event) {"
+							"let jsonObject = {"
+								"key: \"contextmenu\","
+								"x: event.screenX,"
+								"y: event.screenY,"
+								"character: div.dataset.character,"
+								"word: div.dataset.word,"
+								"sentence: div.dataset.sentence"
+							"};"
+							"window.chrome.webview.postMessage(jsonObject);"
+							"event.preventDefault();"
+						"});"
+						"shadow.addEventListener(\"mousedown\", function (event) {"
+							"let jsonObject = {"
+								"key: 'mousedown',"
+								"x: event.screenX,"
+								"y: event.screenY"
+							"};"
+							"window.chrome.webview.postMessage(jsonObject);"
+						"});"
+					"}"
+				"</script>"
+			"</body>"
+		"</html>";
 		static constexpr char           html_skeleton[]  = ""
 		"<html>"
 			"<body>"
@@ -112,7 +113,9 @@ namespace ocr {
 			"const host = document.getElementById(\"{}\");"
 			"const shadow = host.shadowRoot;"
 			"const div = shadow.lastChild;"
-			"div.id = `{}`;"
+			"div.dataset.character = `{}`;"
+			"div.dataset.word = `{}`;"
+			"div.dataset.sentence = `{}`;"
 			"div.innerHTML = `{}`;"
 		"}})();";
 		static constexpr wchar_t reset_webpage_script[] = L""
@@ -136,7 +139,9 @@ namespace ocr {
 					"key: \"contextmenu\","
 					"x: event.screenX,"
 					"y: event.screenY,"
-					"word: div.id"
+					"character: div.dataset.character,"
+					"word: div.dataset.word,"
+					"sentence: div.dataset.sentence"
 				"};"
 				"window.chrome.webview.postMessage(jsonObject);"
 				"event.preventDefault();"
@@ -154,10 +159,8 @@ namespace ocr {
 		int                                                             width{}, height{};
 		bool                                                            is_hovering{};
 		cv::Rect                                                        rect;
-		std::ranges::borrowed_iterator_t<std::vector<OCRBlock>&>        hover_block_it;
-		std::vector<OCRResultPacked>                                    hover_block_results;
-		std::ranges::borrowed_iterator_t<std::vector<OCRResultPacked>&> hover_word_it;
-		std::string                                                     hover_word_text;
+		OCRBlock*      hover_block;
+		OCRResultPacked* hover_word;
 		bool                                                            need_refresh{false};
 
 		std::vector<OCRBlock>                           results;
@@ -184,17 +187,23 @@ namespace ocr {
 			std::vector<OCRBlock>&        out
 		);
 
+		static std::vector<OCRResultPacked> ocrSplitText(const Poly2I& rect, const Text& text, bool horizontal);
+
 		void updateWindowSize() const;
 
 		void updateWindowPosition() const;
 
 		void refreshWindow();
 
+		void refreshHovering();
+
 		void onNavigationComplete();
 
 		HRESULT onWebMessageReceived(ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args);
 
-		void createContextMenu(int x, int y, const std::string& phrase) const;
+		void createContextMenu(int x, int y, const std::string& character, const std::string& phrase, const std::string& sentence) const;
+
+		static std::string getSentence(OCRBlock* hover_block);
 
 		LRESULT CALLBACK wndProc(UINT msg, WPARAM wparam, LPARAM lparam);
 
