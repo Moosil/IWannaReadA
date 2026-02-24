@@ -88,8 +88,8 @@ namespace ocr {
 		std::string       lookup_string;
 		const std::string first_char = hover_word->text;
 		dictionary_data[first_char]  = {};
-		for (const auto& [_, text] : std::span(hover_word, &hover_block->results.back())) {
-			lookup_string += text;
+		for (const auto* curr = hover_word; curr != hover_block->results.data() + hover_block->results.size(); ++curr) {
+			lookup_string += curr->text;
 
 			if (const std::string dict_html = mdict->lookup(lookup_string); !dict_html.empty()) {
 				const std::string strip_dict_html = trim_copy(dict_html);
@@ -210,16 +210,20 @@ namespace ocr {
 	void TooltipWnd::updateWindowPosition() const {
 		if (!hover_word)
 			return;
+
+		const auto [screen_width, screen_height] = getScreenSize();
+
 		int top;
-		if (height < getTop(hover_word->rect)) {
+		// choose above or below hover word based on which haas more room
+		if (const int room_left_top = getTop(hover_word->rect); screen_height - getBottom(hover_word->rect) > room_left_top) {
 			// window is too tall (it goes above top of screen)
-			top = getTop(hover_word->rect);
+			top = getBottom(hover_word->rect) + height;
 		} else {
 			// window can extend up and is below screen
-			top = getBottom(hover_word->rect);
+			top = room_left_top;
 		}
 		int left;
-		if (const int screen_width = getScreenSize().first; getRight(hover_word->rect) + width > screen_width) {
+		if (getRight(hover_word->rect) + width > screen_width) {
 			// window is too width (it goes past right of screen)
 			left = screen_width - width;
 		} else {
@@ -234,9 +238,6 @@ namespace ocr {
 		if (!is_hovering)
 			return;
 
-		height = min_height;
-		width  = min_width;
-
 		if (!inited_web_view2)
 			return;
 
@@ -249,6 +250,9 @@ namespace ocr {
 			need_refresh = true;
 			return;
 		}
+		// if (it != dictionary_data.end()) {
+		// 	spdlog::info(it->first);
+		// }
 
 		if (it->second.entries.empty()) {
 			const HRESULT err = webview->ExecuteScript(
@@ -266,53 +270,112 @@ namespace ocr {
 		}
 
 		std::string script;
-		auto&       [entries] = it->second;
-
-		for (int i = 0; i < entries.size(); i++) {
-			// Shadow DOM template to isolate duplicated HTML ids
-			script += fmt::format(
-				fill_webpage_script,
-				i,
-				hover_word->text,
-				entries[i].entry,
-				getSentence(hover_block),
-				entries[i].entry_html
-			);
+		auto&       dict_data = it->second; {
+			int i = 0;
+			for (; i < dict_data.entries.size(); i++) {
+				// Shadow DOM template to isolate duplicated HTML ids
+				script += fmt::format(
+					fill_webpage_script,
+					i,
+					hover_word->text,
+					dict_data.entries[i].entry,
+					getSentence(hover_block),
+					dict_data.entries[i].entry_html
+				);
+			}
+			for (; i < 5; i++) {
+				script += fmt::format(
+					fill_webpage_script,
+					i,
+					"",
+					"",
+					"",
+					""
+				);
+			}
 		}
 		width = std::max(min_width, max_webpage_width);
 
-		const HRESULT err0 = webview->ExecuteScript(
-			utf8ToWide(script).c_str(),
-			Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
-				// ReSharper disable once CppParameterMayBeConst
-				[this](HRESULT errorCode0, LPCWSTR resultObjectAsJson) -> HRESULT {
-					log(errorCode0, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
-					const HRESULT err1 = webview->ExecuteScript(
-						get_width_script,
-						Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
-							// ReSharper disable CppParameterMayBeConst
-							[this](HRESULT errorCode1, LPCWSTR result) -> HRESULT {
-								// ReSharper restore CppParameterMayBeConst
-								log(errorCode1, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
-								if (SUCCEEDED(errorCode1) && result && is_hovering) {
-									const int calc_webpage_width = _wtoi(result) + scroll_bar_width;
-									max_webpage_width            = std::max(calc_webpage_width, max_webpage_width);
-									width                        = std::max(min_width, calc_webpage_width);
+		spdlog::info("dict data height: {}", dict_data.height);
+		if (dict_data.height == -1) {
+			height = min_height;
+			updateWindowSize();
+			updateWindowPosition();
+			const HRESULT err0 = webview->ExecuteScript(
+				utf8ToWide(script).c_str(),
+				Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+					// ReSharper disable once CppParameterMayBeConst
+					[this, &dict_data](HRESULT errorCode0, LPCWSTR resultObjectAsJson) -> HRESULT {
+						log(errorCode0, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
+						const HRESULT err1 = webview->ExecuteScript(
+							get_height_script,
+							Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+								// ReSharper disable CppParameterMayBeConst
+								[this, &dict_data](HRESULT errorCode1, LPCWSTR result) -> HRESULT {
+									// ReSharper restore CppParameterMayBeConst
+									log(errorCode1, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
+									if (SUCCEEDED(errorCode1) && result && is_hovering) {
+										const int calc_webpage_height = _wtoi(result);
+										// for when width was used ----------v
+										//max_webpage_width            = std::max(calc_webpage_height, max_webpage_width);
+
+										height = std::clamp(
+											std::min(
+												calc_webpage_height,
+												std::max(
+													getTop(hover_word->rect),
+													getScreenSize().second - getBottom(hover_word->rect)
+												)
+											),
+											min_height,
+											max_height
+										);
+										dict_data.height = calc_webpage_height;
+										spdlog::info(
+											"entry: {}, height: {}",
+											dict_data.entries[0].entry,
+											calc_webpage_height
+										);
+										updateWindowSize();
+										updateWindowPosition();
+									}
+									return S_OK;
 								}
-								return S_OK;
-							}
-						).Get()
-					);
-					log(err1, "ICoreWebView2::ExecuteScript", ERR_LEVEL::WARN);
+							).Get()
+						);
+						log(err1, "ICoreWebView2::ExecuteScript", ERR_LEVEL::WARN);
+						return S_OK;
+					}
+				).Get()
+			);
+			log(err0, "ICoreWebView2::ExecuteScript", ERR_LEVEL::FATAL);
+		} else {
+			const HRESULT err0 = webview->ExecuteScript(
+				utf8ToWide(script).c_str(),
+				Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+					// ReSharper disable once CppParameterMayBeConst
+					[this, &dict_data](HRESULT errorCode0, LPCWSTR resultObjectAsJson) -> HRESULT {
+						log(errorCode0, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
+						return S_OK;
+					}
+				).Get()
+			);
+			log(err0, "ICoreWebView2::ExecuteScript", ERR_LEVEL::FATAL);
 
-					updateWindowSize();
-
-					updateWindowPosition();
-					return S_OK;
-				}
-			).Get()
-		);
-		log(err0, "ICoreWebView2::ExecuteScript", ERR_LEVEL::FATAL);
+			height = std::clamp(
+				std::min(
+					dict_data.height,
+					std::max(
+						getTop(hover_word->rect),
+						getScreenSize().second - getBottom(hover_word->rect)
+					)
+				),
+				min_height,
+				max_height
+			);
+			updateWindowSize();
+			updateWindowPosition();
+		}
 	}
 
 	void TooltipWnd::onNavigationComplete() {
@@ -348,7 +411,13 @@ namespace ocr {
 		nlohmann::json json = nlohmann::json::parse(wideToUtf8(json_string));
 		if (const auto it = json.find("key"); it != json.end()) {
 			if (it.value() == "contextmenu") {
-				createContextMenu(json.at("x"), json.at("y"), json.at("character"), json.at("word"), json.at("sentence"));
+				createContextMenu(
+					json.at("x"),
+					json.at("y"),
+					json.at("character"),
+					json.at("word"),
+					json.at("sentence")
+				);
 			} else {
 				//mousedown
 			}
@@ -356,7 +425,13 @@ namespace ocr {
 		return S_OK;
 	}
 
-	void TooltipWnd::createContextMenu(const int x, const int y, const std::string& character, const std::string& phrase, const std::string& sentence) const {
+	void TooltipWnd::createContextMenu(
+		const int          x,
+		const int          y,
+		const std::string& character,
+		const std::string& phrase,
+		const std::string& sentence
+	) const {
 		const HMENU& menu = CreatePopupMenu();
 		AppendMenu(menu, MF_STRING, 1, "Copy character");
 		AppendMenu(menu, MF_STRING, 2, "Copy phrase");
@@ -391,9 +466,10 @@ namespace ocr {
 
 	std::string TooltipWnd::getSentence(OCRBlock* hover_block) {
 		return hover_block->results
-		| std::ranges::views::transform(
-			[](auto& r) -> std::string& { return r.text; })
-		| std::views::join | std::ranges::to<std::string>();
+		       | std::ranges::views::transform(
+			       [](auto& r) -> std::string& { return r.text; }
+		       )
+		       | std::views::join | std::ranges::to<std::string>();
 	}
 
 	LRESULT TooltipWnd::wndProc(const UINT msg, const WPARAM wparam, const LPARAM lparam) {
@@ -523,6 +599,8 @@ namespace ocr {
 
 		wnd->initDictionary(dict_folder_path);
 
+		log(SetWindowDisplayAffinity(wnd->hwnd, WDA_EXCLUDEFROMCAPTURE), "SetWindowDisplayAffinity");
+
 		return wnd;
 	}
 
@@ -530,7 +608,7 @@ namespace ocr {
 	void TooltipWnd::updateRectRes(const std::vector<OCRResult>& new_res, const cv::Rect& new_rect) {
 		processOCRResults(new_res, cv::Point{rect.x, rect.y}, results);
 
-		rect = new_rect;
+		rect        = new_rect;
 		hover_block = nullptr;
 		hover_word  = nullptr;
 		refreshHovering();
@@ -558,7 +636,8 @@ namespace ocr {
 					results,
 					[&mouse_pos](const OCRBlock& block) -> bool {
 						// returns positive (inside), negative (outside), or zero (on an edge) value
-						if (block.poly.empty()) return false;
+						if (block.poly.empty())
+							return false;
 						return cv::pointPolygonTest(block.poly, mouse_pos, false) > 0;
 					}
 				);

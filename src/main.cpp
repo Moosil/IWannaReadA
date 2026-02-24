@@ -3,6 +3,8 @@
 #endif
 
 #include <future>
+#include <ranges>
+
 #include <shellscalingapi.h>
 #include <Windows.h>
 #include <spdlog/spdlog.h>
@@ -102,6 +104,7 @@ std::future<std::vector<OCRResult>> runOCR(
 							if (!rect.empty() && tt_wnd) {
 								ss = ScreenshotWnd::hBitmap2cvMat(ScreenshotWnd::captureScreenRegion(rect));
 								pending_result = runOCR(engine, ss);
+								spdlog::info(pending_result.get() | std::views::transform([](const OCRResult& r) -> std::string { return r.text.text; }) | std::views::join_with(',') | std::ranges::to<std::string>());
 							} else {
 								prev = std::chrono::steady_clock::now();
 							}

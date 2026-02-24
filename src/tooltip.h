@@ -26,6 +26,7 @@ namespace ocr {
 
 	struct DictionaryData {
 		std::vector<DictionaryEntry> entries;
+		int height = -1;
 	};
 
 	struct OCRBlock {
@@ -40,6 +41,7 @@ namespace ocr {
 		static inline bool              isInitialised    = false;
 		static constexpr int            min_width        = 256;
 		static constexpr int            min_height       = 256;
+		static constexpr int            max_height       = 1024;
 		static constexpr int            scroll_bar_width = 16;
 		static constexpr auto boilerplate_html = L""
 		"<html>"
@@ -126,9 +128,19 @@ namespace ocr {
 		"}";
 		static constexpr wchar_t get_width_script[] = L""
 		"(() => {{"
-			"const html = document.documentElement;"
 			"const body = document.body;"
-			"return Math.max(html.scrollWidth, body.scrollWidth);"
+			"const html = document.documentElement;"
+
+			"return Math.max(body.scrollWidth, body.offsetWidth,"
+							"html.scrollWidth, html.offsetWidth, html.clientWidth);"
+		"}})();";
+		static constexpr wchar_t get_height_script[] = L""
+		"(() => {{"
+			"const body = document.body;"
+			"const html = document.documentElement;"
+
+			"return Math.max(body.scrollHeight, body.offsetHeight,"
+							"html.scrollHeight, html.offsetHeight, html.clientHeight);"
 		"}})();";
 		static constexpr wchar_t add_context_menu_script[] = L""
 		"for (const host of document.body.children) {"
