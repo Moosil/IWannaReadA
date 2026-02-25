@@ -296,7 +296,6 @@ namespace ocr {
 		}
 		width = std::max(min_width, max_webpage_width);
 
-		spdlog::info("dict data height: {}", dict_data.height);
 		if (dict_data.height == -1) {
 			height = min_height;
 			updateWindowSize();

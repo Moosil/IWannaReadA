@@ -93,6 +93,7 @@ std::future<std::vector<OCRResult>> runOCR(
 
 					if (pending_result.valid() && pending_result.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
 						const std::vector<OCRResult> results = pending_result.get();
+						//spdlog::info(results | std::views::transform([](const OCRResult& r) -> std::string { return r.text.text; }) | std::views::join_with(',') | std::ranges::to<std::string>());
 						tt_wnd->updateRectRes(results, rect);
 						prev = std::chrono::steady_clock::now();
 					}
@@ -104,7 +105,6 @@ std::future<std::vector<OCRResult>> runOCR(
 							if (!rect.empty() && tt_wnd) {
 								ss = ScreenshotWnd::hBitmap2cvMat(ScreenshotWnd::captureScreenRegion(rect));
 								pending_result = runOCR(engine, ss);
-								spdlog::info(pending_result.get() | std::views::transform([](const OCRResult& r) -> std::string { return r.text.text; }) | std::views::join_with(',') | std::ranges::to<std::string>());
 							} else {
 								prev = std::chrono::steady_clock::now();
 							}

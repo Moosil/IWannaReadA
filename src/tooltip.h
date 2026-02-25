@@ -39,7 +39,7 @@ namespace ocr {
 	private:
 		static inline const std::string className        = "TooltipWnd";
 		static inline bool              isInitialised    = false;
-		static constexpr int            min_width        = 256;
+		static constexpr int            min_width        = 384;
 		static constexpr int            min_height       = 256;
 		static constexpr int            max_height       = 1024;
 		static constexpr int            scroll_bar_width = 16;

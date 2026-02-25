@@ -233,8 +233,8 @@ namespace ocr {
 		std::string string_duration = getRefreshIntervalAsString();
 		trim(string_duration);
 		int value{};
-		if (auto [ptr, ec] = std::from_chars(string_duration.data(), string_duration.data() + string_duration.size(), value); ec != std::errc{}) {
-			std::string extra{ptr};
+		if (auto [ptr, ec] = std::from_chars(string_duration.data(), string_duration.data() + string_duration.size(), value); ec == std::errc{}) {
+			const std::string extra{ptr};
 			if (extra.empty())
 				return value * 1000;
 			if (extra == "ms")
