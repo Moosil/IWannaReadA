@@ -4,3 +4,5 @@
 /.idea
 /models/
 /dictionaries/
+config.yaml
+html_template.html
