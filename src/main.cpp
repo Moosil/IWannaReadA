@@ -1,7 +1,3 @@
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-
 #include <future>
 #include <ranges>
 
@@ -14,6 +10,7 @@
 #include "ocr_engine.h"
 #include "screenshot.h"
 #include "tooltip.h"
+#include "util.h"
 
 using namespace ocr;
 using s_time = std::chrono::time_point<std::chrono::steady_clock>;
@@ -33,7 +30,6 @@ std::future<std::vector<OCRResult>> runOCR(
 	try {
 		SetConsoleOutputCP(CP_UTF8);
 		SetConsoleCP(CP_UTF8);
-		spdlog::set_pattern("%v");
 
 		const auto engine = OCREngine(yaml);
 

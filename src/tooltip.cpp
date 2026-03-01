@@ -5,6 +5,7 @@
 #include <ranges>
 #include <WebView2.h>
 #include <Windowsx.h>
+#include <cpp-pinyin/G2pglobal.h>
 #include <nlohmann/json.hpp>
 #include <opencv2/imgproc.hpp>
 #include <spdlog/spdlog.h>
@@ -49,7 +50,7 @@ namespace ocr {
 				log(nav_subscribe_err, "ICoreWebView2::add_NavigationCompleted", ERR_LEVEL::WARN);
 
 				const HRESULT nav_err = webview->NavigateToString(
-					utf8ToWide(fmt::format(html_skeleton, css_data, css_data, css_data, css_data, css_data)).c_str()
+					utf8ToWide(std::format(html_skeleton, css_data)).c_str()
 				);
 				log(nav_err, "ICoreWebView2::NavigateToString", ERR_LEVEL::FATAL);
 
@@ -215,7 +216,8 @@ namespace ocr {
 
 		int top;
 		// choose above or below hover word based on which haas more room
-		if (const int room_left_top = getTop(hover_word->rect); screen_height - getBottom(hover_word->rect) > room_left_top) {
+		if (const int room_left_top = getTop(hover_word->rect);
+			screen_height - getBottom(hover_word->rect) > room_left_top) {
 			// window is too tall (it goes above top of screen)
 			top = getBottom(hover_word->rect) + height;
 		} else {
@@ -274,7 +276,7 @@ namespace ocr {
 			int i = 0;
 			for (; i < dict_data.entries.size(); i++) {
 				// Shadow DOM template to isolate duplicated HTML ids
-				script += fmt::format(
+				script += std::format(
 					fill_webpage_script,
 					i,
 					hover_word->text,
@@ -284,7 +286,7 @@ namespace ocr {
 				);
 			}
 			for (; i < 5; i++) {
-				script += fmt::format(
+				script += std::format(
 					fill_webpage_script,
 					i,
 					"",
@@ -353,7 +355,7 @@ namespace ocr {
 				utf8ToWide(script).c_str(),
 				Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
 					// ReSharper disable once CppParameterMayBeConst
-					[this, &dict_data](HRESULT errorCode0, LPCWSTR resultObjectAsJson) -> HRESULT {
+					[](HRESULT errorCode0, LPCWSTR resultObjectAsJson) -> HRESULT {
 						log(errorCode0, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
 						return S_OK;
 					}
@@ -435,6 +437,7 @@ namespace ocr {
 		AppendMenu(menu, MF_STRING, 1, "Copy character");
 		AppendMenu(menu, MF_STRING, 2, "Copy phrase");
 		AppendMenu(menu, MF_STRING, 3, "Copy sentence");
+		AppendMenu(menu, MF_STRING, 4, "Add to Anki");
 		const int selected = TrackPopupMenu(
 			menu,
 			TPM_LEFTALIGN | TPM_BOTTOMALIGN | TPM_RETURNCMD | TPM_LEFTBUTTON | TPM_NOANIMATION,
@@ -456,6 +459,19 @@ namespace ocr {
 			case 3: {
 				clip::set_text(sentence);
 				break;
+			}
+			case 4: {
+				auto        find_pos     = sentence.find(phrase);
+				std::string sentence_add = std::format(
+					"{}{{{{c1::{}}}}}{}",
+					sentence.substr(0, find_pos),
+					sentence.substr(find_pos, phrase.length()),
+					sentence.substr(find_pos + phrase.length())
+				);
+
+				const auto pinyin = g2p_man->hanziToPinyin(phrase);
+
+				anki.add_note(phrase, pinyin.toStdStr(), "", sentence_add);
 			}
 			default:
 				break;
@@ -599,6 +615,10 @@ namespace ocr {
 		wnd->initDictionary(dict_folder_path);
 
 		log(SetWindowDisplayAffinity(wnd->hwnd, WDA_EXCLUDEFROMCAPTURE), "SetWindowDisplayAffinity");
+
+		const auto applicationDirPath = std::filesystem::current_path() / "dict";
+		Pinyin::setDictionaryPath(applicationDirPath);
+		wnd->g2p_man = std::make_unique<Pinyin::Pinyin>();
 
 		return wnd;
 	}

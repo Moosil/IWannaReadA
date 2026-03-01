@@ -37,12 +37,10 @@ namespace ocr {
 		for (const std::string& alias : root_alias) {
 			if (node[alias]) {
 				file_path path = node[alias].as<std::string>();
-				spdlog::info("{}", path.string());
 				if (path.empty()) {
 					continue;
 				}
 				if (path.is_relative()) {
-					spdlog::info("{}", path.string());
 					if (file_path res = config_path.parent_path() / path; std::filesystem::is_directory(res)) {
 						spdlog::info("found root path at {}", res.string());
 						return res;
@@ -147,12 +145,6 @@ namespace ocr {
 						for (const std::string& suffix : suffixes) {
 							std::string curr_name = alias;
 							curr_name.append(connector).append(suffix);
-							spdlog::info(
-								"found {0} {1} path. looking for {0} {2} path",
-								model_type_name,
-								opposite_file_type_name,
-								file_type_name
-							);
 							if (det_node[curr_name]) {
 								if (file_path param_path = file_root / det_node[curr_name].as<std::string>();
 									std::filesystem::is_regular_file(param_path)) {

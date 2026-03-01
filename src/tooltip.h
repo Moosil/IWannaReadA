@@ -5,7 +5,9 @@
 #include <unordered_map>
 #include <Windows.h>
 #include <wrl/client.h>
+#include <cpp-pinyin/Pinyin.h>
 
+#include "anki_connect.h"
 #include "common.h"
 
 struct ICoreWebView2Controller;
@@ -80,31 +82,31 @@ namespace ocr {
 			"<body>"
 				"<div id=\"0\">"
 					"<template shadowrootmode=\"open\">"
-						"<style>{}</style>"
+						"<style>{0}</style>"
 						"<div></div>"
 					"</template>"
 				"</div>"
 				"<div id=\"1\">"
 					"<template shadowrootmode=\"open\">"
-						"<style>{}</style>"
+						"<style>{0}</style>"
 						"<div></div>"
 					"</template>"
 				"</div>"
 				"<div id=\"2\">"
 					"<template shadowrootmode=\"open\">"
-						"<style>{}</style>"
+						"<style>{0}</style>"
 						"<div></div>"
 					"</template>"
 				"</div>"
 				"<div id=\"3\">"
 					"<template shadowrootmode=\"open\">"
-						"<style>{}</style>"
+						"<style>{0}</style>"
 						"<div></div>"
 					"</template>"
 				"</div>"
 				"<div id=\"4\">"
 					"<template shadowrootmode=\"open\">"
-						"<style>{}</style>"
+						"<style>{0}</style>"
 						"<div></div>"
 					"</template>"
 				"</div>"
@@ -186,6 +188,10 @@ namespace ocr {
 		Microsoft::WRL::ComPtr<ICoreWebView2Controller> wv_controller;
 		Microsoft::WRL::ComPtr<ICoreWebView2>           webview;
 		bool                                            inited_web_view2{false};
+
+		std::unique_ptr<Pinyin::Pinyin> g2p_man;
+		Anki::Interface anki{};
+
 
 		void initWebView2();
 

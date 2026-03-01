@@ -2,7 +2,6 @@
 
 #include <array>
 #include <format>
-#include <fmt/ranges.h>
 #include <opencv2/core/types.hpp>
 
 namespace ocr {
@@ -47,7 +46,7 @@ namespace ocr {
 
 		// Convert to std::string
 		explicit operator std::string() const {
-			return fmt::format("Text{{\n\ttext={},\n\tscore={}\n}}", text, scores);
+			return std::format("Text{{\n\ttext={},\n\tscore={}\n}}", text, scores);
 		}
 	};
 
@@ -57,7 +56,7 @@ namespace ocr {
 
 		// Convert to std::string
 		explicit operator std::string() const {
-			return fmt::format("OCRResult{{\nrect={},\ntext={}\n}}", std::string(rect), std::string(text));
+			return std::format("OCRResult{{\nrect={},\ntext={}\n}}", std::string(rect), std::string(text));
 		}
 	};
 

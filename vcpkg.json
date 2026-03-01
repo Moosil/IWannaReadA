@@ -35,5 +35,11 @@
   }, {
     "name" : "nlohmann-json",
     "version>=" : "3.12.0#1"
+  }, {
+    "name" : "cpp-httplib",
+    "version>=" : "0.28.0"
+  }, {
+    "name" : "cpp-pinyin",
+    "version>=" : "1.0.2"
   } ]
 }
