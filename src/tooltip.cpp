@@ -11,7 +11,9 @@
 #include <spdlog/spdlog.h>
 #include <utf8/cpp20.h>
 #include <wrl/event.h>
+#include <opencc.h>
 
+#include "dict_extract.h"
 #include "implwebview2.h"
 #include "log.h"
 #include "util.h"
@@ -41,7 +43,6 @@ namespace ocr {
 					Microsoft::WRL::Callback<ICoreWebView2NavigationCompletedEventHandler>(
 						[this](ICoreWebView2* sender, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
 							inited_web_view2 = true;
-							onNavigationComplete();
 							return S_OK;
 						}
 					).Get(),
@@ -50,7 +51,7 @@ namespace ocr {
 				log(nav_subscribe_err, "ICoreWebView2::add_NavigationCompleted", ERR_LEVEL::WARN);
 
 				const HRESULT nav_err = webview->NavigateToString(
-					utf8ToWide(std::format(html_skeleton, css_data)).c_str()
+					utf8ToWide(webpage_html).c_str()
 				);
 				log(nav_err, "ICoreWebView2::NavigateToString", ERR_LEVEL::FATAL);
 
@@ -62,21 +63,10 @@ namespace ocr {
 		wv_init->try_init_env();
 	}
 
-	void TooltipWnd::initDictionary(const std::string& dict_string_path) {
-		const std::filesystem::path dict_folder_path_path = dict_string_path;
-		std::filesystem::path       dict_file_path{dict_folder_path_path};
+	void TooltipWnd::initDictionary(const std::filesystem::path& dict_path) {
+		std::filesystem::path dict_file_path{dict_path};
 		dict_file_path /= dict_file_path.filename();
 		dict_file_path += ".mdx";
-		for (const auto& dir_item : std::filesystem::directory_iterator{dict_folder_path_path}) {
-			if (dir_item.path().extension() == ".css") {
-				std::ifstream     in(dir_item.path());
-				const std::string contents(
-					(std::istreambuf_iterator(in)),
-					std::istreambuf_iterator<char>()
-				);
-				css_data += contents;
-			}
-		}
 
 		mdict = std::make_unique<mdict::Mdict>(dict_file_path.string());
 		mdict->init();
@@ -91,11 +81,11 @@ namespace ocr {
 		dictionary_data[first_char]  = {};
 		for (const auto* curr = hover_word; curr != hover_block->results.data() + hover_block->results.size(); ++curr) {
 			lookup_string += curr->text;
-
 			if (const std::string dict_html = mdict->lookup(lookup_string); !dict_html.empty()) {
 				const std::string strip_dict_html = trim_copy(dict_html);
-
-				dictionary_data[first_char].entries.emplace_back(lookup_string, strip_dict_html);
+				const std::vector<EntryInfo> to_add = dict_extractor.extractMDictHTML(strip_dict_html);
+				dictionary_data[first_char].entries.append_range(to_add);
+				dictionary_data[first_char].phrase = lookup_string;
 			}
 		};
 		std::ranges::reverse(dictionary_data[first_char].entries);
@@ -235,6 +225,19 @@ namespace ocr {
 		SetWindowPos(hwnd, HWND_TOPMOST, left, top - height, -1, -1, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 	}
 
+	std::vector<std::string> splitHanzi(const std::string& hanzi) {
+		std::vector<std::string> result;
+		std::u16string hanzi_u16 = utf8::utf8to16(hanzi);
+		for (const char16_t c : hanzi_u16) {
+			std::u16string u16str;
+			u16str += c;
+			std::string hanzi_str = utf8::utf16to8(u16str);
+			result.push_back(hanzi_str);
+		}
+
+		return result;
+	}
+
 	void TooltipWnd::refreshWindow() {
 		need_refresh = false;
 		if (!is_hovering)
@@ -257,45 +260,46 @@ namespace ocr {
 		// }
 
 		if (it->second.entries.empty()) {
-			const HRESULT err = webview->ExecuteScript(
-				reset_webpage_script,
-				Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
-					// ReSharper disable once CppParameterMayBeConst
-					[](HRESULT errorCode, LPCWSTR resultObjectAsJson) -> HRESULT {
-						log(errorCode, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
-						return S_OK;
-					}
-				).Get()
-			);
-			log(err, "ICoreWebView2::ExecuteScript", ERR_LEVEL::WARN);
-			return;
+			//TODO deal with dictionary having that entry but nothing in that entry
+			spdlog::info("word: {}", hover_word->text);
+			spdlog::warn("dictionary had entry but no contents: NOT IMPLEMENTED");
 		}
 
-		std::string script;
-		auto&       dict_data = it->second; {
-			int i = 0;
-			for (; i < dict_data.entries.size(); i++) {
-				// Shadow DOM template to isolate duplicated HTML ids
-				script += std::format(
-					fill_webpage_script,
-					i,
-					hover_word->text,
-					dict_data.entries[i].entry,
-					getSentence(hover_block),
-					dict_data.entries[i].entry_html
-				);
+		auto&       dict_data = it->second;
+		nlohmann::json page_data = nlohmann::json::array();
+			for (const auto& entry : dict_data.entries) {
+				nlohmann::json definition = nlohmann::json::object();
+				for (const auto& [word_class, def, sentences] : entry.definitions) {
+					nlohmann::json to_add = nlohmann::json::object();
+					to_add["definition"] = def;
+
+					std::string chinese_sentences;
+					if (sentences.size() > 0) {
+						chinese_sentences = sentences[0].chinese;
+						for (int i = 1; i < sentences.size(); i++) {
+							chinese_sentences += "<br>" + sentences[i].chinese;
+						}
+					}
+					to_add["sentences"] = chinese_sentences;
+					if (!definition.contains(word_class)) {
+						definition[word_class] = nlohmann::json::array();
+					}
+					definition[word_class].push_back(to_add);
+				}
+
+				nlohmann::json entry_json = nlohmann::json::object();
+				entry_json["simp"] = splitHanzi(entry.simp);
+				entry_json["trad"] = converter.Convert(entry.simp);
+				entry_json["pinyin"] = entry.pinyin;
+				entry_json["def"] = definition;
+				entry_json["c_word"] = dict_data.phrase;
+				entry_json["c_sent"] = getSentence(hover_block);
+				page_data.push_back(entry_json);
 			}
-			for (; i < 5; i++) {
-				script += std::format(
-					fill_webpage_script,
-					i,
-					"",
-					"",
-					"",
-					""
-				);
-			}
-		}
+		const std::string page_data_str = page_data.dump();
+		const std::string script = "setPage(" + page_data_str + ")";
+		const auto script_utf16 = utf8::utf8to16(script);
+
 		width = std::max(min_width, max_webpage_width);
 
 		if (dict_data.height == -1) {
@@ -317,8 +321,6 @@ namespace ocr {
 									log(errorCode1, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
 									if (SUCCEEDED(errorCode1) && result && is_hovering) {
 										const int calc_webpage_height = _wtoi(result);
-										// for when width was used ----------v
-										//max_webpage_width            = std::max(calc_webpage_height, max_webpage_width);
 
 										height = std::clamp(
 											std::min(
@@ -334,7 +336,7 @@ namespace ocr {
 										dict_data.height = calc_webpage_height;
 										spdlog::info(
 											"entry: {}, height: {}",
-											dict_data.entries[0].entry,
+											"placeholder TODO", // TODO
 											calc_webpage_height
 										);
 										updateWindowSize();
@@ -377,30 +379,6 @@ namespace ocr {
 			updateWindowSize();
 			updateWindowPosition();
 		}
-	}
-
-	void TooltipWnd::onNavigationComplete() {
-		const HRESULT script_err = webview->ExecuteScript(
-			add_context_menu_script,
-			Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
-				// ReSharper disable once CppParameterMayBeConst
-				[this](HRESULT errorCode, LPCWSTR resultObjectAsJson) -> HRESULT {
-					log(errorCode, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
-					EventRegistrationToken token = {};
-
-					const HRESULT add_msg_err = webview->add_WebMessageReceived(
-						Microsoft::WRL::Callback<ICoreWebView2WebMessageReceivedEventHandler>(
-							this,
-							&TooltipWnd::onWebMessageReceived
-						).Get(),
-						&token
-					);
-					log(add_msg_err, "ICoreWebView2::add_WebMessageReceived", ERR_LEVEL::WARN);
-					return S_OK;
-				}
-			).Get()
-		);
-		log(script_err, "ICoreWebView2::ExecuteScript", ERR_LEVEL::FATAL);
 	}
 
 	// ReSharper disable once CppMemberFunctionMayBeConst
@@ -573,7 +551,8 @@ namespace ocr {
 	std::unique_ptr<TooltipWnd> TooltipWnd::initTooltip(
 		const std::vector<OCRResult>& res,
 		const cv::Rect&               rect,
-		const std::string&            dict_folder_path
+		const std::filesystem::path&  mdict_path,
+		const std::filesystem::path&  webpage_path
 	) {
 		auto wnd = std::make_unique<TooltipWnd>();
 		if (!isInitialised) {
@@ -612,7 +591,9 @@ namespace ocr {
 			wnd.get()
 		);
 
-		wnd->initDictionary(dict_folder_path);
+		wnd->initDictionary(mdict_path);
+
+		wnd->webpage_html = readFile(webpage_path);
 
 		log(SetWindowDisplayAffinity(wnd->hwnd, WDA_EXCLUDEFROMCAPTURE), "SetWindowDisplayAffinity");
 

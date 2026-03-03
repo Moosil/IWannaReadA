@@ -117,4 +117,6 @@ namespace ocr {
 		const auto end = std::chrono::steady_clock::now();
 		spdlog::info("({})->({})  ran in {}ms", start_location.function_name(), location.function_name(), std::chrono::duration<double, std::milli>(end - start_time).count());
 	}
+
+	std::string readFile(const std::filesystem::path& path);
 } // ocr

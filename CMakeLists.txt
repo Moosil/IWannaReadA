@@ -15,7 +15,14 @@ find_package(clip CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(httplib CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
-find_package(cpp-pinyin)
+find_package(cpp-pinyin CONFIG REQUIRED)
+find_path(LEXBOR_INCLUDE_DIR NAMES lexbor/html/parser.h)
+find_library(LEXBOR_LIBRARY NAMES lexbor)
+
+# Check if found
+if(NOT LEXBOR_INCLUDE_DIR OR NOT LEXBOR_LIBRARY)
+    message(FATAL_ERROR "lexbor not found")
+endif()
 
 if(MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
@@ -30,6 +37,7 @@ add_compile_definitions(WIN32_LEAN_AND_MEAN)
 
 add_subdirectory(third_party/mdict-cpp)
 add_subdirectory(third_party/utfcpp)
+add_subdirectory(third_party/OpenCC)
 
 add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/ocr_engine.cpp
@@ -51,10 +59,14 @@ add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/implwebview2.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/log.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/anki_connect.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/ src/anki_connect.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/anki_connect.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/dict_extract.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/dict_extract.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/dict_extract_汉英词典（第3版）.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/dict_extract_汉英词典（第3版）.h
 )
 
-target_include_directories(${PROJECT_NAME} PUBLIC src)
+target_include_directories(${PROJECT_NAME} PUBLIC src ${LEXBOR_INCLUDE_DIR})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
         yaml-cpp::yaml-cpp
@@ -71,10 +83,18 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         nlohmann_json::nlohmann_json
         httplib::httplib
         cpp-pinyin::cpp-pinyin
+        ${LEXBOR_LIBRARY}
+        OpenCC::OpenCC
 )
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${cpp-pinyin_DIR}/dict"
         "$<TARGET_FILE_DIR:${PROJECT_NAME}>/dict"
+)
+
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_FILE:OpenCC::OpenCC>"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
 )

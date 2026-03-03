@@ -17,3 +17,6 @@ key: "ppocr_keys_v5.txt"
 
 refresh: on
 refresh_interval: 100ms
+
+html_template: "html_template.html"
+dictionary: "dictionaries/hanyingcidian(disanban)"

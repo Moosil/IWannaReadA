@@ -22,9 +22,14 @@ namespace ocr {
 
 		file_path getRecParamPath();
 
+		file_path getHTMLTemplatePath();
+
+		file_path getMDictPath();
+
 		bool getRefresh();
 
 		int getRefreshIntervalMs();
+
 	private:
 		enum class ModelType {
 			Rec,

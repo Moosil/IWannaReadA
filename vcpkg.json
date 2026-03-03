@@ -41,5 +41,8 @@
   }, {
     "name" : "cpp-pinyin",
     "version>=" : "1.0.2"
+  }, {
+    "name" : "lexbor",
+    "version>=" : "2.6.0"
   } ]
 }

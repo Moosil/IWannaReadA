@@ -9,6 +9,9 @@
 
 #include "anki_connect.h"
 #include "common.h"
+#include "dict_extract.h"
+#include "dict_extract_汉英词典（第3版）.h"
+#include "opencc.h"
 
 struct ICoreWebView2Controller;
 struct ICoreWebView2;
@@ -21,13 +24,9 @@ namespace WebView2 {
 }
 
 namespace ocr {
-	struct DictionaryEntry {
-		std::string entry;
-		std::string entry_html;
-	};
-
 	struct DictionaryData {
-		std::vector<DictionaryEntry> entries;
+		std::vector<EntryInfo> entries{};
+		std::string phrase;
 		int height = -1;
 	};
 
@@ -45,89 +44,6 @@ namespace ocr {
 		static constexpr int            min_height       = 256;
 		static constexpr int            max_height       = 1024;
 		static constexpr int            scroll_bar_width = 16;
-		static constexpr auto boilerplate_html = L""
-		"<html>"
-			"<body>"
-				"<div id=\"root\"></div>"
-				"<script>"
-					"for (const host of document.body.children) {"
-						"const shadow = host.shadowRoot;"
-						"const div = host.shadowRoot.lastChild;"
-						"shadow.addEventListener(\"contextmenu\", function (event) {"
-							"let jsonObject = {"
-								"key: \"contextmenu\","
-								"x: event.screenX,"
-								"y: event.screenY,"
-								"character: div.dataset.character,"
-								"word: div.dataset.word,"
-								"sentence: div.dataset.sentence"
-							"};"
-							"window.chrome.webview.postMessage(jsonObject);"
-							"event.preventDefault();"
-						"});"
-						"shadow.addEventListener(\"mousedown\", function (event) {"
-							"let jsonObject = {"
-								"key: 'mousedown',"
-								"x: event.screenX,"
-								"y: event.screenY"
-							"};"
-							"window.chrome.webview.postMessage(jsonObject);"
-						"});"
-					"}"
-				"</script>"
-			"</body>"
-		"</html>";
-		static constexpr char           html_skeleton[]  = ""
-		"<html>"
-			"<body>"
-				"<div id=\"0\">"
-					"<template shadowrootmode=\"open\">"
-						"<style>{0}</style>"
-						"<div></div>"
-					"</template>"
-				"</div>"
-				"<div id=\"1\">"
-					"<template shadowrootmode=\"open\">"
-						"<style>{0}</style>"
-						"<div></div>"
-					"</template>"
-				"</div>"
-				"<div id=\"2\">"
-					"<template shadowrootmode=\"open\">"
-						"<style>{0}</style>"
-						"<div></div>"
-					"</template>"
-				"</div>"
-				"<div id=\"3\">"
-					"<template shadowrootmode=\"open\">"
-						"<style>{0}</style>"
-						"<div></div>"
-					"</template>"
-				"</div>"
-				"<div id=\"4\">"
-					"<template shadowrootmode=\"open\">"
-						"<style>{0}</style>"
-						"<div></div>"
-					"</template>"
-				"</div>"
-			"</body>"
-		"</html>";
-		static constexpr char fill_webpage_script[] = ""
-		"(() => {{"
-			"const host = document.getElementById(\"{}\");"
-			"const shadow = host.shadowRoot;"
-			"const div = shadow.lastChild;"
-			"div.dataset.character = `{}`;"
-			"div.dataset.word = `{}`;"
-			"div.dataset.sentence = `{}`;"
-			"div.innerHTML = `{}`;"
-		"}})();";
-		static constexpr wchar_t reset_webpage_script[] = L""
-		"for (const host of document.body.children) {"
-			"const div = host.shadowRoot.lastChild;"
-			"div.id=\"\";"
-			"div.innerHTML=\"\";"
-		"}";
 		static constexpr wchar_t get_width_script[] = L""
 		"(() => {{"
 			"const body = document.body;"
@@ -144,31 +60,6 @@ namespace ocr {
 			"return Math.max(body.scrollHeight, body.offsetHeight,"
 							"html.scrollHeight, html.offsetHeight, html.clientHeight);"
 		"}})();";
-		static constexpr wchar_t add_context_menu_script[] = L""
-		"for (const host of document.body.children) {"
-			"const shadow = host.shadowRoot;"
-			"const div = host.shadowRoot.lastChild;"
-			"shadow.addEventListener(\"contextmenu\", function (event) {"
-				"let jsonObject = {"
-					"key: \"contextmenu\","
-					"x: event.screenX,"
-					"y: event.screenY,"
-					"character: div.dataset.character,"
-					"word: div.dataset.word,"
-					"sentence: div.dataset.sentence"
-				"};"
-				"window.chrome.webview.postMessage(jsonObject);"
-				"event.preventDefault();"
-			"});"
-			"shadow.addEventListener(\"mousedown\", function (event) {"
-				"let jsonObject = {"
-					"key: 'mousedown',"
-					"x: event.screenX,"
-					"y: event.screenY"
-				"};"
-				"window.chrome.webview.postMessage(jsonObject);"
-			"});"
-		"}";
 
 		int                                                             width{}, height{};
 		bool                                                            is_hovering{};
@@ -180,7 +71,6 @@ namespace ocr {
 		std::vector<OCRBlock>                           results;
 		std::size_t                                     results_size{};
 		std::unique_ptr<mdict::Mdict>                   mdict;
-		std::string                                     css_data;
 		std::unordered_map<std::string, DictionaryData> dictionary_data;
 		int                                             max_webpage_width{scroll_bar_width};
 
@@ -188,6 +78,9 @@ namespace ocr {
 		Microsoft::WRL::ComPtr<ICoreWebView2Controller> wv_controller;
 		Microsoft::WRL::ComPtr<ICoreWebView2>           webview;
 		bool                                            inited_web_view2{false};
+		std::string webpage_html;
+		汉英词典第三版Extractor dict_extractor{};
+		opencc::SimpleConverter converter{"../t2s.json"};
 
 		std::unique_ptr<Pinyin::Pinyin> g2p_man;
 		Anki::Interface anki{};
@@ -195,7 +88,7 @@ namespace ocr {
 
 		void initWebView2();
 
-		void initDictionary(const std::string& dict_string_path);
+		void initDictionary(const std::filesystem::path& dict_path);
 
 		void initCurrDictHTML();
 
@@ -211,11 +104,11 @@ namespace ocr {
 
 		void updateWindowPosition() const;
 
+		static std::vector<std::string> guessPinyin(const Pinyin::PinyinResVector& pinyin_res, const std::string& pinyin_str);
+
 		void refreshWindow();
 
 		void refreshHovering();
-
-		void onNavigationComplete();
 
 		HRESULT onWebMessageReceived(ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args);
 
@@ -238,7 +131,8 @@ namespace ocr {
 		static std::unique_ptr<TooltipWnd> initTooltip(
 			const std::vector<OCRResult>& res,
 			const cv::Rect&               rect,
-			const std::string&            dict_folder_path
+			const std::filesystem::path&  mdict_path,
+			const std::filesystem::path&  webpage_path
 		);
 
 		void updateRectRes(const std::vector<OCRResult>& new_res, const cv::Rect& new_rect);

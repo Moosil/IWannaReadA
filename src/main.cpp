@@ -27,6 +27,9 @@ std::future<std::vector<OCRResult>> runOCR(
 	Config yaml{"../config.yaml"};
 	const bool refresh = yaml.getRefresh();
 	const int refresh_interval = yaml.getRefreshIntervalMs();
+	const std::filesystem::path mdict_path = yaml.getMDictPath();
+	const std::filesystem::path html_template_path = yaml.getHTMLTemplatePath();
+
 	try {
 		SetConsoleOutputCP(CP_UTF8);
 		SetConsoleCP(CP_UTF8);
@@ -64,8 +67,8 @@ std::future<std::vector<OCRResult>> runOCR(
 							rect.x + rect.width,
 							rect.y + rect.height
 						);
-						tt_wnd = TooltipWnd::initTooltip(output, rect, "../dictionaries/hanyingcidian(disanban)");
-						prev = std::chrono::steady_clock::now();
+						tt_wnd = TooltipWnd::initTooltip(output, rect, mdict_path, html_template_path);
+						prev   = std::chrono::steady_clock::now();
 					}
 				}
 			} else {

@@ -214,6 +214,36 @@ namespace ocr {
 		return getPath(ModelType::Rec, FileType::Param);
 	}
 
+	Config::file_path Config::getHTMLTemplatePath() {
+		for (const std::string& connector : connectors) {
+			if (const std::string curr_name = "html" + connector + "template"; node[curr_name]) {
+				if (file_path path = config_path.parent_path() / node[curr_name].as<std::string>();
+					std::filesystem::is_regular_file(path)) {
+					spdlog::info("found html template path at {}", path.string());
+					return path;
+				}
+			}
+		}
+		spdlog::error("couldn't find html template path in {}", config_path.parent_path().string());
+		throw std::runtime_error{
+			std::format("couldn't find html template path in {}", config_path.parent_path().string())
+		};
+	}
+
+	Config::file_path Config::getMDictPath() {
+		if (const std::string curr_name = "dictionary"; node[curr_name]) {
+			if (file_path path = config_path.parent_path() / node[curr_name].as<std::string>();
+				std::filesystem::is_directory(path)) {
+				spdlog::info("found mdict path at {}", path.string());
+				return path;
+				}
+		}
+		spdlog::error("couldn't find mdict in {}", config_path.parent_path().string());
+		throw std::runtime_error{
+			std::format("couldn't find mdict path in {}", config_path.parent_path().string())
+		};
+	}
+
 	bool Config::getRefresh() {
 		for (const auto& refresh : refresh_alias)
 			if (node[refresh])
@@ -225,7 +255,11 @@ namespace ocr {
 		std::string string_duration = getRefreshIntervalAsString();
 		trim(string_duration);
 		int value{};
-		if (auto [ptr, ec] = std::from_chars(string_duration.data(), string_duration.data() + string_duration.size(), value); ec == std::errc{}) {
+		if (auto [ptr, ec] = std::from_chars(
+			string_duration.data(),
+			string_duration.data() + string_duration.size(),
+			value
+		); ec == std::errc{}) {
 			const std::string extra{ptr};
 			if (extra.empty())
 				return value * 1000;

@@ -6,6 +6,9 @@
 #include <windows.h>
 #include <opencv2/imgproc.hpp>
 #pragma comment(lib,"Shcore.lib")
+#include <fstream>
+#include <filesystem>
+#include <ranges>
 #include <utf8/cpp20.h>
 #include <wrl/client.h>
 
@@ -246,5 +249,12 @@ namespace ocr {
 		text_layout->Release();
 
 		return {text_metrics.width, text_metrics.height};
+	}
+
+	std::string readFile(const std::filesystem::path& path) {
+		auto&& file = std::ifstream(path, std::ios::in | std::ios::binary);
+		file >> std::noskipws;
+		auto&& view = std::views::istream<char>(file);
+		return std::ranges::to<std::string>(view);
 	}
 }
