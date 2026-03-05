@@ -1,0 +1,457 @@
+<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<!--suppress CssUnusedSymbol -->
+		<style>
+			.hidden {
+				display: none !important;
+			}
+
+			:root {
+				/* catppuccin palette */
+				--rosewater: hsl(10, 56%, 91%) !important;
+				--flamingo: hsl(0, 59%, 88%) !important;
+				--pink: hsl(316, 72%, 86%) !important;
+				--mauve: hsl(267, 84%, 81%) !important;
+				--red: hsl(343, 81%, 75%) !important;
+				--maroon: hsl(350, 65%, 78%) !important;
+				--peach: hsl(23, 92%, 76%) !important;
+				--yellow: hsl(41, 86%, 83%) !important;
+				--green: hsl(115, 54%, 76%) !important;
+				--teal: hsl(170, 57%, 73%) !important;
+				--sky: hsl(189, 71%, 73%) !important;
+				--sapphire: hsl(199, 76%, 69%) !important;
+				--blue: hsl(217, 92%, 76%) !important;
+				--lavender: hsl(232, 97%, 85%) !important;
+				--text: hsl(226, 64%, 88%) !important;
+				--subtext1: hsl(227, 35%, 80%) !important;
+				--subtext0: hsl(228, 24%, 72%) !important;
+				--overlay2: hsl(228, 17%, 64%) !important;
+				--overlay1: hsl(230, 13%, 56%) !important;
+				--overlay0: hsl(231, 11%, 47%) !important;
+				--surface2: hsl(233, 12%, 39%) !important;
+				--surface1: hsl(234, 13%, 31%) !important;
+				--surface0: hsl(237, 16%, 23%) !important;
+				--base: hsl(240, 21%, 15%) !important;
+				--mantle: hsl(240, 21%, 12%) !important;
+				--crust: hsl(240, 23%, 9%) !important;
+				--theme-color: var(--blue) !important;
+
+				font-family: Arial, serif;
+			}
+			body {
+				color: var(--subtext1) !important;
+				background-color: var(--base) !important;
+			}
+
+			.headword {
+				font-size: 28px;
+				background-color: var(--mantle);
+				border: 5px solid var(--mantle);
+				border-radius: 8px;
+				margin-top: 8px;
+			}
+
+			.left-bracket {
+				margin-left: -15px;
+			}
+
+			.right-bracket {
+				margin-right: -15px;
+			}
+
+			.bracket {
+				font-weight: 20;
+				text-shadow: 0 0 1px #000;
+			}
+
+			.empty-hanzi {
+				color: var(--surface2);
+			}
+
+			.pinyin-rt {
+				color: var(--surface0);
+				-webkit-transition: color .3s ease-out;
+				-moz-transition: color .3s ease-out;
+				-o-transition: color .3s ease-out;
+				transition: color .3s ease-out;
+			}
+
+			ruby:has(.pinyin-rt:hover) .pinyin-rt {
+				color: var(--text);
+			}
+
+			.definition {
+				background-color: var(--mantle);
+				border: 5px solid var(--mantle);
+				border-radius: 8px;
+				padding-left: 4px;
+			}
+
+			.def-title {
+				font-size: 22px;
+				color: var(--theme-color);
+			}
+
+			.def-list {
+				padding-left: 0;
+				margin: 0;
+
+				list-style-type: none; /* Hides default marker */
+				counter-reset: item-counter;
+			}
+
+			.def-list li::before {
+				counter-increment: item-counter;
+				content: counter(item-counter);
+				color: var(--overlay0);
+				font-weight: bold;
+				padding-right: 5px;
+
+			}
+
+			li {
+				margin-top: 5px;
+				margin-bottom: 5px;
+			}
+
+			li .def-details {
+				display: inline-block;
+				vertical-align: top;
+				width: 95%; /* Adjust so the number has room on the left */
+			}
+
+			.def-details {
+				display: inline-block;
+			}
+
+			.def-details > summary {
+				font-weight: bold;
+				list-style: none;
+			}
+			.def-details > summary::-webkit-details-marker {
+				display: none;
+			}
+
+			.def-details > :not(summary) {
+				border-left: 2px solid var(--theme-color);
+				margin-left: -13px;
+				padding-left: 13px;
+			}
+		</style>
+		<script>
+			/**
+             * @param {Element} headword
+             * @param {Array} hanzi
+             * @param {Element} pinyin_rt
+             */
+			function fillSimpHeadword(headword, hanzi, pinyin_rt) {
+				let i = 0;
+				const childrenCnt = headword.children.length;
+				for (; i < hanzi.length; i++) {
+					let hanziElem;
+					if (i < childrenCnt - 1) {
+						hanziElem = headword.children[i];
+						hanziElem.classList.remove("hidden");
+					} else {
+						hanziElem = document.createElement("a");
+						hanziElem.classList.add("hanzi-link");
+						hanziElem.lang = "zh";
+
+						headword.insertBefore(hanziElem, pinyin_rt);
+					}
+
+					if (hanzi[i] === "-") {
+						hanziElem.classList.add("empty-hanzi");
+						hanziElem.textContent = "─";
+					} else {
+						hanziElem.classList.remove("empty-hanzi");
+						hanziElem.textContent = hanzi[i];
+					}
+				}
+				for (; i < childrenCnt - 1; i++) {
+					headword.children[i].classList.add("hidden");
+				}
+			}
+
+			/**
+			 * @param {Element} headword
+			 * @param {Array} hanzi
+			 */
+			function fillTradHeadword(headword, hanzi) {
+				let i = 0;
+				const childrenCnt = headword.children.length;
+				for (; i < hanzi.length; i++) {
+					let hanziElem;
+					if (i < childrenCnt) {
+						hanziElem = headword.children[i];
+						hanziElem.classList.remove("hidden");
+					} else {
+						hanziElem = document.createElement("a");
+						hanziElem.classList.add("hanzi-link");
+						hanziElem.lang = "zh";
+
+						headword.appendChild(hanziElem);
+					}
+
+					if (hanzi[i] === "-") {
+						hanziElem.classList.add("empty-hanzi");
+						hanziElem.textContent = "─";
+					} else {
+						hanziElem.classList.remove("empty-hanzi");
+						hanziElem.textContent = hanzi[i];
+					}
+				}
+				for (; i < childrenCnt; i++) {
+					headword.children[i].classList.add("hidden");
+				}
+			}
+
+			/**
+			 * @param {Element} headword
+			 * @param {Array} hanzi_simp
+			 * @param {Array} hanzi_trad
+			 * @param {string} pinyin
+			 */
+			function fillHeadwords(headword, hanzi_simp, hanzi_trad, pinyin) {
+				{
+					const simpList = headword.getElementsByClassName("simp-headword");
+					if (simpList.length === 0) {
+						const newSimp = document.createElement("ruby");
+						newSimp.classList.add("simp-headword");
+						headword.appendChild(newSimp);
+						const newPinyin = document.createElement("rt");
+						newPinyin.classList.add("pinyin-rt");
+						newPinyin.textContent = pinyin;
+						newSimp.appendChild(newPinyin);
+
+						fillSimpHeadword(newSimp, hanzi_simp, newPinyin);
+					} else {
+						const rtList = simpList[0].getElementsByTagName("rt");
+						if (rtList.length !== 0) {
+							rtList[0].textContent = pinyin;
+							fillSimpHeadword(simpList[0], hanzi_simp, rtList[0]);
+						} else {
+							const newPinyin = document.createElement("rt");
+							newPinyin.classList.add("pinyin-rt");
+							newPinyin.textContent = pinyin;
+							simpList[0].appendChild(newPinyin);
+							fillSimpHeadword(simpList[0], hanzi_simp, newPinyin);
+						}
+					}
+				}
+
+				{
+					const tradList = headword.getElementsByClassName("trad-headword");
+					if (tradList.length === 0) {
+						const bracketOpen = document.createElement("span");
+						bracketOpen.textContent = "〔";
+						bracketOpen.classList.add("left-bracket", "bracket");
+						headword.appendChild(bracketOpen);
+
+						const newTrad = document.createElement("span");
+						newTrad.classList.add("trad-headword");
+						headword.appendChild(newTrad);
+						fillTradHeadword(newTrad, hanzi_trad);
+
+						const bracketClose = document.createElement("span");
+						bracketClose.textContent = "〕";
+						bracketClose.classList.add("right-bracket", "bracket");
+						headword.appendChild(bracketClose);
+					} else {
+						fillTradHeadword(tradList[0], hanzi_trad);
+					}
+				}
+			}
+
+			/**
+			 * @param {Element} definition
+			 * @param {string} wordClass
+			 * @param {Array} definitions_list
+			 */
+			function fillDefinition(definition, wordClass, definitions_list) {
+				{
+					const titleList = definition.getElementsByClassName("def-title");
+					if (titleList.length === 0) {
+						const newTitle = document.createElement("span");
+						const bold = document.createElement("b");
+						bold.textContent = wordClass;
+						newTitle.classList.add("def-title");
+						newTitle.appendChild(bold);
+						definition.appendChild(newTitle);
+					}
+				}
+				let ol
+				const olList = definition.getElementsByClassName("def-list");
+				if (olList.length === 0) {
+					ol = document.createElement("ol");
+					ol.classList.add("def-list");
+					definition.appendChild(ol);
+				} else {
+					ol = olList[0];
+				}
+
+				const liList = ol.children;
+				let i = 0;
+				for (; i < definitions_list.length; i++) {
+					if (i >= liList.length) {
+						const summary = document.createElement("summary");
+						summary.textContent = definitions_list[i]["definition"].toString();
+
+						const div = document.createElement("div");
+						div.innerHTML = definitions_list[i]["sentences"];
+
+						const details = document.createElement("details");
+						details.classList.add("def-details");
+						details.appendChild(summary);
+						details.appendChild(div);
+
+						const li = document.createElement("li");
+						li.appendChild(details);
+						ol.appendChild(li)
+					} else {
+						const li = liList[i];
+						li.classList.remove("hidden");
+						const details = li.firstChild;
+
+						const summary = details.firstChild;
+						summary.textContent = definitions_list[i]["definition"].toString();
+
+						const div = details.lastChild;
+						div.innerHTML = definitions_list[i]["sentences"];
+					}
+				}
+				for (; i + 1 < definition.children.length; i++) {
+					definition.children[i + 1].classList.add("hidden");
+				}
+			}
+
+			/**
+             * @param {Element} definitions_container
+             * @param {Object} definitions_list
+             */
+			function fillDefinitionsContainer(definitions_container, definitions_list) {
+				for (const wordClass in definitions_list) {
+					const elems = definitions_container.getElementsByClassName(wordClass);
+					if (elems.length === 0) {
+						const newElem = document.createElement("div");
+						newElem.classList.add("definition", wordClass);
+						definitions_container.appendChild(newElem);
+						fillDefinition(newElem, wordClass, definitions_list[wordClass]);
+					} else {
+						elems[0].classList.remove("hidden");
+						fillDefinition(elems[0], wordClass, definitions_list[wordClass]);
+					}
+				}
+
+				for (const elem of definitions_container.children) {
+					const wordClass = [...elem.classList].find(cls => cls !== "definition" && cls !== "hidden");
+					if (!Object.hasOwn(definitions_list, wordClass)) {
+						elem.classList.add("hidden");
+					}
+				}
+			}
+
+			/**
+             * @param {Element} entry
+             * @param {Array} hanzi_simp
+             * @param {Array} hanzi_trad
+             * @param {string} pinyin
+             * @param {Object} definitions
+             */
+			function fillEntry(entry, hanzi_simp, hanzi_trad, pinyin, definitions) {
+				{
+					const headwordList = entry.getElementsByClassName("headword");
+					if (headwordList.length === 0) {
+						const newHeadword = document.createElement("div");
+						newHeadword.classList.add("headword");
+						entry.appendChild(newHeadword);
+						fillHeadwords(newHeadword, hanzi_simp, hanzi_trad, pinyin);
+					} else {
+						fillHeadwords(headwordList[0], hanzi_simp, hanzi_trad, pinyin);
+					}
+				}
+
+				{
+					const defContainerList = entry.getElementsByClassName("definitions-container");
+					if (defContainerList.length === 0) {
+						const newDefContainer = document.createElement("div");
+						newDefContainer.classList.add("definitions-container");
+						entry.appendChild(newDefContainer);
+						fillDefinitionsContainer(newDefContainer, definitions);
+					} else {
+						fillDefinitionsContainer(defContainerList[0], definitions);
+					}
+				}
+			}
+			// function is called in tooltip.cpp
+			// noinspection JSUnusedGlobalSymbols
+			function setPage(page_data) {
+				const entryContainer = document.getElementById("entry-container");
+				const entryList = entryContainer.children;
+
+				let i = 0;
+				for (; i < page_data.length; i++) {
+					/**
+					 * @type {string}
+					 */
+					const contextWord = page_data[i]["c_word"];
+					/**
+					 * @type {string}
+					 */
+					const contextSentence = page_data[i]["c_sent"];
+					/**
+					 * @type {Array}
+					 */
+					const hanziSimp = page_data[i]["simp"];
+					/**
+					 * @type {Array}
+					 */
+					const hanziTrad = page_data[i]["trad"];
+					/**
+					 * @type {string}
+					 */
+					const pinyin = page_data[i]["pinyin"];
+					/**
+					 * @type {Object}
+					 */
+					const definitions = page_data[i]["def"];
+
+					if (entryList.length <= i) {
+						const newEntry = document.createElement("div");
+						newEntry.classList.add("entry");
+						newEntry.addEventListener("contextmenu", function (event) {
+							const jsonObject = {
+								key: "contextmenu",
+								x: event.screenX,
+								y: event.screenY,
+								character: contextWord[0],
+								word: contextWord,
+								sentence: contextSentence
+							};
+							// noinspection JSUnresolvedReference
+							window.chrome.webview.postMessage(jsonObject); // is part of Microsoft Edge Webview2
+							event.preventDefault();
+						});
+
+						entryContainer.appendChild(newEntry);
+						fillEntry(newEntry, hanziSimp, hanziTrad, pinyin, definitions);
+					} else {
+						entryContainer.children[i].classList.remove("hidden");
+						fillEntry(entryList[i], hanziSimp, hanziTrad, pinyin, definitions);
+					}
+				}
+
+				for (; i < entryList.length; i++) {
+					entryContainer.children[i].classList.add("hidden");
+				}
+			}
+		</script>
+		<title></title>
+	</head>
+	<body>
+		<div id="entry-container">
+		</div>
+	</body>
+</html>

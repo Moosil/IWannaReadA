@@ -6,7 +6,6 @@
 
 #include "util.h"
 #include "lexbor/dom/dom.h"
-#include "utf8/cpp20.h"
 
 namespace ocr {
 	DictExtractor::DictExtractor() {
@@ -78,18 +77,17 @@ namespace ocr {
 	}
 
 	std::string DictExtractor::getTextContent(lxb_dom_node_t* node) {
-		const auto* cdata = lxb_dom_interface_character_data(node);
-		return reinterpret_cast<const char*>(cdata->data.data);
+		if (lxb_dom_node_tag_id(node) == LXB_TAG__TEXT) {
+			const auto* cdata = lxb_dom_interface_character_data(node);
+			return reinterpret_cast<const char*>(cdata->data.data);
+		}
+		return "";
 	}
 
 	std::string DictExtractor::getRecursiveTextContent(lxb_dom_node_t* node) {
 		auto child = node->first_child;
 		if (child == nullptr) {
-			if (lxb_dom_node_tag_id(node) == LXB_TAG__TEXT) {
-				return getTextContent(node);
-			} else {
-				return "";
-			}
+			return getTextContent(node);
 		}
 
 		std::string text_content{};

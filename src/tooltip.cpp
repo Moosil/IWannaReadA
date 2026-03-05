@@ -82,8 +82,8 @@ namespace ocr {
 		for (const auto* curr = hover_word; curr != hover_block->results.data() + hover_block->results.size(); ++curr) {
 			lookup_string += curr->text;
 			if (const std::string dict_html = mdict->lookup(lookup_string); !dict_html.empty()) {
-				const std::string strip_dict_html = trim_copy(dict_html);
-				const std::vector<EntryInfo> to_add = dict_extractor.extractMDictHTML(strip_dict_html);
+				const std::string            strip_dict_html = trim_copy(dict_html);
+				const std::vector<EntryInfo> to_add          = dict_extractor.extractMDictHTML(strip_dict_html);
 				dictionary_data[first_char].entries.append_range(to_add);
 				dictionary_data[first_char].phrase = lookup_string;
 			}
@@ -227,10 +227,10 @@ namespace ocr {
 
 	std::vector<std::string> splitHanzi(const std::string& hanzi) {
 		std::vector<std::string> result;
-		std::u16string hanzi_u16 = utf8::utf8to16(hanzi);
+		std::u16string           hanzi_u16 = utf8::utf8to16(hanzi);
 		for (const char16_t c : hanzi_u16) {
 			std::u16string u16str;
-			u16str += c;
+			u16str                += c;
 			std::string hanzi_str = utf8::utf16to8(u16str);
 			result.push_back(hanzi_str);
 		}
@@ -265,40 +265,40 @@ namespace ocr {
 			spdlog::warn("dictionary had entry but no contents: NOT IMPLEMENTED");
 		}
 
-		auto&       dict_data = it->second;
+		auto&          dict_data = it->second;
 		nlohmann::json page_data = nlohmann::json::array();
-			for (const auto& entry : dict_data.entries) {
-				nlohmann::json definition = nlohmann::json::object();
-				for (const auto& [word_class, def, sentences] : entry.definitions) {
-					nlohmann::json to_add = nlohmann::json::object();
-					to_add["definition"] = def;
+		for (const auto& entry : dict_data.entries) {
+			nlohmann::json definition = nlohmann::json::object();
+			for (const auto& [word_class, def, sentences] : entry.definitions) {
+				nlohmann::json to_add = nlohmann::json::object();
+				to_add["definition"]  = def;
 
-					std::string chinese_sentences;
-					if (sentences.size() > 0) {
-						chinese_sentences = sentences[0].chinese;
-						for (int i = 1; i < sentences.size(); i++) {
-							chinese_sentences += "<br>" + sentences[i].chinese;
-						}
+				std::string chinese_sentences;
+				if (!sentences.empty()) {
+					chinese_sentences = sentences[0].chinese;
+					for (int i = 1; i < sentences.size(); i++) {
+						chinese_sentences += "<br>" + sentences[i].chinese;
 					}
-					to_add["sentences"] = chinese_sentences;
-					if (!definition.contains(word_class)) {
-						definition[word_class] = nlohmann::json::array();
-					}
-					definition[word_class].push_back(to_add);
 				}
-
-				nlohmann::json entry_json = nlohmann::json::object();
-				entry_json["simp"] = splitHanzi(entry.simp);
-				entry_json["trad"] = converter.Convert(entry.simp);
-				entry_json["pinyin"] = entry.pinyin;
-				entry_json["def"] = definition;
-				entry_json["c_word"] = dict_data.phrase;
-				entry_json["c_sent"] = getSentence(hover_block);
-				page_data.push_back(entry_json);
+				to_add["sentences"] = chinese_sentences;
+				if (!definition.contains(word_class)) {
+					definition[word_class] = nlohmann::json::array();
+				}
+				definition[word_class].push_back(to_add);
 			}
+
+			nlohmann::json entry_json = nlohmann::json::object();
+			entry_json["simp"]        = splitHanzi(entry.simp);
+			entry_json["trad"]        = converter.Convert(entry.simp);
+			entry_json["pinyin"]      = entry.pinyin;
+			entry_json["def"]         = definition;
+			entry_json["c_word"]      = dict_data.phrase;
+			entry_json["c_sent"]      = getSentence(hover_block);
+			page_data.push_back(entry_json);
+		}
 		const std::string page_data_str = page_data.dump();
-		const std::string script = "setPage(" + page_data_str + ")";
-		const auto script_utf16 = utf8::utf8to16(script);
+		const std::string script        = "setPage(" + page_data_str + ")";
+		const auto        script_utf16  = utf8::utf8to16(script);
 
 		width = std::max(min_width, max_webpage_width);
 
@@ -336,7 +336,8 @@ namespace ocr {
 										dict_data.height = calc_webpage_height;
 										spdlog::info(
 											"entry: {}, height: {}",
-											"placeholder TODO", // TODO
+											"placeholder TODO",
+											// TODO
 											calc_webpage_height
 										);
 										updateWindowSize();
@@ -611,8 +612,18 @@ namespace ocr {
 		rect        = new_rect;
 		hover_block = nullptr;
 		hover_word  = nullptr;
-		refreshHovering();
-		UpdateWindow(hwnd);
+		if (GetAsyncKeyState(VK_SHIFT) & (1 << 15)) {
+			refreshHovering();
+			if (is_hovering) {
+				ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+				UpdateWindow(hwnd);
+			} else {
+				if (inited_web_view2) {
+					ShowWindow(hwnd, SW_HIDE);
+				}
+				UpdateWindow(hwnd);
+			}
+		}
 	}
 
 	void TooltipWnd::refreshHovering() {

@@ -19,10 +19,10 @@ namespace ocr {
 	};
 
 	struct EntryInfo {
-		std::string              simp;
-		std::string              trad;
-		std::string pinyin;
-		std::vector<Definition>  definitions{};
+		std::string             simp;
+		std::string             trad;
+		std::string             pinyin;
+		std::vector<Definition> definitions{};
 	};
 
 	class DictExtractor {
@@ -45,7 +45,7 @@ namespace ocr {
 
 		static std::string getRecursiveTextContent(lxb_dom_node_t* node);
 
-		[[nodiscard]] virtual std::vector<EntryInfo> extractMDictHTML(const std::string& html) const = 0;
+		[[nodiscard]] virtual std::vector<EntryInfo> extractMDictHTML(const std::string& html) = 0;
 
 	protected:
 		lxb_html_parser_t* parser;
