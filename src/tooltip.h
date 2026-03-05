@@ -116,6 +116,8 @@ namespace ocr {
 
 		static std::string getSentence(OCRBlock* hover_block);
 
+		static std::string getPhrase(const OCRResultPacked* hover_word, const OCRBlock* hover_block);
+
 		LRESULT CALLBACK wndProc(UINT msg, WPARAM wparam, LPARAM lparam);
 
 		static LRESULT CALLBACK wndProcSetup(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);

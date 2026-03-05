@@ -76,6 +76,7 @@ namespace ocr {
 		if (!hover_word || !hover_block || results.empty())
 			return;
 
+		spdlog::info("inited dict html of {}", hover_word->text);
 		std::string       lookup_string;
 		const std::string first_char = hover_word->text;
 		dictionary_data[first_char]  = {};
@@ -261,13 +262,18 @@ namespace ocr {
 
 		if (it->second.entries.empty()) {
 			//TODO deal with dictionary having that entry but nothing in that entry
-			spdlog::info("word: {}", hover_word->text);
-			spdlog::warn("dictionary had entry but no contents: NOT IMPLEMENTED");
+			spdlog::warn("{}'s dictionary had entry but no contents: NOT IMPLEMENTED", hover_word->text);
 		}
 
 		auto&          dict_data = it->second;
 		nlohmann::json page_data = nlohmann::json::array();
 		for (const auto& entry : dict_data.entries) {
+			// if entry.simp is a prefix of the hovered phrase
+			if (const std::string phrase = getPhrase(hover_word, hover_block);
+				phrase.compare(0, entry.simp.size(), entry.simp) != 0) {
+				continue;
+			}
+
 			nlohmann::json definition = nlohmann::json::object();
 			for (const auto& [word_class, def, sentences] : entry.definitions) {
 				nlohmann::json to_add = nlohmann::json::object();
@@ -334,12 +340,6 @@ namespace ocr {
 											max_height
 										);
 										dict_data.height = calc_webpage_height;
-										spdlog::info(
-											"entry: {}, height: {}",
-											"placeholder TODO",
-											// TODO
-											calc_webpage_height
-										);
 										updateWindowSize();
 										updateWindowPosition();
 									}
@@ -464,6 +464,14 @@ namespace ocr {
 			       [](auto& r) -> std::string& { return r.text; }
 		       )
 		       | std::views::join | std::ranges::to<std::string>();
+	}
+
+	std::string TooltipWnd::getPhrase(const OCRResultPacked* hover_word, const OCRBlock* hover_block) {
+		std::string result;
+		for (const auto* curr = hover_word; curr != hover_block->results.data() + hover_block->results.size(); ++curr) {
+			result += curr->text;
+		}
+		return result;
 	}
 
 	LRESULT TooltipWnd::wndProc(const UINT msg, const WPARAM wparam, const LPARAM lparam) {

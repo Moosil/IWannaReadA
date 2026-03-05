@@ -3,6 +3,8 @@
 #include <spdlog/spdlog.h>
 #include <utf8/cpp20.h>
 
+#include "util.h"
+
 namespace ocr {
 	std::string 汉英词典第三版Extractor::process_definition(const std::string& preprocess_def, const std::string& word_class) {
 		std::u16string       process_def    = utf8::utf8to16(preprocess_def);
@@ -91,7 +93,7 @@ namespace ocr {
 				lxb_dom_collection_t* citouci_col         = searchForClass(doc, citouci_search_root, "citouci");
 				lxb_dom_node_t*       citouci             = lxb_dom_collection_node(citouci_col, 0);
 				curr_entry.simp                           = getTextContent(citouci->first_child);
-				curr_entry.trad                           = "-";
+				trim(curr_entry.simp);
 				lxb_dom_collection_destroy(citouci_col, true);
 				citouci_col = nullptr;
 			}

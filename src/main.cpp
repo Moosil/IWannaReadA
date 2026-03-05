@@ -15,19 +15,19 @@
 using namespace ocr;
 using s_time = std::chrono::time_point<std::chrono::steady_clock>;
 
-std::future<std::vector<OCRResult>> runOCR(
-	const OCREngine&                        engine,
-	const cv::Mat&                          image
+std::future<std::vector<OCRResult> > runOCR(
+	const OCREngine& engine,
+	const cv::Mat&   image
 );
 
 [[noreturn]] int main() {
 	// fixes scaling of screenshots on monitors with DPI
 	SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
 
-	Config yaml{"../config.yaml"};
-	const bool refresh = yaml.getRefresh();
-	const int refresh_interval = yaml.getRefreshIntervalMs();
-	const std::filesystem::path mdict_path = yaml.getMDictPath();
+	Config                      yaml{"../config.yaml"};
+	const bool                  refresh            = yaml.getRefresh();
+	const int                   refresh_interval   = yaml.getRefreshIntervalMs();
+	const std::filesystem::path mdict_path         = yaml.getMDictPath();
 	const std::filesystem::path html_template_path = yaml.getHTMLTemplatePath();
 
 	try {
@@ -45,13 +45,13 @@ std::future<std::vector<OCRResult>> runOCR(
 			spdlog::info("hotkey registered successfully");
 		}
 
-		MSG                            msg = {nullptr};
-		std::unique_ptr<ScreenshotWnd> ss_wnd;
-		std::unique_ptr<TooltipWnd>    tt_wnd;
-		cv::Mat                        ss;
-		cv::Rect                       rect;
-		std::future<std::vector<OCRResult>> pending_result;
-		s_time prev = std::chrono::steady_clock::now();
+		MSG                                  msg = {nullptr};
+		std::unique_ptr<ScreenshotWnd>       ss_wnd;
+		std::unique_ptr<TooltipWnd>          tt_wnd;
+		cv::Mat                              ss;
+		cv::Rect                             rect;
+		std::future<std::vector<OCRResult> > pending_result;
+		s_time                               prev      = std::chrono::steady_clock::now();
 		while (true) {
 			if (ss_wnd) {
 				ss_wnd->update();
@@ -90,36 +90,38 @@ std::future<std::vector<OCRResult>> runOCR(
 				if (tt_wnd) {
 					tt_wnd->updateLoop();
 
-					if (pending_result.valid() && pending_result.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+					if (pending_result.valid() && pending_result.wait_for(std::chrono::seconds(0)) ==
+					    std::future_status::ready) {
 						const std::vector<OCRResult> results = pending_result.get();
 						//spdlog::info(results | std::views::transform([](const OCRResult& r) -> std::string { return r.text.text; }) | std::views::join_with(',') | std::ranges::to<std::string>());
 						tt_wnd->updateRectRes(results, rect);
-						prev = std::chrono::steady_clock::now();
 					}
 
 					if (refresh && !pending_result.valid()) {
-						s_time now = std::chrono::steady_clock::now();
-						const auto milliseconds_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - prev);
-						if ((milliseconds_duration).count() > refresh_interval/*ms*/) {
+						s_time     now                   = std::chrono::steady_clock::now();
+						const auto milliseconds_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+							now - prev
+						);
+						if ((milliseconds_duration).count() > refresh_interval/*ms*/ &&
+						    (!pending_result.valid() || pending_result.wait_for(std::chrono::seconds(0)) == std::future_status::ready)) {
 							if (!rect.empty() && tt_wnd) {
-								ss = ScreenshotWnd::hBitmap2cvMat(ScreenshotWnd::captureScreenRegion(rect));
+								ss             = ScreenshotWnd::hBitmap2cvMat(ScreenshotWnd::captureScreenRegion(rect));
 								pending_result = runOCR(engine, ss);
-							} else {
-								prev = std::chrono::steady_clock::now();
 							}
+							prev = std::chrono::steady_clock::now();
 						}
 					}
 				}
 			}
 		}
-	} catch (std::exception &e) {
+	} catch (std::exception& e) {
 		spdlog::critical("Exception: {}", e.what());
 	}
 }
 
-std::future<std::vector<OCRResult>> runOCR(
-	const OCREngine&                        engine,
-	const cv::Mat&                          image
+std::future<std::vector<OCRResult> > runOCR(
+	const OCREngine& engine,
+	const cv::Mat&   image
 ) {
 	const cv::Mat img = image.clone();
 	return std::async(
