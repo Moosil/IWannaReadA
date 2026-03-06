@@ -43,7 +43,7 @@ namespace ocr {
 
 		static std::string getTextContent(lxb_dom_node_t* node);
 
-		static std::string getRecursiveTextContent(lxb_dom_node_t* node);
+		static std::vector<std::string> getRecursiveTextContent(lxb_dom_node_t* node);
 
 		[[nodiscard]] virtual std::vector<EntryInfo> extractMDictHTML(const std::string& html) = 0;
 

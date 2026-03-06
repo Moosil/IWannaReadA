@@ -312,17 +312,18 @@ namespace ocr {
 			height = min_height;
 			updateWindowSize();
 			updateWindowPosition();
+			const Poly2I hover_word_rect = hover_word->rect;
 			const HRESULT err0 = webview->ExecuteScript(
 				utf8ToWide(script).c_str(),
 				Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
 					// ReSharper disable once CppParameterMayBeConst
-					[this, &dict_data](HRESULT errorCode0, LPCWSTR resultObjectAsJson) -> HRESULT {
+					[this, &dict_data, &hover_word_rect](HRESULT errorCode0, LPCWSTR resultObjectAsJson) -> HRESULT {
 						log(errorCode0, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
 						const HRESULT err1 = webview->ExecuteScript(
 							get_height_script,
 							Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
 								// ReSharper disable CppParameterMayBeConst
-								[this, &dict_data](HRESULT errorCode1, LPCWSTR result) -> HRESULT {
+								[this, &dict_data, &hover_word_rect](HRESULT errorCode1, LPCWSTR result) -> HRESULT {
 									// ReSharper restore CppParameterMayBeConst
 									log(errorCode1, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
 									if (SUCCEEDED(errorCode1) && result && is_hovering) {
@@ -332,8 +333,8 @@ namespace ocr {
 											std::min(
 												calc_webpage_height,
 												std::max(
-													getTop(hover_word->rect),
-													getScreenSize().second - getBottom(hover_word->rect)
+													getTop(hover_word_rect),
+													getScreenSize().second - getBottom(hover_word_rect)
 												)
 											),
 											min_height,

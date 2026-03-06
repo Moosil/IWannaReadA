@@ -1,6 +1,7 @@
 #include "dict_extract.h"
 
 
+#include <stack>
 #include <stdexcept>
 #include <spdlog/spdlog.h>
 
@@ -47,8 +48,8 @@ namespace ocr {
 				find_child = lxb_dom_node_next(find_child);
 				continue;
 			}
-			const std::string child_class_string = reinterpret_cast<const char*>(child_class->value->data);
-			if (child_class_string == class_name) {
+			if (const std::string child_class_string = reinterpret_cast<const char*>(child_class->value->data);
+				child_class_string == class_name) {
 				break;
 			}
 
@@ -79,22 +80,58 @@ namespace ocr {
 	std::string DictExtractor::getTextContent(lxb_dom_node_t* node) {
 		if (lxb_dom_node_tag_id(node) == LXB_TAG__TEXT) {
 			const auto* cdata = lxb_dom_interface_character_data(node);
-			return reinterpret_cast<const char*>(cdata->data.data);
+			std::string inner_text = reinterpret_cast<const char*>(cdata->data.data);
+			if (const auto parent_class = lxb_dom_interface_element(node->parent)->attr_class) {
+				if (const std::string parent_class_string = reinterpret_cast<const char*>(parent_class->value->data);
+					parent_class_string == "pinyin") {
+					if (inner_text.find_first_not_of("āēīōūǖĀĒĪŌŪǕáéíóúǘÁÉÍÓÚǗǎěǐǒǔǚǍĚǏǑǓǙăĕĭŏŭĂĔĬŎŬàèìòùǜÀÈÌÒÙǛaeiouüAEIOUÜ bcdfghjklmnpqrstvwxyz") == std::string::npos) {
+						return inner_text;
+					}
+					spdlog::info("discarded {} of node because parent.class was \"pinyin\" and it didn't contain only pinyin characters", inner_text);
+					return "";
+				}
+			}
+			return inner_text;
+		}
+		if (lxb_dom_node_tag_id(node) == LXB_TAG_IMG || lxb_dom_node_tag_id(node) == LXB_TAG_IMAGE) {
+			if (const std::string child_attr_string = reinterpret_cast<const char*>(lxb_dom_interface_element(node)->first_attr->value->data);
+				child_attr_string == "file://imgs/hand.gif") {
+				return "[linktoreference]";
+			}
 		}
 		return "";
 	}
 
-	std::string DictExtractor::getRecursiveTextContent(lxb_dom_node_t* node) {
-		auto child = node->first_child;
-		if (child == nullptr) {
-			return getTextContent(node);
+	std::vector<std::string> DictExtractor::getRecursiveTextContent(lxb_dom_node_t* node) {
+		std::vector<std::string> text_content;
+		std::string              curr_text;
+
+		std::stack<lxb_dom_node_t*> stack;
+		stack.push(node);
+		spdlog::info("started new");
+		while (!stack.empty()) {
+			lxb_dom_node_t* curr = stack.top(); stack.pop();
+			for (auto* child = curr->last_child; child != nullptr; child = child->prev) {
+				stack.push(child);
+			}
+			if (curr->first_child == nullptr) {
+				if (std::string curr_contents = getTextContent(curr);
+				curr_contents == "[linktoreference]") {
+					text_content.push_back(curr_text);
+					spdlog::info("appended {}", curr_text);
+					curr_text = "";
+				} else {
+					spdlog::info("added {}", curr_contents);
+					curr_text += curr_contents;
+				}
+			}
+		}
+		if (!curr_text.empty()) {
+			text_content.push_back(curr_text);
+			spdlog::info("appended {}", curr_text);
 		}
 
-		std::string text_content{};
-		while (child != nullptr) {
-			text_content += getRecursiveTextContent(child);
-			child        = lxb_dom_node_next(child);
-		}
+		spdlog::info("finished");
 		return text_content;
 	}
 }

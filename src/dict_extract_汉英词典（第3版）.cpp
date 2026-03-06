@@ -1,13 +1,16 @@
 #include "dict_extract_汉英词典（第3版）.h"
 
+#include <ranges>
 #include <spdlog/spdlog.h>
 #include <utf8/cpp20.h>
 
 #include "util.h"
 
 namespace ocr {
-	std::string 汉英词典第三版Extractor::process_definition(const std::string& preprocess_def, const std::string& word_class) {
-		std::u16string       process_def    = utf8::utf8to16(preprocess_def);
+	std::string 汉英词典第三版Extractor::process_definition(const std::vector<std::string>& preprocess_def, const std::string& word_class) {
+		if (preprocess_def.empty()) return "";
+
+		std::u16string       process_def    = utf8::utf8to16(preprocess_def[0]);
 		const std::u16string word_class_u16 = utf8::utf8to16(word_class);
 		if (const std::size_t word_class_find = process_def.find(word_class_u16);
 			word_class_find != std::string::npos) {
@@ -16,9 +19,15 @@ namespace ocr {
 		if (const std::size_t first_space = process_def.find(u' ');
 			first_space != std::string::npos) {
 			if (const std::size_t next_non_space = process_def.find_first_not_of(u' ', first_space);
-				next_non_space != std::string::npos)
-				return utf8::utf16to8(process_def.substr(next_non_space));
-			return "";
+				next_non_space != std::string::npos) {
+				process_def = process_def.substr(next_non_space);
+			} else {
+				//if it makes it here, it's all spaces...
+				return "";
+			}
+		}
+		if (process_def[process_def.size() - 1] == u':') {
+			process_def = process_def.substr(0, process_def.size() - 1);
 		}
 		return utf8::utf16to8(process_def);
 	}
@@ -77,7 +86,7 @@ namespace ocr {
 			EntryInfo curr_entry{};
 
 			auto link_node    = pinyin_link->first_child;
-			curr_entry.pinyin = getRecursiveTextContent(link_node);
+			curr_entry.pinyin = getRecursiveTextContent(link_node)| std::views::join | std::ranges::to<std::string>();
 
 			auto              link_elem = lxb_dom_interface_element(link_node);
 			std::size_t       href_len{};
@@ -106,11 +115,11 @@ namespace ocr {
 				lxb_dom_node_t* fallback_chixing = chixing_search_root->first_child->next->first_child->first_child->
 				                                                        first_child->first_child->first_child;
 				std::string word_class = getTextContent(fallback_chixing->first_child);
-				std::string definition = getRecursiveTextContent(fallback_chixing);
+				std::string definition = getRecursiveTextContent(fallback_chixing)[0]; // idk about this because what case does this arise in/????
 				Definition  curr_def{.word_class = word_class, .definition = definition};
 			}
 
-			for (size_t i = 0; i < lxb_dom_collection_length(chixing_col); i++) {
+			for (std::size_t i = 0; i < lxb_dom_collection_length(chixing_col); i++) {
 				lxb_dom_node_t* chixing = lxb_dom_collection_node(chixing_col, i);
 
 				lxb_dom_node_t* def_search_root = chixing->parent->parent->parent->parent;
@@ -120,20 +129,26 @@ namespace ocr {
 					Definition curr_def{.word_class = getTextContent(chixing->first_child)};
 
 					lxb_dom_node_t*   def_node       = chixing->parent;
-					const std::string preprocess_def = getRecursiveTextContent(def_node);
-					if (!preprocess_def.empty())
-						curr_def.definition = process_definition(preprocess_def, curr_def.word_class);
+					const std::vector<std::string> preprocess_def = getRecursiveTextContent(def_node);
+					curr_def.definition = process_definition(preprocess_def, curr_def.word_class);
+					for (std::size_t j = 1; j < preprocess_def.size(); j++) {
+						curr_def.sentences.emplace_back(preprocess_def[j], "");
+					}
 
 					lxb_dom_node_t* sentence_root = def_search_root->first_child->first_child->next;
 					fill_sentences(sentence_root, doc, curr_def.sentences);
 					curr_entry.definitions.push_back(curr_def);
 				}
-				while (definition != nullptr) {
+				const lxb_dom_node_t* next_chixing = lxb_dom_collection_node(chixing_col, i+1);
+				while (definition != nullptr && (i + 1 == lxb_dom_collection_length(chixing_col) || definition != next_chixing->parent->parent->parent->parent)) {
 					Definition curr_def{.word_class = getTextContent(chixing->first_child)};
 
 					lxb_dom_node_t*   def_node       = definition->first_child->first_child->first_child;
-					const std::string preprocess_def = getRecursiveTextContent(def_node);
-					curr_def.definition              = process_definition(preprocess_def, curr_def.word_class);
+					const std::vector<std::string> preprocess_def = getRecursiveTextContent(def_node);
+					curr_def.definition = process_definition(preprocess_def, curr_def.word_class);
+					for (std::size_t j = 1; j < preprocess_def.size(); j++) {
+						curr_def.sentences.emplace_back(preprocess_def[j], "");
+					}
 
 					lxb_dom_node_t* sentence_root = definition->first_child->first_child->next;
 					fill_sentences(sentence_root, doc, curr_def.sentences);
