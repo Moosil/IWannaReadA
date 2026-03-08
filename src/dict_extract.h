@@ -25,6 +25,12 @@ namespace ocr {
 		std::vector<Definition> definitions{};
 	};
 
+	struct ExtractTextHelper {
+		std::u16string curr;
+		std::vector<std::string> result;
+		std::size_t remove_prefix_buffer{0};
+	};
+
 	class DictExtractor {
 	public:
 		DictExtractor();
@@ -41,7 +47,7 @@ namespace ocr {
 
 		static lxb_dom_node_t* findChildId(lxb_dom_node* parent, const std::string& id_name);
 
-		static std::string getTextContent(lxb_dom_node_t* node);
+		static std::string getTextContent(lxb_dom_node_t* node, ExtractTextHelper* helper = nullptr);
 
 		static std::vector<std::string> getRecursiveTextContent(lxb_dom_node_t* node);
 

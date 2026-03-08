@@ -4,6 +4,7 @@
 #include <stack>
 #include <stdexcept>
 #include <spdlog/spdlog.h>
+#include <utf8/cpp20.h>
 
 #include "util.h"
 #include "lexbor/dom/dom.h"
@@ -77,15 +78,17 @@ namespace ocr {
 		return find_child;
 	}
 
-	std::string DictExtractor::getTextContent(lxb_dom_node_t* node) {
+	std::string DictExtractor::getTextContent(lxb_dom_node_t* node, ExtractTextHelper* helper) {
 		if (lxb_dom_node_tag_id(node) == LXB_TAG__TEXT) {
 			const auto* cdata = lxb_dom_interface_character_data(node);
 			std::string inner_text = reinterpret_cast<const char*>(cdata->data.data);
 			if (const auto parent_class = lxb_dom_interface_element(node->parent)->attr_class) {
 				if (const std::string parent_class_string = reinterpret_cast<const char*>(parent_class->value->data);
 					parent_class_string == "pinyin") {
-					if (inner_text.find_first_not_of("āēīōūǖĀĒĪŌŪǕáéíóúǘÁÉÍÓÚǗǎěǐǒǔǚǍĚǏǑǓǙăĕĭŏŭĂĔĬŎŬàèìòùǜÀÈÌÒÙǛaeiouüAEIOUÜ bcdfghjklmnpqrstvwxyz") == std::string::npos) {
-						return inner_text;
+					if (inner_text.find_first_not_of("āēīōūǖĀĒĪŌŪǕáéíóúǘÁÉÍÓÚǗǎěǐǒǔǚǍĚǏǑǓǙăĕĭŏŭĂĔĬŎŬàèìòùǜÀÈÌÒÙǛaeiouüAEIOUÜ bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZ") == std::string::npos) {
+						if (helper && helper->curr.size() != 0 && helper->curr[helper->curr.size() - 1] == u'(') helper->curr.erase(helper->curr.size() - 1);
+						if (helper) helper->remove_prefix_buffer = 2;
+						return ""; //inner text is the pinyin
 					}
 					spdlog::info("discarded {} of node because parent.class was \"pinyin\" and it didn't contain only pinyin characters", inner_text);
 					return "";
@@ -103,8 +106,7 @@ namespace ocr {
 	}
 
 	std::vector<std::string> DictExtractor::getRecursiveTextContent(lxb_dom_node_t* node) {
-		std::vector<std::string> text_content;
-		std::string              curr_text;
+		ExtractTextHelper helper{};
 
 		std::stack<lxb_dom_node_t*> stack;
 		stack.push(node);
@@ -115,23 +117,33 @@ namespace ocr {
 				stack.push(child);
 			}
 			if (curr->first_child == nullptr) {
-				if (std::string curr_contents = getTextContent(curr);
+				const std::size_t remove_prefix_buffer = helper.remove_prefix_buffer;
+				helper.remove_prefix_buffer = 0;
+				std::string curr_contents = getTextContent(curr, &helper);
+				if (std::u16string curr_cont_u16 = utf8::utf8to16(curr_contents);
 				curr_contents == "[linktoreference]") {
-					text_content.push_back(curr_text);
-					spdlog::info("appended {}", curr_text);
-					curr_text = "";
+					std::string curr_utf8 = utf8::utf16to8(helper.curr);
+					helper.result.push_back(curr_utf8);
+					spdlog::info("appended {} to the result", curr_utf8);
+					helper.curr = u"";
 				} else {
-					spdlog::info("added {}", curr_contents);
-					curr_text += curr_contents;
+					if (remove_prefix_buffer > 0) {
+						spdlog::info("removed {} from start of {}", helper.remove_prefix_buffer, curr_contents);
+						curr_cont_u16.erase(0, remove_prefix_buffer);
+					}
+					std::string curr_utf8 = utf8::utf16to8(helper.curr);
+					spdlog::info("added \"{}\" to curr:\"{}\"", curr_contents, curr_utf8);
+					helper.curr += curr_cont_u16;
 				}
 			}
 		}
-		if (!curr_text.empty()) {
-			text_content.push_back(curr_text);
-			spdlog::info("appended {}", curr_text);
+		if (!helper.curr.empty()) {
+		const std::string curr_utf8 = utf8::utf16to8(helper.curr);
+			helper.result.push_back(curr_utf8);
+					spdlog::info("appended {} to the result", curr_utf8);
 		}
 
 		spdlog::info("finished");
-		return text_content;
+		return helper.result;
 	}
 }

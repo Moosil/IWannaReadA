@@ -117,6 +117,7 @@ std::future<std::vector<OCRResult> > runOCR(
 	} catch (std::exception& e) {
 		spdlog::critical("Exception: {}", e.what());
 	}
+	return 0;
 }
 
 std::future<std::vector<OCRResult> > runOCR(
