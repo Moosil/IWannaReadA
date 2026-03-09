@@ -25,9 +25,10 @@ namespace ocr {
 	lxb_dom_collection_t* DictExtractor::searchForClass(
 		lxb_html_document_t* doc,
 		lxb_dom_node_t*      root,
+		const std::size_t max_results,
 		const std::string&   class_name
 	) {
-		lxb_dom_collection_t* col = lxb_dom_collection_make(&doc->dom_document, 16);
+		lxb_dom_collection_t* col = lxb_dom_collection_make(&doc->dom_document, max_results);
 
 		const auto search_ucstr = reinterpret_cast<const lxb_char_t*>(class_name.c_str());
 		lxb_dom_elements_by_class_name(
@@ -35,6 +36,30 @@ namespace ocr {
 			col,
 			search_ucstr,
 			class_name.length()
+		);
+		// need to call lxb_dom_collection_destroy(col, true);
+		return col;
+	}
+
+	lxb_dom_collection_t* DictExtractor::searchForAttr(
+		lxb_html_document_t* doc,
+		lxb_dom_node_t*      root,
+		const std::size_t max_results,
+		const std::string&   attr_name,
+		const std::string&   attr_value
+	) {
+		lxb_dom_collection_t* col = lxb_dom_collection_make(&doc->dom_document, max_results);
+
+		const auto search_ucstr = reinterpret_cast<const lxb_char_t*>(attr_name.c_str());
+		const auto value_ucstr = reinterpret_cast<const lxb_char_t*>(attr_value.c_str());
+		lxb_dom_elements_by_attr(
+			lxb_dom_interface_element(root),
+			col,
+			search_ucstr,
+			attr_name.length(),
+			value_ucstr,
+			attr_value.length(),
+			false
 		);
 		// need to call lxb_dom_collection_destroy(col, true);
 		return col;
@@ -110,7 +135,6 @@ namespace ocr {
 
 		std::stack<lxb_dom_node_t*> stack;
 		stack.push(node);
-		spdlog::info("started new");
 		while (!stack.empty()) {
 			lxb_dom_node_t* curr = stack.top(); stack.pop();
 			for (auto* child = curr->last_child; child != nullptr; child = child->prev) {
@@ -124,26 +148,20 @@ namespace ocr {
 				curr_contents == "[linktoreference]") {
 					std::string curr_utf8 = utf8::utf16to8(helper.curr);
 					helper.result.push_back(curr_utf8);
-					spdlog::info("appended {} to the result", curr_utf8);
 					helper.curr = u"";
 				} else {
 					if (remove_prefix_buffer > 0) {
-						spdlog::info("removed {} from start of {}", helper.remove_prefix_buffer, curr_contents);
 						curr_cont_u16.erase(0, remove_prefix_buffer);
 					}
-					std::string curr_utf8 = utf8::utf16to8(helper.curr);
-					spdlog::info("added \"{}\" to curr:\"{}\"", curr_contents, curr_utf8);
 					helper.curr += curr_cont_u16;
 				}
 			}
 		}
 		if (!helper.curr.empty()) {
-		const std::string curr_utf8 = utf8::utf16to8(helper.curr);
+			const std::string curr_utf8 = utf8::utf16to8(helper.curr);
 			helper.result.push_back(curr_utf8);
-					spdlog::info("appended {} to the result", curr_utf8);
 		}
 
-		spdlog::info("finished");
 		return helper.result;
 	}
 }

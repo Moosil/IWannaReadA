@@ -40,7 +40,16 @@ namespace ocr {
 		static lxb_dom_collection_t* searchForClass(
 			lxb_html_document_t* doc,
 			lxb_dom_node_t*      root,
+			size_t               max_results,
 			const std::string&   class_name
+		);
+
+		static lxb_dom_collection_t* searchForAttr(
+			lxb_html_document_t* doc,
+			lxb_dom_node_t*      root,
+			std::size_t          max_results,
+			const std::string&   attr_name,
+			const std::string&   attr_value
 		);
 
 		static lxb_dom_node_t* findChildClass(lxb_dom_node* parent, const std::string& class_name);

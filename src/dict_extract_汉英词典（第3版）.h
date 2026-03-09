@@ -19,6 +19,7 @@ namespace ocr {
 		static void fill_sentences(
 			lxb_dom_node*          curr_sentence_node,
 			lxb_html_document_t*   doc,
+			const std::u16string&  curr_word,
 			std::vector<Sentence>& sentences
 		);
 

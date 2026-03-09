@@ -47,8 +47,8 @@
 
 			.headword {
 				font-size: 28px;
-				background-color: var(--mantle);
-				border: 5px solid var(--mantle);
+				background-color: var(--base);
+				border: 5px solid var(--base);
 				border-radius: 8px;
 				margin-top: 8px;
 			}
@@ -64,6 +64,8 @@
 			.bracket {
 				font-weight: 20;
 				text-shadow: 0 0 1px #000;
+				pointer-events: none;
+				user-select: none;
 			}
 
 			.empty-hanzi {
@@ -78,13 +80,17 @@
 				transition: color .3s ease-out;
 			}
 
+			.pinyin-rt.on {
+				color: var(--text);
+			}
+
 			ruby:has(.pinyin-rt:hover) .pinyin-rt {
 				color: var(--text);
 			}
 
 			.definition {
-				background-color: var(--mantle);
-				border: 5px solid var(--mantle);
+				background-color: var(--base);
+				border: 5px solid var(--base);
 				border-radius: 8px;
 				padding-left: 4px;
 			}
@@ -138,6 +144,58 @@
 				border-left: 2px solid var(--theme-color);
 				margin-left: -13px;
 				padding-left: 13px;
+			}
+
+			.sentence-container {
+				margin-top: 2px;
+				margin-bottom: 2px;
+			}
+
+			.en-sentence {
+				display: inline-block;
+				color: var(--subtext0);
+				width: 0;
+				vertical-align: bottom;
+				white-space: nowrap;
+				overflow: hidden;
+
+				interpolate-size: allow-keywords;
+				-webkit-transition: width .3s ease-out;
+				-moz-transition: width .3s ease-out;
+				-o-transition: width .3s ease-out;
+				transition: width .3s ease-out;
+			}
+
+			.sentence-container:hover .en-sentence {
+				width: auto;
+			}
+
+			.zh-sentence {
+				display: inline-block;
+				background: var(--base);
+				z-index: 1;
+				padding-right: 4px;
+			}
+
+			.en-sent-dummy {
+				display: inline-block;
+				color: #00000000;
+				width: auto;
+				vertical-align: bottom;
+				white-space: nowrap;
+				overflow: hidden;
+
+				user-select: none;
+
+				interpolate-size: allow-keywords;
+				-webkit-transition: width .3s ease-out;
+				-moz-transition: width .3s ease-out;
+				-o-transition: width .3s ease-out;
+				transition: width .3s ease-out;
+			}
+
+			.sentence-container:hover .en-sent-dummy {
+				width: 0;
 			}
 		</style>
 		<script>
@@ -223,6 +281,11 @@
 						headword.appendChild(newSimp);
 						const newPinyin = document.createElement("rt");
 						newPinyin.classList.add("pinyin-rt");
+						newSimp.addEventListener("click", (event) => {
+							if (event.button === 0) {
+								newPinyin.classList.toggle("on");
+							}
+						})
 						newPinyin.textContent = pinyin;
 						newSimp.appendChild(newPinyin);
 
@@ -235,6 +298,11 @@
 						} else {
 							const newPinyin = document.createElement("rt");
 							newPinyin.classList.add("pinyin-rt");
+							simpList[0].addEventListener("click", (event) => {
+								if (event.button === 0) {
+									newPinyin.classList.toggle("on");
+								}
+							})
 							newPinyin.textContent = pinyin;
 							simpList[0].appendChild(newPinyin);
 							fillSimpHeadword(simpList[0], hanzi_simp, newPinyin);
@@ -262,6 +330,52 @@
 					} else {
 						fillTradHeadword(tradList[0], hanzi_trad);
 					}
+				}
+			}
+
+			/**
+			 * @param {Element} container
+			 * @param {Object} sentences
+			 */
+			function fillSentence(container, sentences) {
+				let sentencePair;
+				const sentencePairList = container.getElementsByClassName("sentence-pair");
+				if (sentencePairList.length === 0) {
+					sentencePair = document.createElement("span");
+					sentencePair.classList.add("sentence-pair");
+					container.appendChild(sentencePair);
+				} else {
+					sentencePair = sentencePairList[0];
+				}
+
+				const zhSentenceList = sentencePair.getElementsByClassName("zh-sentence");
+				if (zhSentenceList.length === 0) {
+					const newZhSentence = document.createElement("span");
+					newZhSentence.classList.add("zh-sentence");
+					newZhSentence.textContent = sentences.zh.toString();
+					sentencePair.appendChild(newZhSentence);
+				} else {
+					zhSentenceList[0].textContent = sentences.zh.toString();
+				}
+
+				const enSentenceList = sentencePair.getElementsByClassName("en-sentence");
+				if (enSentenceList.length === 0) {
+					const newEnSentence = document.createElement("span");
+					newEnSentence.classList.add("en-sentence");
+					newEnSentence.textContent = sentences.en.toString();
+					sentencePair.appendChild(newEnSentence);
+				} else {
+					enSentenceList[0].textContent = sentences.en.toString();
+				}
+
+				const enSentDummyList = sentencePair.getElementsByClassName("en-sent-dummy");
+				if (enSentDummyList.length === 0) {
+					const newEnSentDummy = document.createElement("span");
+					newEnSentDummy.classList.add("en-sent-dummy");
+					newEnSentDummy.textContent = sentences.en.toString();
+					sentencePair.appendChild(newEnSentDummy);
+				} else {
+					enSentDummyList[0].textContent = sentences.en.toString();
 				}
 			}
 
@@ -300,10 +414,25 @@
 						summary.textContent = definitions_list[i]["definition"].toString();
 
 						const div = document.createElement("div");
-						div.innerHTML = definitions_list[i]["sentences"];
+						let j = 0;
+						const containerList = div.children;
+						for (; j < definitions_list[i]["sentences"].length; j++) {
+							if (j >= containerList.length) {
+								const container = document.createElement("div");
+								container.classList.add("sentence-container");
 
+								fillSentence(container, definitions_list[i]["sentences"][j]);
+								div.appendChild(container);
+							} else {
+								const container = containerList[j];
+								container.classList.remove("hidden");
+
+								fillSentence(container, definitions_list[i]["sentences"][j])
+							}
+						}
 						const details = document.createElement("details");
 						details.classList.add("def-details");
+						details.name = "sentence";
 						details.appendChild(summary);
 						details.appendChild(div);
 
@@ -319,11 +448,29 @@
 						summary.textContent = definitions_list[i]["definition"].toString();
 
 						const div = details.lastChild;
-						div.innerHTML = definitions_list[i]["sentences"];
+						let j = 0;
+						const containerList = div.children;
+						for (; j < definitions_list[i]["sentences"].length; j++) {
+							if (j >= containerList.length) {
+								const container = document.createElement("div");
+								container.classList.add("sentence-container");
+
+								fillSentence(container, definitions_list[i]["sentences"][j]);
+								div.appendChild(container);
+							} else {
+								const container = containerList[j];
+								container.classList.remove("hidden");
+
+								fillSentence(container, definitions_list[i]["sentences"][j])
+							}
+						}
+						for (; j + 1 < containerList.length; j++) {
+							containerList[j + 1].classList.add("hidden");
+						}
 					}
 				}
-				for (; i + 1 < definition.children.length; i++) {
-					definition.children[i + 1].classList.add("hidden");
+				for (; i + 1 < liList.length; i++) {
+					liList[i + 1].classList.add("hidden");
 				}
 			}
 
@@ -421,7 +568,7 @@
 					if (entryList.length <= i) {
 						const newEntry = document.createElement("div");
 						newEntry.classList.add("entry");
-						newEntry.addEventListener("contextmenu", function (event) {
+						newEntry.addEventListener("contextmenu", (event) => {
 							const jsonObject = {
 								key: "contextmenu",
 								x: event.screenX,

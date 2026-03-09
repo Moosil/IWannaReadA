@@ -112,6 +112,8 @@ namespace ocr {
 
 		HRESULT onWebMessageReceived(ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args);
 
+		void onNavigationComplete();
+
 		void createContextMenu(int x, int y, const std::string& character, const std::string& phrase, const std::string& sentence) const;
 
 		static std::string getSentence(OCRBlock* hover_block);

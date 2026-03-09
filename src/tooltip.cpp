@@ -43,6 +43,7 @@ namespace ocr {
 					Microsoft::WRL::Callback<ICoreWebView2NavigationCompletedEventHandler>(
 						[this](ICoreWebView2* sender, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
 							inited_web_view2 = true;
+							onNavigationComplete();
 							return S_OK;
 						}
 					).Get(),
@@ -83,6 +84,7 @@ namespace ocr {
 		for (const auto* curr = hover_word; curr != hover_block->results.data() + hover_block->results.size(); ++curr) {
 			lookup_string += curr->text;
 			if (const std::string dict_html = mdict->lookup(lookup_string); !dict_html.empty()) {
+				spdlog::info("loading entry: {}", lookup_string);
 				const std::string            strip_dict_html = trim_copy(dict_html);
 				const std::vector<EntryInfo> to_add          = dict_extractor.extractMDictHTML(strip_dict_html);
 				dictionary_data[first_char].entries.append_range(to_add);
@@ -265,12 +267,15 @@ namespace ocr {
 			spdlog::warn("{}'s dictionary had entry but no contents: NOT IMPLEMENTED", hover_word->text);
 		}
 
+		spdlog::info("loading {}", hover_word->text);
 		auto&          dict_data = it->second;
 		nlohmann::json page_data = nlohmann::json::array();
 		for (const auto& entry : dict_data.entries) {
+			spdlog::info("adding {} to tooltip", entry.simp);
 			// if entry.simp is a prefix of the hovered phrase
 			if (const std::string phrase = getPhrase(hover_word, hover_block);
 				phrase.compare(0, entry.simp.size(), entry.simp) != 0) {
+				spdlog::info("nvm");
 				continue;
 			}
 
@@ -279,14 +284,17 @@ namespace ocr {
 				nlohmann::json to_add = nlohmann::json::object();
 				to_add["definition"]  = def;
 
-				std::string chinese_sentences;
-				if (!sentences.empty()) {
-					chinese_sentences = sentences[0].chinese;
-					for (int i = 1; i < sentences.size(); i++) {
-						chinese_sentences += "<br>" + sentences[i].chinese;
-					}
-				}
-				to_add["sentences"] = chinese_sentences;
+				std::vector<std::unordered_map<std::string, std::string> > sentence_vector;
+				sentence_vector = sentences
+				                  | std::views::transform(
+					                  [](const Sentence& s) -> std::unordered_map<std::string, std::string> {
+						                  return {{"zh", s.chinese}, {"en", s.english}};
+					                  }
+				                  )
+				                  | std::ranges::to<std::vector<std::unordered_map<std::string, std::string> > >();
+
+
+				to_add["sentences"] = sentence_vector;
 				if (!definition.contains(word_class)) {
 					definition[word_class] = nlohmann::json::array();
 				}
@@ -307,13 +315,14 @@ namespace ocr {
 		const auto        script_utf16  = utf8::utf8to16(script);
 
 		width = std::max(min_width, max_webpage_width);
+		spdlog::info("script: {}", script);
 
 		if (dict_data.height == -1) {
 			height = min_height;
 			updateWindowSize();
 			updateWindowPosition();
-			const Poly2I hover_word_rect = hover_word->rect;
-			const HRESULT err0 = webview->ExecuteScript(
+			const Poly2I  hover_word_rect = hover_word->rect;
+			const HRESULT err0            = webview->ExecuteScript(
 				utf8ToWide(script).c_str(),
 				Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
 					// ReSharper disable once CppParameterMayBeConst
@@ -405,6 +414,19 @@ namespace ocr {
 		}
 		return S_OK;
 	}
+
+	void TooltipWnd::onNavigationComplete() {
+		EventRegistrationToken token       = {};
+		const HRESULT          add_msg_err = webview->add_WebMessageReceived(
+			Microsoft::WRL::Callback<ICoreWebView2WebMessageReceivedEventHandler>(
+				this,
+				&TooltipWnd::onWebMessageReceived
+			).Get(),
+			&token
+		);
+		log(add_msg_err, "ICoreWebView2::add_WebMessageReceived", ERR_LEVEL::WARN);
+	}
+
 
 	void TooltipWnd::createContextMenu(
 		const int          x,

@@ -37,10 +37,11 @@ namespace ocr {
 		lxb_dom_node_t*      sentence,
 		const std::string&   class_name
 	) {
-		lxb_dom_collection_t* found_collection = searchForClass(doc, sentence, class_name);
+		lxb_dom_collection_t* found_collection = searchForClass(doc, sentence, 1, class_name);
 		if (const lxb_dom_node_t* found_node = lxb_dom_collection_node(found_collection, 0);
 			found_node && found_node->first_child) {
-			return getTextContent(found_node->first_child);
+			const std::string sent_utf8 = getTextContent(found_node->first_child);
+			return sent_utf8;
 		}
 		lxb_dom_collection_destroy(found_collection, true);
 		found_collection = nullptr;
@@ -52,17 +53,22 @@ namespace ocr {
 	 * @param curr_sentence_node the first node of the sentences. \n
 	 * Each neighbouring node must have 0-1 sentences below it for each language
 	 * @param doc the current HTML document loaded
+	 * @param curr_word current word that the sentences are of
 	 * @param sentences the sentence vector to fill
 	 */
 	void 汉英词典第三版Extractor::fill_sentences(
 		lxb_dom_node*          curr_sentence_node,
 		lxb_html_document_t*   doc,
+		const std::u16string& curr_word,
 		std::vector<Sentence>& sentences
 	) {
 		while (curr_sentence_node != nullptr) {
 			Sentence curr_sentence{};
 
-			curr_sentence.chinese = search_for_sentence(doc, curr_sentence_node, "hycd_3rd_zh");
+			std::string chinese_sentence = search_for_sentence(doc, curr_sentence_node, "hycd_3rd_zh");
+			std::u16string chinese_sent_u16 = utf8::utf8to16(chinese_sentence);
+			std::ranges::replace(chinese_sent_u16, curr_word[0], u'～');
+			curr_sentence.chinese = utf8::utf16to8(chinese_sent_u16);
 
 			curr_sentence.english = search_for_sentence(doc, curr_sentence_node, "hycd_3rd_en");
 
@@ -99,24 +105,30 @@ namespace ocr {
 
 			lxb_dom_node_t* part = findChildId(root, pinyin_find_tag.substr(1)); {
 				lxb_dom_node_t*       citouci_search_root = part->first_child->first_child;
-				lxb_dom_collection_t* citouci_col         = searchForClass(doc, citouci_search_root, "citouci");
+				lxb_dom_collection_t* citouci_col         = searchForClass(doc, citouci_search_root, 1, "citouci");
 				lxb_dom_node_t*       citouci             = lxb_dom_collection_node(citouci_col, 0);
 				curr_entry.simp                           = getTextContent(citouci->first_child);
 				trim(curr_entry.simp);
 				lxb_dom_collection_destroy(citouci_col, true);
 				citouci_col = nullptr;
 			}
+			std::u16string curr_entry_simp_u16 = utf8::utf8to16(curr_entry.simp);
 
 			lxb_dom_node_t* chixing_search_root = part->first_child->first_child->last_child->first_child->first_child->
 			                                            first_child;
-			lxb_dom_collection_t* chixing_col = searchForClass(doc, chixing_search_root, "chixing");
+			lxb_dom_collection_t* chixing_col = searchForClass(doc, chixing_search_root, 1, "chixing");
 
 			if (lxb_dom_collection_length(chixing_col) == 0) {
-				lxb_dom_node_t* fallback_chixing = chixing_search_root->first_child->next->first_child->first_child->
-				                                                        first_child->first_child->first_child;
+				lxb_dom_node_t* fallback_chixing_search_root = chixing_search_root->first_child->next;
+				lxb_dom_collection_t* fallback_chixing_col         = searchForAttr(doc, fallback_chixing_search_root, 1, "width", "100%");
+				lxb_dom_node_t*       fallback_chixing             = lxb_dom_collection_node(fallback_chixing_col, 0);
+
 				std::string word_class = getTextContent(fallback_chixing->first_child);
 				std::string definition = getRecursiveTextContent(fallback_chixing)[0]; // idk about this because what case does this arise in/????
 				Definition  curr_def{.word_class = word_class, .definition = definition};
+
+				lxb_dom_collection_destroy(fallback_chixing_col, true);
+				fallback_chixing_col = nullptr;
 			}
 
 			for (std::size_t i = 0; i < lxb_dom_collection_length(chixing_col); i++) {
@@ -136,7 +148,7 @@ namespace ocr {
 					}
 
 					lxb_dom_node_t* sentence_root = def_search_root->first_child->first_child->next;
-					fill_sentences(sentence_root, doc, curr_def.sentences);
+					fill_sentences(sentence_root, doc, curr_entry_simp_u16, curr_def.sentences);
 					curr_entry.definitions.push_back(curr_def);
 				}
 				const lxb_dom_node_t* next_chixing = lxb_dom_collection_node(chixing_col, i+1);
@@ -151,7 +163,7 @@ namespace ocr {
 					}
 
 					lxb_dom_node_t* sentence_root = definition->first_child->first_child->next;
-					fill_sentences(sentence_root, doc, curr_def.sentences);
+					fill_sentences(sentence_root, doc, curr_entry_simp_u16, curr_def.sentences);
 					curr_entry.definitions.push_back(curr_def);
 					definition = lxb_dom_node_next(definition);
 				}
