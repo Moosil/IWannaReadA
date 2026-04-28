@@ -1,14 +1,16 @@
-#define NOMINMAX // catching windows min max thingy
 #include "rec.h"
+
+
+#include <opencv2/core/mat.hpp>
 
 #include <format>
 #include <fstream>
 #include <ranges>
-#include <opencv2/core/mat.hpp>
 
-#include "util.h"
+#include "util_text.h"
 
-namespace ocr {
+
+namespace iwra {
 	Rec::Rec(const std::string& det_model_path, const std::string& det_param_path, const std::string& keys_path) {
 		init(det_model_path, det_param_path, keys_path);
 	}

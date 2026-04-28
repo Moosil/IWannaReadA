@@ -1,9 +1,12 @@
 #pragma once
 
-#include <filesystem>
+
 #include <yaml-cpp/yaml.h>
 
-namespace ocr {
+#include <filesystem>
+
+
+namespace iwra {
 	class Config {
 	public:
 		using file_path = std::filesystem::path;
@@ -24,7 +27,11 @@ namespace ocr {
 
 		file_path getHTMLTemplatePath();
 
-		file_path getMDictPath();
+		file_path getDictPath();
+
+		std::string getAnkiCardType();
+
+		std::string getAnkiDeckName();
 
 		bool getRefresh();
 

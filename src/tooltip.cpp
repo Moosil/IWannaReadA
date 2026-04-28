@@ -1,25 +1,61 @@
 #include "tooltip.h"
 
+
 #include <clip.h>
 #include <filesystem>
 #include <ranges>
 #include <WebView2.h>
 #include <Windowsx.h>
-#include <cpp-pinyin/G2pglobal.h>
 #include <nlohmann/json.hpp>
 #include <opencv2/imgproc.hpp>
 #include <spdlog/spdlog.h>
 #include <utf8/cpp20.h>
 #include <wrl/event.h>
-#include <opencc.h>
 
-#include "dict_extract.h"
+#include "dict_parser.h"
 #include "implwebview2.h"
 #include "log.h"
 #include "util.h"
+#include "util_ocr.h"
+#include "util_text.h"
+#include "util_utf8.h"
 
 
-namespace ocr {
+namespace iwra {
+	TooltipWnd::TooltipWnd(
+		const std::vector<OCRResult>& res,
+		const cv::Rect& rect,
+		const std::filesystem::path& webpage_path,
+		const std::shared_ptr<DictParser>& parser,
+		const std::shared_ptr<Anki::Interface>& anki
+	): rect{rect}, parser{parser}, anki{anki} {
+		processOCRResults(res, cv::Point{rect.x, rect.y}, results);
+
+		constexpr int style           = WS_POPUP;
+		constexpr int extended_styles = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_TRANSPARENT;
+		width                    = min_width;
+		height                   = min_height;
+
+		hwnd = CreateWindowEx(
+			extended_styles,
+			className.c_str(),
+			"tt",
+			style,
+			0,
+			0,
+			width,
+			height,
+			nullptr,
+			nullptr,
+			GetModuleHandle(nullptr),
+			this
+		);
+
+		webpage_html = readFile(webpage_path);
+
+		log(SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE), "SetWindowDisplayAffinity");
+	}
+
 	void TooltipWnd::initWebView2() {
 		HRESULT err = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 		log(err, "CoInitializeEx", ERR_LEVEL::FATAL);
@@ -64,30 +100,20 @@ namespace ocr {
 		wv_init->try_init_env();
 	}
 
-	void TooltipWnd::initDictionary(const std::filesystem::path& dict_path) {
-		std::filesystem::path dict_file_path{dict_path};
-		dict_file_path /= dict_file_path.filename();
-		dict_file_path += ".mdx";
-
-		mdict = std::make_unique<mdict::Mdict>(dict_file_path.string());
-		mdict->init();
-	}
-
-	void TooltipWnd::initCurrDictHTML() {
+	void TooltipWnd::initCurrDict() {
 		if (!hover_word || !hover_block || results.empty())
 			return;
 
-		spdlog::info("inited dict html of {}", hover_word->text);
+		spdlog::info("inited dict of {}", hover_word->text);
 		std::string       lookup_string;
 		const std::string first_char = hover_word->text;
 		dictionary_data[first_char]  = {};
 		for (const auto* curr = hover_word; curr != hover_block->results.data() + hover_block->results.size(); ++curr) {
 			lookup_string += curr->text;
-			if (const std::string dict_html = mdict->lookup(lookup_string); !dict_html.empty()) {
+			if (auto dict_entry = parser->get_entry(lookup_string);
+				!dict_entry.empty()) {
 				spdlog::info("loading entry: {}", lookup_string);
-				const std::string            strip_dict_html = trim_copy(dict_html);
-				const std::vector<EntryInfo> to_add          = dict_extractor.extractMDictHTML(strip_dict_html);
-				dictionary_data[first_char].entries.append_range(to_add);
+				dictionary_data[first_char].entries.append_range(dict_entry);
 				dictionary_data[first_char].phrase = lookup_string;
 			}
 		};
@@ -228,17 +254,37 @@ namespace ocr {
 		SetWindowPos(hwnd, HWND_TOPMOST, left, top - height, -1, -1, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 	}
 
-	std::vector<std::string> splitHanzi(const std::string& hanzi) {
-		std::vector<std::string> result;
-		std::u16string           hanzi_u16 = utf8::utf8to16(hanzi);
-		for (const char16_t c : hanzi_u16) {
-			std::u16string u16str;
-			u16str                += c;
-			std::string hanzi_str = utf8::utf16to8(u16str);
-			result.push_back(hanzi_str);
+	std::vector<std::string> splitHanzi(const std::string& hanzi, const std::string& pinyin) {
+		std::string post_pinyin = pinyin+' ';
+		std::vector<std::size_t> lengths;
+		std::size_t prev = 0;
+		for (std::size_t it = post_pinyin.find(' '); it != std::string::npos; prev = it, it = post_pinyin.find(' ', it+1)) {
+			if (const int number = post_pinyin[it-1] - '0';
+				1 < number && number > 5) {
+				post_pinyin.erase(it, 1);
+				it -= 1;
+				if (it > 0) {
+					if (const int prev_number = post_pinyin[it-1] - '0';
+						1 < prev_number && prev_number > 5) {
+						lengths.back() += it-prev;
+						continue;
+					}
+				}
+				lengths.push_back(it-prev);
+			} else {
+				lengths.push_back(1);
+			}
 		}
 
-		return result;
+		std::vector<std::string> res;
+
+		std::size_t total_len = 0;
+		const std::u16string hanzi_u16 = utf8::utf8to16(hanzi);
+		for (const auto length : lengths) {
+			res.push_back(utf8::utf16to8(hanzi_u16.substr(total_len, length)));
+			total_len += length;
+		}
+		return res;
 	}
 
 	void TooltipWnd::refreshWindow() {
@@ -254,7 +300,7 @@ namespace ocr {
 
 		const auto it = dictionary_data.find(hover_word->text);
 		if (it == dictionary_data.end()) {
-			initCurrDictHTML();
+			initCurrDict();
 			need_refresh = true;
 			return;
 		}
@@ -267,45 +313,39 @@ namespace ocr {
 			spdlog::warn("{}'s dictionary had entry but no contents: NOT IMPLEMENTED", hover_word->text);
 		}
 
-		spdlog::info("loading {}", hover_word->text);
+		spdlog::info("loading {}", getPhrase(hover_word, hover_block));
 		auto&          dict_data = it->second;
 		nlohmann::json page_data = nlohmann::json::array();
 		for (const auto& entry : dict_data.entries) {
-			spdlog::info("adding {} to tooltip", entry.simp);
+			spdlog::info("adding {} to tooltip", entry.get_simp());
 			// if entry.simp is a prefix of the hovered phrase
 			if (const std::string phrase = getPhrase(hover_word, hover_block);
-				phrase.compare(0, entry.simp.size(), entry.simp) != 0) {
+				!phrase.starts_with(entry.get_simp()) && !phrase.starts_with(entry.get_trad())) {
 				spdlog::info("nvm");
 				continue;
 			}
 
-			nlohmann::json definition = nlohmann::json::object();
-			for (const auto& [word_class, def, sentences] : entry.definitions) {
-				nlohmann::json to_add = nlohmann::json::object();
-				to_add["definition"]  = def;
+			nlohmann::json def_json = nlohmann::json::array();
+			for (const auto& def : entry.definitions) {
+				def_json.push_back(def);
+			}
 
-				std::vector<std::unordered_map<std::string, std::string> > sentence_vector;
-				sentence_vector = sentences
-				                  | std::views::transform(
-					                  [](const Sentence& s) -> std::unordered_map<std::string, std::string> {
-						                  return {{"zh", s.chinese}, {"en", s.english}};
-					                  }
-				                  )
-				                  | std::ranges::to<std::vector<std::unordered_map<std::string, std::string> > >();
-
-
-				to_add["sentences"] = sentence_vector;
-				if (!definition.contains(word_class)) {
-					definition[word_class] = nlohmann::json::array();
+			nlohmann::json words = nlohmann::json::array();
+			for (const auto& [characters] : entry.word) {
+				nlohmann::json word_json = nlohmann::json::array();
+				for (const auto& [simp, trad, pinyin] : characters) {
+					nlohmann::json char_json = nlohmann::json::object();
+					char_json["simp"]        = simp;
+					char_json["trad"]        = trad;
+					char_json["pinyin"]      = pinyin;
+					word_json.push_back(char_json);
 				}
-				definition[word_class].push_back(to_add);
+				words.push_back(word_json);
 			}
 
 			nlohmann::json entry_json = nlohmann::json::object();
-			entry_json["simp"]        = splitHanzi(entry.simp);
-			entry_json["trad"]        = converter.Convert(entry.simp);
-			entry_json["pinyin"]      = entry.pinyin;
-			entry_json["def"]         = definition;
+			entry_json["words"] = words;
+			entry_json["def"]         = def_json;
 			entry_json["c_word"]      = dict_data.phrase;
 			entry_json["c_sent"]      = getSentence(hover_block);
 			page_data.push_back(entry_json);
@@ -406,7 +446,9 @@ namespace ocr {
 					json.at("y"),
 					json.at("character"),
 					json.at("word"),
-					json.at("sentence")
+					json.at("pinyin"),
+					json.at("sentence"),
+					json.at("definition")
 				);
 			} else {
 				//mousedown
@@ -433,7 +475,9 @@ namespace ocr {
 		const int          y,
 		const std::string& character,
 		const std::string& phrase,
-		const std::string& sentence
+		const std::string& pinyin,
+		const std::string& sentence,
+		const std::string& definition
 	) const {
 		const HMENU& menu = CreatePopupMenu();
 		AppendMenu(menu, MF_STRING, 1, "Copy character");
@@ -463,17 +507,15 @@ namespace ocr {
 				break;
 			}
 			case 4: {
-				auto        find_pos     = sentence.find(phrase);
-				std::string sentence_add = std::format(
+				const auto        find_pos     = utf8Find(sentence, utf8::peek_next(character.begin(), character.end()));
+				const std::string sentence_add = std::format(
 					"{}{{{{c1::{}}}}}{}",
-					sentence.substr(0, find_pos),
-					sentence.substr(find_pos, phrase.length()),
-					sentence.substr(find_pos + phrase.length())
+					std::string(sentence.begin(), find_pos),
+					phrase,
+					std::string(find_pos + 1, sentence.end())
 				);
 
-				const auto pinyin = g2p_man->hanziToPinyin(phrase);
-
-				anki.add_note(phrase, pinyin.toStdStr(), "", sentence_add);
+				anki->add_note(phrase, pinyin, definition, sentence_add);
 			}
 			default:
 				break;
@@ -513,7 +555,7 @@ namespace ocr {
 				const auto x = GET_X_LPARAM(lparam);
 				const int  y = GET_Y_LPARAM(lparam);
 				if (hover_word) {
-					createContextMenu(x, y, hover_word->text, hover_word->text, getSentence(hover_block));
+					createContextMenu(x, y, hover_word->text, hover_word->text, ":(", getSentence(hover_block), ":(");
 				}
 				break;
 			}
@@ -577,16 +619,16 @@ namespace ocr {
 	}
 
 	TooltipWnd::~TooltipWnd() {
-		mdict.reset();
 	}
 
 	std::unique_ptr<TooltipWnd> TooltipWnd::initTooltip(
 		const std::vector<OCRResult>& res,
 		const cv::Rect&               rect,
-		const std::filesystem::path&  mdict_path,
-		const std::filesystem::path&  webpage_path
+		const std::filesystem::path&  webpage_path,
+		const std::shared_ptr<DictParser>& parser,
+		const std::shared_ptr<Anki::Interface>& anki
 	) {
-		auto wnd = std::make_unique<TooltipWnd>();
+
 		if (!isInitialised) {
 			WNDCLASS wc{};
 			wc.lpfnWndProc   = &wndProcSetup;
@@ -600,38 +642,7 @@ namespace ocr {
 			isInitialised = true;
 		}
 
-		wnd->rect = rect;
-		processOCRResults(res, cv::Point{wnd->rect.x, wnd->rect.y}, wnd->results);
-
-		constexpr int style           = WS_POPUP;
-		constexpr int extended_styles = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_TRANSPARENT;
-		wnd->width                    = min_width;
-		wnd->height                   = min_height;
-
-		wnd->hwnd = CreateWindowEx(
-			extended_styles,
-			className.c_str(),
-			"tt",
-			style,
-			0,
-			0,
-			wnd->width,
-			wnd->height,
-			nullptr,
-			nullptr,
-			GetModuleHandle(nullptr),
-			wnd.get()
-		);
-
-		wnd->initDictionary(mdict_path);
-
-		wnd->webpage_html = readFile(webpage_path);
-
-		log(SetWindowDisplayAffinity(wnd->hwnd, WDA_EXCLUDEFROMCAPTURE), "SetWindowDisplayAffinity");
-
-		const auto applicationDirPath = std::filesystem::current_path() / "dict";
-		Pinyin::setDictionaryPath(applicationDirPath);
-		wnd->g2p_man = std::make_unique<Pinyin::Pinyin>();
+		auto wnd = std::unique_ptr<TooltipWnd>(new TooltipWnd(res, rect, webpage_path, parser, anki));
 
 		return wnd;
 	}

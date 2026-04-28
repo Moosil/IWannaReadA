@@ -15,9 +15,6 @@ find_package(clip CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(httplib CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
-find_package(cpp-pinyin CONFIG REQUIRED)
-find_path(LEXBOR_INCLUDE_DIR NAMES lexbor/html/parser.h)
-find_library(LEXBOR_LIBRARY NAMES lexbor)
 
 # Check if found
 if(NOT LEXBOR_INCLUDE_DIR OR NOT LEXBOR_LIBRARY)
@@ -35,9 +32,7 @@ set(TARGET lto PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 add_compile_definitions(WIN32_LEAN_AND_MEAN)
 
-add_subdirectory(third_party/mdict-cpp)
 add_subdirectory(third_party/utfcpp)
-add_subdirectory(third_party/OpenCC)
 
 add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/ocr_engine.cpp
@@ -60,10 +55,17 @@ add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/log.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/anki_connect.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/anki_connect.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/dict_extract.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/dict_extract.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/dict_extract_汉英词典（第3版）.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/dict_extract_汉英词典（第3版）.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/ccedict.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/dict_parser.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/util_utf8.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/util_pinyin.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/util_ocr.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/util_ocr.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/util_text.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/util_text.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/util_pinyin.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/util_utf8.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/log.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC src ${LEXBOR_INCLUDE_DIR})
@@ -77,24 +79,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         fmt::fmt
         msimg32 # AlphaBlend
         utf8cpp
-        mdict
         unofficial::webview2::webview2
         clip::clip
         nlohmann_json::nlohmann_json
         httplib::httplib
-        cpp-pinyin::cpp-pinyin
-        ${LEXBOR_LIBRARY}
-        OpenCC::OpenCC
-)
-
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${cpp-pinyin_DIR}/dict"
-        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/dict"
-)
-
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "$<TARGET_FILE:OpenCC::OpenCC>"
-        "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
 )

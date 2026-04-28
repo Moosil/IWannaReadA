@@ -26,7 +26,7 @@ namespace WebView2 {
 		while (attempts < MaxAttempts) {
 
 			const HRESULT err = CreateCoreWebView2EnvironmentWithOptions(nullptr, nullptr, nullptr, this);
-			ocr::log(err, "CreateCoreWebView2EnvironmentWithOptions", ocr::ERR_LEVEL::WARN);
+			iwra::log(err, "CreateCoreWebView2EnvironmentWithOptions", iwra::ERR_LEVEL::WARN);
 			if (SUCCEEDED(err) || err == HRESULT_FROM_WIN32(ERROR_INVALID_STATE)) {
 				return;
 			}
@@ -40,10 +40,10 @@ namespace WebView2 {
 	}
 
 	HRESULT STDMETHODCALLTYPE Impl::Invoke(HRESULT err, ICoreWebView2Environment* env) {
-		ocr::log(err, "ICoreWebView2Environment::Invoke", ocr::ERR_LEVEL::WARN);
+		iwra::log(err, "ICoreWebView2Environment::Invoke", iwra::ERR_LEVEL::WARN);
 		if (SUCCEEDED(err)) {
 			err = env->CreateCoreWebView2Controller(hwnd, this);
-			ocr::log(err, "ICoreWebView2Environment::CreateCoreWebView2Controller", ocr::ERR_LEVEL::WARN);
+			iwra::log(err, "ICoreWebView2Environment::CreateCoreWebView2Controller", iwra::ERR_LEVEL::WARN);
 
 			if (SUCCEEDED(err)) {
 				return err;
@@ -55,7 +55,7 @@ namespace WebView2 {
 	}
 
 	HRESULT STDMETHODCALLTYPE Impl::Invoke(HRESULT err, ICoreWebView2Controller* controller) {
-		ocr::log(err, "ICoreWebView2Controller::Invoke", ocr::ERR_LEVEL::WARN);
+		iwra::log(err, "ICoreWebView2Controller::Invoke", iwra::ERR_LEVEL::WARN);
 		if (FAILED(err)) {
 			if (err == E_ABORT) {
 				spdlog::info("Controller Invoke: E_ABORT");
@@ -71,31 +71,31 @@ namespace WebView2 {
 
 		wil::com_ptr<ICoreWebView2> webview;
 		err = controller->get_CoreWebView2(&webview);
-		ocr::log(err, "ICoreWebView2Controller::get_CoreWebView2", ocr::ERR_LEVEL::FATAL);
+		iwra::log(err, "ICoreWebView2Controller::get_CoreWebView2", iwra::ERR_LEVEL::FATAL);
 
 		err = controller->put_Bounds(extent);
-		ocr::log(err, "ICoreWebView2Controller::put_Bounds", ocr::ERR_LEVEL::WARN);
+		iwra::log(err, "ICoreWebView2Controller::put_Bounds", iwra::ERR_LEVEL::WARN);
 
 		wil::com_ptr<ICoreWebView2_13> webview13;
 		err = webview->QueryInterface(IID_PPV_ARGS(&webview13));
-		ocr::log(err, "ICoreWebView2::QueryInterface", ocr::ERR_LEVEL::WARN);
+		iwra::log(err, "ICoreWebView2::QueryInterface", iwra::ERR_LEVEL::WARN);
 
 		if (SUCCEEDED(err)) {
 			wil::com_ptr<ICoreWebView2Profile> profile;
 			err = webview13->get_Profile(&profile);
-			ocr::log(err, "ICoreWebView2_13::get_Profile", ocr::ERR_LEVEL::WARN);
+			iwra::log(err, "ICoreWebView2_13::get_Profile", iwra::ERR_LEVEL::WARN);
 
 			if (SUCCEEDED(err)) {
 				err = profile->put_PreferredColorScheme(COREWEBVIEW2_PREFERRED_COLOR_SCHEME_LIGHT);
-				ocr::log(err, "ICoreWebView2Profile::put_PreferredColorScheme", ocr::ERR_LEVEL::WARN);
+				iwra::log(err, "ICoreWebView2Profile::put_PreferredColorScheme", iwra::ERR_LEVEL::WARN);
 			}
 		}
 
 		wil::com_ptr<ICoreWebView2Settings> settings;
 		err = webview->get_Settings(&settings);
-		ocr::log(err, "ICoreWebView2::get_Settings", ocr::ERR_LEVEL::WARN);
+		iwra::log(err, "ICoreWebView2::get_Settings", iwra::ERR_LEVEL::WARN);
 		err = settings->put_AreDefaultContextMenusEnabled(false);
-		ocr::log(err, "ICoreWebView2Settings::put_AreDefaultContextMenusEnabled", ocr::ERR_LEVEL::WARN);
+		iwra::log(err, "ICoreWebView2Settings::put_AreDefaultContextMenusEnabled", iwra::ERR_LEVEL::WARN);
 
 		callback(controller, webview.get());
 		return S_OK;

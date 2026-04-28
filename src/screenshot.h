@@ -4,7 +4,7 @@
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/types.hpp>
 
-namespace ocr {
+namespace iwra {
 	class ScreenshotWnd {
 	private:
 		static inline const std::string className     = "ScreenshotWnd";

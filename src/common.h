@@ -4,7 +4,7 @@
 #include <format>
 #include <opencv2/core/types.hpp>
 
-namespace ocr {
+namespace iwra {
 	using Poly2I = std::array<cv::Point, 4>;
 	using Poly2F = std::array<cv::Point2f, 4>;
 

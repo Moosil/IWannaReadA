@@ -3,7 +3,7 @@
 #include "common.h"
 #include "ncnn/net.h"
 
-namespace ocr {
+namespace iwra {
 	class Det {
 	private:
 		static constexpr std::size_t max_candidates = 1000;

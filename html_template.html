@@ -45,7 +45,14 @@
 				background-color: var(--base) !important;
 			}
 
+			.spacing {
+				display: inline-flex;
+				gap: 4px;
+			}
+
 			.headword {
+				display: inline-flex;
+				gap: 8px;
 				font-size: 28px;
 				background-color: var(--base);
 				border: 5px solid var(--base);
@@ -199,209 +206,116 @@
 			}
 		</style>
 		<script>
-			/**
-             * @param {Element} headword
-             * @param {Array} hanzi
-             * @param {Element} pinyin_rt
-             */
-			function fillSimpHeadword(headword, hanzi, pinyin_rt) {
-				let i = 0;
-				const childrenCnt = headword.children.length;
-				for (; i < hanzi.length; i++) {
-					let hanziElem;
-					if (i < childrenCnt - 1) {
-						hanziElem = headword.children[i];
-						hanziElem.classList.remove("hidden");
-					} else {
-						hanziElem = document.createElement("a");
-						hanziElem.classList.add("hanzi-link");
-						hanziElem.lang = "zh";
-
-						headword.insertBefore(hanziElem, pinyin_rt);
-					}
-
-					if (hanzi[i] === "-") {
-						hanziElem.classList.add("empty-hanzi");
-						hanziElem.textContent = "─";
-					} else {
-						hanziElem.classList.remove("empty-hanzi");
-						hanziElem.textContent = hanzi[i];
-					}
-				}
-				for (; i < childrenCnt - 1; i++) {
-					headword.children[i].classList.add("hidden");
-				}
-			}
 
 			/**
-			 * @param {Element} headword
-			 * @param {Array} hanzi
-			 */
-			function fillTradHeadword(headword, hanzi) {
-				let i = 0;
-				const childrenCnt = headword.children.length;
-				for (; i < hanzi.length; i++) {
-					let hanziElem;
-					if (i < childrenCnt) {
-						hanziElem = headword.children[i];
-						hanziElem.classList.remove("hidden");
-					} else {
-						hanziElem = document.createElement("a");
-						hanziElem.classList.add("hanzi-link");
-						hanziElem.lang = "zh";
-
-						headword.appendChild(hanziElem);
-					}
-
-					if (hanzi[i] === "-") {
-						hanziElem.classList.add("empty-hanzi");
-						hanziElem.textContent = "─";
-					} else {
-						hanziElem.classList.remove("empty-hanzi");
-						hanziElem.textContent = hanzi[i];
-					}
-				}
-				for (; i < childrenCnt; i++) {
-					headword.children[i].classList.add("hidden");
-				}
-			}
-
-			/**
-			 * @param {Element} headword
-			 * @param {Array} hanzi_simp
-			 * @param {Array} hanzi_trad
+			 * @param {Element} element
+			 * @param {string} hanzi
 			 * @param {string} pinyin
 			 */
-			function fillHeadwords(headword, hanzi_simp, hanzi_trad, pinyin) {
-				{
-					const simpList = headword.getElementsByClassName("simp-headword");
-					if (simpList.length === 0) {
-						const newSimp = document.createElement("ruby");
-						newSimp.classList.add("simp-headword");
-						headword.appendChild(newSimp);
-						const newPinyin = document.createElement("rt");
-						newPinyin.classList.add("pinyin-rt");
-						newSimp.addEventListener("click", (event) => {
-							if (event.button === 0) {
-								newPinyin.classList.toggle("on");
-							}
-						})
-						newPinyin.textContent = pinyin;
-						newSimp.appendChild(newPinyin);
+			function fillHanziPinyin(element, hanzi, pinyin) {
+				element.firstChild.textContent = hanzi;
+				element.lastChild.textContent = pinyin;
+			}
 
-						fillSimpHeadword(newSimp, hanzi_simp, newPinyin);
+			/**
+			 * @param {string} hanzi
+			 * @param {string} pinyin
+			 */
+			function getHanziPinyin(hanzi, pinyin) {
+				const ruby = document.createElement("ruby");
+
+				const span = document.createElement("span");
+
+				const rt = document.createElement("rt");
+				rt.classList.add("pinyin-rt");
+
+				ruby.appendChild(span);
+				ruby.appendChild(rt);
+
+
+				ruby.addEventListener("click", (event) => {
+					if (event.button === 0) {
+						rt.classList.toggle("on");
+					}
+				})
+				fillHanziPinyin(ruby, hanzi, pinyin);
+				return ruby;
+			}
+
+			/**
+			 * @param {Array} characters
+			 * @param {string} set
+			 */
+			function getWord(characters, set) {
+				const span = document.createElement("span");
+				fillWord(span, characters, set);
+				return span;
+			}
+
+			/**
+			 * @param {Element} element
+			 * @param {Array} characters
+			 * @param {string} set
+			 */
+			function fillWord(element, characters, set) {
+				let i = 0;
+				const el_len = element.children.length;
+				for (; i < characters.length; i++) {
+					if (i < el_len) {
+						const curr = element.children[i];
+						curr.classList.remove("hidden");
+						fillHanziPinyin(curr, characters[i][set], characters[i]["pinyin"]);
 					} else {
-						const rtList = simpList[0].getElementsByTagName("rt");
-						if (rtList.length !== 0) {
-							rtList[0].textContent = pinyin;
-							fillSimpHeadword(simpList[0], hanzi_simp, rtList[0]);
-						} else {
-							const newPinyin = document.createElement("rt");
-							newPinyin.classList.add("pinyin-rt");
-							simpList[0].addEventListener("click", (event) => {
-								if (event.button === 0) {
-									newPinyin.classList.toggle("on");
-								}
-							})
-							newPinyin.textContent = pinyin;
-							simpList[0].appendChild(newPinyin);
-							fillSimpHeadword(simpList[0], hanzi_simp, newPinyin);
-						}
+						element.appendChild(getHanziPinyin(characters[i][set], characters[i]["pinyin"]));
 					}
 				}
-
-				{
-					const tradList = headword.getElementsByClassName("trad-headword");
-					if (tradList.length === 0) {
-						const bracketOpen = document.createElement("span");
-						bracketOpen.textContent = "〔";
-						bracketOpen.classList.add("left-bracket", "bracket");
-						headword.appendChild(bracketOpen);
-
-						const newTrad = document.createElement("span");
-						newTrad.classList.add("trad-headword");
-						headword.appendChild(newTrad);
-						fillTradHeadword(newTrad, hanzi_trad);
-
-						const bracketClose = document.createElement("span");
-						bracketClose.textContent = "〕";
-						bracketClose.classList.add("right-bracket", "bracket");
-						headword.appendChild(bracketClose);
-					} else {
-						fillTradHeadword(tradList[0], hanzi_trad);
-					}
+				for (; i < el_len; i++) {
+					element.children[i].classList.add("hidden");
 				}
 			}
 
 			/**
-			 * @param {Element} container
-			 * @param {Object} sentences
-			 */
-			function fillSentence(container, sentences) {
-				let sentencePair;
-				const sentencePairList = container.getElementsByClassName("sentence-pair");
-				if (sentencePairList.length === 0) {
-					sentencePair = document.createElement("span");
-					sentencePair.classList.add("sentence-pair");
-					container.appendChild(sentencePair);
-				} else {
-					sentencePair = sentencePairList[0];
+             * @param {Element} element
+             * @param {Array} words
+             * @param {string} set
+             */
+			function fillHeadword(element, words, set) {
+				let i = 0;
+				const el_len = element.children.length;
+				for (; i < words.length; i++) {
+					if (i < el_len) {
+						const curr = element.children[i];
+						curr.classList.remove("hidden");
+						fillWord(curr, words[i], set);
+					} else {
+						element.appendChild(getWord(words[i], set));
+					}
 				}
-
-				const zhSentenceList = sentencePair.getElementsByClassName("zh-sentence");
-				if (zhSentenceList.length === 0) {
-					const newZhSentence = document.createElement("span");
-					newZhSentence.classList.add("zh-sentence");
-					newZhSentence.textContent = sentences.zh.toString();
-					sentencePair.appendChild(newZhSentence);
-				} else {
-					zhSentenceList[0].textContent = sentences.zh.toString();
-				}
-
-				const enSentenceList = sentencePair.getElementsByClassName("en-sentence");
-				if (enSentenceList.length === 0) {
-					const newEnSentence = document.createElement("span");
-					newEnSentence.classList.add("en-sentence");
-					newEnSentence.textContent = sentences.en.toString();
-					sentencePair.appendChild(newEnSentence);
-				} else {
-					enSentenceList[0].textContent = sentences.en.toString();
-				}
-
-				const enSentDummyList = sentencePair.getElementsByClassName("en-sent-dummy");
-				if (enSentDummyList.length === 0) {
-					const newEnSentDummy = document.createElement("span");
-					newEnSentDummy.classList.add("en-sent-dummy");
-					newEnSentDummy.textContent = sentences.en.toString();
-					sentencePair.appendChild(newEnSentDummy);
-				} else {
-					enSentDummyList[0].textContent = sentences.en.toString();
+				for (; i < el_len; i++) {
+					element.children[i].classList.add("hidden");
 				}
 			}
 
 			/**
-			 * @param {Element} definition
-			 * @param {string} wordClass
-			 * @param {Array} definitions_list
-			 */
-			function fillDefinition(definition, wordClass, definitions_list) {
-				{
-					const titleList = definition.getElementsByClassName("def-title");
-					if (titleList.length === 0) {
-						const newTitle = document.createElement("span");
-						const bold = document.createElement("b");
-						bold.textContent = wordClass;
-						newTitle.classList.add("def-title");
-						newTitle.appendChild(bold);
-						definition.appendChild(newTitle);
-					}
-				}
-				let ol
-				const olList = definition.getElementsByClassName("def-list");
+             * @param {Element} element
+             * @param {Array} words
+             */
+			function fillHeadwords(element, words) {
+				fillHeadword(element.firstElementChild, words, "simp");
+				fillHeadword(element.lastElementChild, words, "trad");
+			}
+
+			/**
+             * @param {Element} definitions_container
+             * @param {Array} definitions_list
+             */
+			function fillDefinitionsContainer(definitions_container, definitions_list) {
+				let ol;
+				const olList = definitions_container.getElementsByClassName("def-list");
 				if (olList.length === 0) {
 					ol = document.createElement("ol");
 					ol.classList.add("def-list");
-					definition.appendChild(ol);
+					definitions_container.appendChild(ol);
 				} else {
 					ol = olList[0];
 				}
@@ -410,63 +324,17 @@
 				let i = 0;
 				for (; i < definitions_list.length; i++) {
 					if (i >= liList.length) {
-						const summary = document.createElement("summary");
-						summary.textContent = definitions_list[i]["definition"].toString();
-
-						const div = document.createElement("div");
-						let j = 0;
-						const containerList = div.children;
-						for (; j < definitions_list[i]["sentences"].length; j++) {
-							if (j >= containerList.length) {
-								const container = document.createElement("div");
-								container.classList.add("sentence-container");
-
-								fillSentence(container, definitions_list[i]["sentences"][j]);
-								div.appendChild(container);
-							} else {
-								const container = containerList[j];
-								container.classList.remove("hidden");
-
-								fillSentence(container, definitions_list[i]["sentences"][j])
-							}
-						}
-						const details = document.createElement("details");
-						details.classList.add("def-details");
-						details.name = "sentence";
-						details.appendChild(summary);
-						details.appendChild(div);
+						const span = document.createElement("span");
+						span.textContent = definitions_list[i].toString();
 
 						const li = document.createElement("li");
-						li.appendChild(details);
+						li.appendChild(span);
 						ol.appendChild(li)
 					} else {
 						const li = liList[i];
 						li.classList.remove("hidden");
-						const details = li.firstChild;
-
-						const summary = details.firstChild;
-						summary.textContent = definitions_list[i]["definition"].toString();
-
-						const div = details.lastChild;
-						let j = 0;
-						const containerList = div.children;
-						for (; j < definitions_list[i]["sentences"].length; j++) {
-							if (j >= containerList.length) {
-								const container = document.createElement("div");
-								container.classList.add("sentence-container");
-
-								fillSentence(container, definitions_list[i]["sentences"][j]);
-								div.appendChild(container);
-							} else {
-								const container = containerList[j];
-								container.classList.remove("hidden");
-
-								fillSentence(container, definitions_list[i]["sentences"][j])
-							}
-						}
-						for (; j + 1 < containerList.length; j++) {
-							containerList[j + 1].classList.add("hidden");
-						}
+						const span = li.firstChild;
+						span.textContent = definitions_list[i].toString();
 					}
 				}
 				for (; i + 1 < liList.length; i++) {
@@ -475,48 +343,24 @@
 			}
 
 			/**
-             * @param {Element} definitions_container
-             * @param {Object} definitions_list
-             */
-			function fillDefinitionsContainer(definitions_container, definitions_list) {
-				for (const wordClass in definitions_list) {
-					const elems = definitions_container.getElementsByClassName(wordClass);
-					if (elems.length === 0) {
-						const newElem = document.createElement("div");
-						newElem.classList.add("definition", wordClass);
-						definitions_container.appendChild(newElem);
-						fillDefinition(newElem, wordClass, definitions_list[wordClass]);
-					} else {
-						elems[0].classList.remove("hidden");
-						fillDefinition(elems[0], wordClass, definitions_list[wordClass]);
-					}
-				}
-
-				for (const elem of definitions_container.children) {
-					const wordClass = [...elem.classList].find(cls => cls !== "definition" && cls !== "hidden");
-					if (!Object.hasOwn(definitions_list, wordClass)) {
-						elem.classList.add("hidden");
-					}
-				}
-			}
-
-			/**
              * @param {Element} entry
-             * @param {Array} hanzi_simp
-             * @param {Array} hanzi_trad
-             * @param {string} pinyin
-             * @param {Object} definitions
+             * @param {Array} words
+             * @param {Array} definitions
              */
-			function fillEntry(entry, hanzi_simp, hanzi_trad, pinyin, definitions) {
+			function fillEntry(entry, words, definitions) {
 				{
 					const headwordList = entry.getElementsByClassName("headword");
 					if (headwordList.length === 0) {
 						const newHeadword = document.createElement("div");
 						newHeadword.classList.add("headword");
 						entry.appendChild(newHeadword);
-						fillHeadwords(newHeadword, hanzi_simp, hanzi_trad, pinyin);
+						newHeadword.appendChild(document.createElement("span"));
+						newHeadword.appendChild(document.createElement("span"));
+						newHeadword.firstElementChild.classList.add("spacing");
+						newHeadword.lastElementChild.classList.add("spacing");
+						fillHeadwords(newHeadword, words);
 					} else {
-						fillHeadwords(headwordList[0], hanzi_simp, hanzi_trad, pinyin);
+						fillHeadwords(headwordList[0], words);
 					}
 				}
 
@@ -551,17 +395,9 @@
 					/**
 					 * @type {Array}
 					 */
-					const hanziSimp = page_data[i]["simp"];
+					const words = page_data[i]["words"];
 					/**
 					 * @type {Array}
-					 */
-					const hanziTrad = page_data[i]["trad"];
-					/**
-					 * @type {string}
-					 */
-					const pinyin = page_data[i]["pinyin"];
-					/**
-					 * @type {Object}
 					 */
 					const definitions = page_data[i]["def"];
 
@@ -573,9 +409,11 @@
 								key: "contextmenu",
 								x: event.screenX,
 								y: event.screenY,
-								character: contextWord[0],
+								character: words.flatMap(c => c["simp"]).join(" "),
 								word: contextWord,
-								sentence: contextSentence
+								pinyin: words.flatMap(c => c["pinyin"]).join(" "),
+								sentence: contextSentence,
+								definition: definitions.join('\n')
 							};
 							// noinspection JSUnresolvedReference
 							window.chrome.webview.postMessage(jsonObject); // is part of Microsoft Edge Webview2
@@ -583,10 +421,10 @@
 						});
 
 						entryContainer.appendChild(newEntry);
-						fillEntry(newEntry, hanziSimp, hanziTrad, pinyin, definitions);
+						fillEntry(newEntry, words, definitions);
 					} else {
 						entryContainer.children[i].classList.remove("hidden");
-						fillEntry(entryList[i], hanziSimp, hanziTrad, pinyin, definitions);
+						fillEntry(entryList[i], words, definitions);
 					}
 				}
 

@@ -1,17 +1,12 @@
 #pragma once
 
-#include <mdict.h>
-#include <stack>
 #include <unordered_map>
 #include <Windows.h>
 #include <wrl/client.h>
-#include <cpp-pinyin/Pinyin.h>
 
 #include "anki_connect.h"
 #include "common.h"
-#include "dict_extract.h"
-#include "dict_extract_汉英词典（第3版）.h"
-#include "opencc.h"
+#include "dict_parser.h"
 
 struct ICoreWebView2Controller;
 struct ICoreWebView2;
@@ -23,9 +18,9 @@ namespace WebView2 {
 	class Impl;
 }
 
-namespace ocr {
+namespace iwra {
 	struct DictionaryData {
-		std::vector<EntryInfo> entries{};
+		std::vector<DictParser::entry> entries{};
 		std::string phrase;
 		int height = -1;
 	};
@@ -70,7 +65,7 @@ namespace ocr {
 
 		std::vector<OCRBlock>                           results;
 		std::size_t                                     results_size{};
-		std::unique_ptr<mdict::Mdict>                   mdict;
+		std::shared_ptr<DictParser> parser;
 		std::unordered_map<std::string, DictionaryData> dictionary_data;
 		int                                             max_webpage_width{scroll_bar_width};
 
@@ -79,18 +74,20 @@ namespace ocr {
 		Microsoft::WRL::ComPtr<ICoreWebView2>           webview;
 		bool                                            inited_web_view2{false};
 		std::string webpage_html;
-		汉英词典第三版Extractor dict_extractor{};
-		opencc::SimpleConverter converter{"../t2s.json"};
 
-		std::unique_ptr<Pinyin::Pinyin> g2p_man;
-		Anki::Interface anki{};
+		std::shared_ptr<Anki::Interface> anki;
 
+		TooltipWnd(
+			const std::vector<OCRResult>&           res,
+			const cv::Rect&                         rect,
+			const std::filesystem::path&            webpage_path,
+			const std::shared_ptr<DictParser>&      parser,
+			const std::shared_ptr<Anki::Interface>& anki
+		);
 
 		void initWebView2();
 
-		void initDictionary(const std::filesystem::path& dict_path);
-
-		void initCurrDictHTML();
+		void initCurrDict();
 
 		static void processOCRResults(
 			const std::vector<OCRResult>& res,
@@ -104,8 +101,6 @@ namespace ocr {
 
 		void updateWindowPosition() const;
 
-		static std::vector<std::string> guessPinyin(const Pinyin::PinyinResVector& pinyin_res, const std::string& pinyin_str);
-
 		void refreshWindow();
 
 		void refreshHovering();
@@ -114,7 +109,10 @@ namespace ocr {
 
 		void onNavigationComplete();
 
-		void createContextMenu(int x, int y, const std::string& character, const std::string& phrase, const std::string& sentence) const;
+		void createContextMenu(int x, int y, const std::string& character, const std::string& phrase, const std::string& pinyin, const std::string&
+		                       sentence,
+		                       const std::string& definition
+		) const;
 
 		static std::string getSentence(OCRBlock* hover_block);
 
@@ -128,15 +126,16 @@ namespace ocr {
 		HWND hwnd{};
 		bool is_running = true;
 
-		TooltipWnd() = default;
+		TooltipWnd() = delete;
 
 		~TooltipWnd();
 
 		static std::unique_ptr<TooltipWnd> initTooltip(
-			const std::vector<OCRResult>& res,
-			const cv::Rect&               rect,
-			const std::filesystem::path&  mdict_path,
-			const std::filesystem::path&  webpage_path
+			const std::vector<OCRResult>&           res,
+			const cv::Rect&                         rect,
+			const std::filesystem::path&            webpage_path,
+			const std::shared_ptr<DictParser>&      parser,
+			const std::shared_ptr<Anki::Interface>& anki
 		);
 
 		void updateRectRes(const std::vector<OCRResult>& new_res, const cv::Rect& new_rect);

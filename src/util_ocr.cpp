@@ -1,0 +1,155 @@
+#include "util_ocr.h"
+
+
+#include <opencv2/imgproc.hpp>
+
+
+iwra::Poly2F iwra::rotatedRect2Poly2F(const cv::RotatedRect& rect) {
+	Poly2F poly{};
+	rect.points(poly.data());
+	std::ranges::sort(poly, [](const cv::Point2f& lhs, const cv::Point2f& rhs) { return lhs.x < rhs.x; });
+
+	// sorts points top left, top right, bottom right, bottom left
+	if (poly[1].y > poly[0].y) {
+		if (poly[3].y > poly[2].y) {
+			std::rotate(poly.begin() + 1, poly.begin() + 2, poly.end()); // [ 0, 1, 2, 3 ] -> [ 0, 2, 3, 1 ]
+		} else {
+			std::swap(poly[1], poly[3]); // [ 0, 1, 2, 3 ] -> [ 0, 3, 2, 1 ]
+		}
+	} else {
+		if (poly[3].y > poly[2].y) {
+			std::ranges::rotate(poly, poly.begin() + 1); // [ 0, 1, 2, 3 ] -> [ 1, 2, 3, 0 ]
+		} else {
+			std::swap(poly[0], poly[1]); // [ 0, 1, 2, 3 ] -> [ 1, 0, 2, 3 ]
+			std::swap(poly[1], poly[3]); // [ 1, 0, 2, 3 ] -> [ 1, 3, 2, 0 ]
+		}
+	}
+
+	return poly;
+}
+
+Clipper2Lib::Path64 iwra::rect2path(const Poly2I& rect) {
+	return {
+		Clipper2Lib::Point64(rect[0].x, rect[0].y),
+		Clipper2Lib::Point64(rect[1].x, rect[1].y),
+		Clipper2Lib::Point64(rect[2].x, rect[2].y),
+		Clipper2Lib::Point64(rect[3].x, rect[3].y)
+	};
+}
+
+Clipper2Lib::Path64 iwra::rect2path(const Poly2F& rect) {
+	return {
+		Clipper2Lib::Point64(rect[0].x, rect[0].y),
+		Clipper2Lib::Point64(rect[1].x, rect[1].y),
+		Clipper2Lib::Point64(rect[2].x, rect[2].y),
+		Clipper2Lib::Point64(rect[3].x, rect[3].y)
+	};
+}
+
+cv::RotatedRect iwra::unclip(const Poly2F& rect, const float unclip_ratio) {
+	// get unclip distance (don't fully understand what it's doing yet?)
+	const float distance = getUnclipDistance(rect, unclip_ratio);
+
+	// convert rect to Clipper2 path
+	const Clipper2Lib::Paths64 path = {rect2path(rect)};
+
+	const Clipper2Lib::Paths64 inflated_path = Clipper2Lib::InflatePaths(
+		path,
+		distance,
+		Clipper2Lib::JoinType::Round,
+		Clipper2Lib::EndType::Polygon
+	);
+
+	// convert Clipper2 path to vector of opencv point (float)
+	std::vector<cv::Point2f> points;
+	for (const auto& sol_path : inflated_path) {
+		for (const auto& pt : sol_path) {
+			points.emplace_back(static_cast<float>(pt.x), static_cast<float>(pt.y));
+		}
+	}
+
+	if (points.empty()) {
+		// IDK if this can happen tbh...
+		return {cv::Point2f(0.f, 0.f), cv::Size2f(1.f, 1.f), 0.f};
+		// ReSharper disable once CppRedundantElseKeywordInsideCompoundStatement
+	} else {
+		return cv::minAreaRect(points);
+	}
+}
+
+float iwra::distance(const cv::Point2f a, const cv::Point2f b) {
+	const auto c = b - a;
+	return std::sqrt(c.x * c.x + c.y * c.y);
+}
+
+float iwra::getUnclipDistance(const Poly2F& rect, const float unclip_ratio) {
+	float                 area      = 0, perimeter = 0;
+	constexpr std::size_t max_index = 3;
+
+	// Shoelace formula start (https://en.wikipedia.org/wiki/Shoelace_formula)[Wikipedia]
+	for (std::size_t i = 0; i < max_index; i++) {
+		area      += rect[i].x * rect[i + 1].y - rect[i].y * rect[i + 1].x;
+		perimeter += distance(rect[i], rect[i + 1]);
+	}
+	area      += rect[max_index].x * rect[0].y - rect[max_index].y * rect[0].x;
+	perimeter += distance(rect[max_index], rect[0]);
+
+	area = std::abs(area / 2.f);
+	// Shoelace formula end
+
+	if (perimeter < 1e-6) {
+		return 0;
+	}
+	return area * unclip_ratio / perimeter;
+}
+
+cv::Mat iwra::cropImage(const cv::Mat& image, Poly2I rect) {
+	auto          [left, right] = std::minmax({rect[0].x, rect[1].x, rect[2].x, rect[3].x});
+	auto          [bottom, top] = std::minmax({rect[0].y, rect[1].y, rect[2].y, rect[3].y});
+	const cv::Mat crop_image    = image(cv::Rect(left, bottom, right - left, top - bottom)).clone();
+
+	for (auto& point : rect) {
+		point.x -= left;
+		point.y -= bottom;
+	}
+
+	// get width and height of rectangle when it's not rotated
+	const float crop_w = distance(rect[0], rect[1]);
+	const float crop_h = distance(rect[0], rect[3]);
+
+	// what the image is
+	const std::vector src_rect = {
+		cv::Point2f(rect[0]),
+		cv::Point2f(rect[1]),
+		cv::Point2f(rect[2]),
+		cv::Point2f(rect[3])
+	};
+
+	// what we want the image to be transformed to
+	const std::vector dst_rect = {
+		cv::Point2f(0.f, 0.f),
+		cv::Point2f(crop_w, 0.f),
+		cv::Point2f(crop_w, crop_h),
+		cv::Point2f(0.f, crop_h)
+	};
+
+	const cv::Mat transform_mat = cv::getPerspectiveTransform(src_rect, dst_rect, cv::DECOMP_LU);
+
+	// transform image according to transformation matrix
+	cv::Mat text_image;
+	cv::warpPerspective(
+		crop_image,
+		text_image,
+		transform_mat,
+		cv::Size(static_cast<int>(crop_w), static_cast<int>(crop_h)),
+		cv::BORDER_REPLICATE
+	);
+
+	// if text is vertical, rotate it
+	if (static_cast<float>(text_image.rows) >= static_cast<float>(text_image.cols) * 1.5f) {
+		cv::Mat dst;
+		cv::rotate(text_image, dst, cv::ROTATE_90_COUNTERCLOCKWISE);
+		return dst;
+	}
+	return text_image;
+}

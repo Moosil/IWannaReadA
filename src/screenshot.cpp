@@ -8,7 +8,7 @@
 #include "util.h"
 
 
-namespace ocr {
+namespace iwra {
 	std::unique_ptr<ScreenshotWnd> ScreenshotWnd::startScreenShot(cv::Mat* ss, cv::Rect* rect) {
 		auto wnd = std::make_unique<ScreenshotWnd>();
 		if (!isInitialised) {

@@ -1,12 +1,14 @@
 #include <spdlog/spdlog.h>
 
+#include <utility>
 
 #include "anki_connect.h"
 
 
 namespace Anki {
-	Interface::Interface(const int port) :
-		client{std::make_unique<httplib::Client>("127.0.0.1", port)} {
+	Interface::Interface(std::string deck_name, std::string card_type, const int port) :
+		client{std::make_unique<httplib::Client>("127.0.0.1", port)},
+		deck_name{std::move(deck_name)}, card_type{std::move(card_type)} {
 		//client->set_connection_timeout(0, 500'000); // 500 ms
 
 		spdlog::info("connected AnkiConnect HTTP client to 127.0.0.1:{}", port);
@@ -78,8 +80,8 @@ namespace Anki {
 
 		if (find_note_json["result"].empty()) {
 			nlohmann::json add_node_request = get_add_node_request(
-				"chinese_read_text",
-				"chinese_read_text_card",
+				deck_name,
+				card_type,
 				{{"hanyu", hanyu}, {"pinyin", pinyin}, {"definition", definition}, {"sentence", sentence}}
 			);
 			const httplib::Result add_node_result = post_and_receive(add_node_request);

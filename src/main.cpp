@@ -1,18 +1,23 @@
-#include <future>
-#include <ranges>
-
 #include <shellscalingapi.h>
-#include <Windows.h>
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
 #include <spdlog/spdlog.h>
 #pragma comment(lib,"Shcore.lib")
+
+#include <future>
 
 #include "config.h"
 #include "ocr_engine.h"
 #include "screenshot.h"
 #include "tooltip.h"
-#include "util.h"
+#include "log.h"
 
-using namespace ocr;
+using namespace iwra;
 using s_time = std::chrono::time_point<std::chrono::steady_clock>;
 
 std::future<std::vector<OCRResult> > runOCR(
@@ -22,13 +27,15 @@ std::future<std::vector<OCRResult> > runOCR(
 
 [[noreturn]] int main() {
 	// fixes scaling of screenshots on monitors with DPI
-	SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+	iwra::log(SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE), "SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE)");
 
 	Config                      yaml{"../config.yaml"};
 	const bool                  refresh            = yaml.getRefresh();
 	const int                   refresh_interval   = yaml.getRefreshIntervalMs();
-	const std::filesystem::path mdict_path         = yaml.getMDictPath();
+	const std::filesystem::path dict_path          = yaml.getDictPath();
 	const std::filesystem::path html_template_path = yaml.getHTMLTemplatePath();
+	const std::string           anki_card_type     = yaml.getAnkiCardType();
+	const std::string           anki_deck_name     = yaml.getAnkiDeckName();
 
 	try {
 		SetConsoleOutputCP(CP_UTF8);
@@ -51,7 +58,12 @@ std::future<std::vector<OCRResult> > runOCR(
 		cv::Mat                              ss;
 		cv::Rect                             rect;
 		std::future<std::vector<OCRResult> > pending_result;
-		s_time                               prev      = std::chrono::steady_clock::now();
+		s_time                               prev = std::chrono::steady_clock::now();
+
+		auto anki = std::make_shared<Anki::Interface>(anki_deck_name, anki_card_type);
+		auto dict_parser = std::make_shared<DictParser>();
+		dict_parser->load(dict_path);
+		spdlog::info("loaded dictionary successfully");
 		while (true) {
 			if (ss_wnd) {
 				ss_wnd->update();
@@ -67,7 +79,7 @@ std::future<std::vector<OCRResult> > runOCR(
 							rect.x + rect.width,
 							rect.y + rect.height
 						);
-						tt_wnd = TooltipWnd::initTooltip(output, rect, mdict_path, html_template_path);
+						tt_wnd = TooltipWnd::initTooltip(output, rect, html_template_path, dict_parser, anki);
 						prev   = std::chrono::steady_clock::now();
 					}
 				}
@@ -103,7 +115,8 @@ std::future<std::vector<OCRResult> > runOCR(
 							now - prev
 						);
 						if ((milliseconds_duration).count() > refresh_interval/*ms*/ &&
-						    (!pending_result.valid() || pending_result.wait_for(std::chrono::seconds(0)) == std::future_status::ready)) {
+						    (!pending_result.valid() || pending_result.wait_for(std::chrono::seconds(0)) ==
+						     std::future_status::ready)) {
 							if (!rect.empty() && tt_wnd) {
 								ss             = ScreenshotWnd::hBitmap2cvMat(ScreenshotWnd::captureScreenRegion(rect));
 								pending_result = runOCR(engine, ss);
@@ -117,7 +130,6 @@ std::future<std::vector<OCRResult> > runOCR(
 	} catch (std::exception& e) {
 		spdlog::critical("Exception: {}", e.what());
 	}
-	return 0;
 }
 
 std::future<std::vector<OCRResult> > runOCR(

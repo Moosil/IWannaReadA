@@ -1,11 +1,13 @@
 #include "config.h"
 
+
 #include <format>
 #include <spdlog/spdlog.h>
 
-#include "util.h"
+#include "util_text.h"
 
-namespace ocr {
+
+namespace iwra {
 	Config::Config(const std::filesystem::path& path) :
 		node{YAML::LoadFile(path.string())},
 		config_path{path} {
@@ -230,17 +232,19 @@ namespace ocr {
 		};
 	}
 
-	Config::file_path Config::getMDictPath() {
+	Config::file_path Config::getDictPath() {
 		if (const std::string curr_name = "dictionary"; node[curr_name]) {
 			if (file_path path = config_path.parent_path() / node[curr_name].as<std::string>();
-				std::filesystem::is_directory(path)) {
-				spdlog::info("found mdict path at {}", path.string());
+				std::filesystem::exists(path)) {
+				spdlog::info("found dict path at {}", path.string());
 				return path;
-				}
+			} else {
+				spdlog::error("couldn't find dict at {}", path.string());
+			}
 		}
-		spdlog::error("couldn't find mdict in {}", config_path.parent_path().string());
+		spdlog::error("couldn't find dict in {}", config_path.parent_path().string());
 		throw std::runtime_error{
-			std::format("couldn't find mdict path in {}", config_path.parent_path().string())
+			std::format("couldn't find dict path in {}", config_path.parent_path().string())
 		};
 	}
 
@@ -271,7 +275,27 @@ namespace ocr {
 
 	std::string Config::getRefreshIntervalAsString() {
 		for (const auto& interval : refresh_interval_alias)
-			return node[interval].as<std::string>();
+			if (node[interval])
+				return node[interval].as<std::string>();
+		return "-1";
+	}
+
+	std::string Config::getAnkiCardType() {
+		if (node["anki"])
+			for (const auto& connector : connectors)
+				if (const std::string curr = "card" + connector + "type";
+					node["anki"][curr])
+					return node["anki"][curr].as<std::string>();
+		return "-1";
+	}
+
+	std::string Config::getAnkiDeckName() {
+
+		if (node["anki"])
+			for (const auto& connector : connectors)
+				if (const std::string curr = "deck" + connector + "name";
+					node["anki"][curr])
+					return node["anki"][curr].as<std::string>();
 		return "-1";
 	}
 } // ocr

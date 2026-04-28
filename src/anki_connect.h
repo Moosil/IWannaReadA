@@ -7,14 +7,26 @@
 namespace Anki {
 	class Interface {
 	public:
-		explicit Interface(int port = 8765);
+		Interface(std::string deck_name, std::string card_type, int port = 8765);
 
 		~Interface();
 
-		Interface(const Interface&) = delete;
 		Interface& operator=(const Interface&) = delete;
-		Interface(Interface&& other)= delete;
-		Interface& operator=(Interface&& other) = delete;
+		Interface(const Interface&) = delete;
+
+		Interface& operator=(Interface&& other) noexcept {
+			if (this != &other) {
+				client = std::move(other.client);
+				deck_name = std::move(other.deck_name);
+				card_type = std::move(other.card_type);
+			}
+			return *this;
+		};
+		Interface(Interface&& other) noexcept:
+			client{std::move(other.client)},
+			deck_name{other.deck_name},
+			card_type{other.card_type} {
+		};
 
 		static nlohmann::json get_request_body(const std::string& request_name, const nlohmann::json& params = nullptr);
 		;
@@ -42,6 +54,9 @@ namespace Anki {
 		using CardID = unsigned long long;
 
 		std::unique_ptr<httplib::Client> client;
+
+		std::string deck_name;
+		std::string card_type;
 
 		static constexpr int ankiconnect_version = 6;
 	};

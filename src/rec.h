@@ -7,7 +7,7 @@
 #include "common.h"
 
 
-namespace ocr {
+namespace iwra {
 	class Rec {
 	private:
 		struct RetInfo {

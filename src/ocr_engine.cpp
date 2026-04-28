@@ -8,10 +8,10 @@
 #include <spdlog/spdlog.h>
 
 #include "config.h"
-#include "util.h"
+#include "util_ocr.h"
 
 
-namespace ocr {
+namespace iwra {
 	OCREngine::OCREngine(
 		const std::string& det_model_path,
 		const std::string& det_param_path,

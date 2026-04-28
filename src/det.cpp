@@ -7,10 +7,10 @@
 #include <ranges>
 #include <opencv2/imgproc.hpp>
 
-#include "util.h"
+#include "util_ocr.h"
 
 
-namespace ocr {
+namespace iwra {
 	Det::Det(const std::string& det_model_path, const std::string& det_param_path) {
 		init(det_model_path, det_param_path);
 	}

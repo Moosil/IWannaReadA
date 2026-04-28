@@ -6,7 +6,7 @@
 #include "det.h"
 #include "rec.h"
 
-namespace ocr {
+namespace iwra {
 	class OCREngine {
 	private:
 		Det det;
