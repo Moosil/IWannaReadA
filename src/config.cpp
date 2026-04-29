@@ -36,12 +36,9 @@ namespace iwra {
 
 	Config::file_path Config::getRootPath() {
 		spdlog::info("looking for root path...");
-		for (const std::string& alias : root_alias) {
-			if (node[alias]) {
-				file_path path = node[alias].as<std::string>();
-				if (path.empty()) {
-					continue;
-				}
+		if (node["file-root"]) {
+			file_path path = node["file-root"].as<std::string>();
+			if (!path.empty()) {
 				if (path.is_relative()) {
 					if (file_path res = config_path.parent_path() / path; std::filesystem::is_directory(res)) {
 						spdlog::info("found root path at {}", res.string());
@@ -62,19 +59,11 @@ namespace iwra {
 
 	Config::file_path Config::getKeyPath() {
 		spdlog::info("looking for key path...");
-		for (const std::string& alias : key_alias) {
-			for (const std::string& connector : connectors) {
-				for (const std::string& suffix : suffixes) {
-					std::string curr_name = alias;
-					curr_name.append(connector).append(suffix);
-					if (node[curr_name]) {
-						if (file_path path = file_root / node[curr_name].as<std::string>();
-							std::filesystem::is_regular_file(path)) {
-							spdlog::info("found key path at {}", path.string());
-							return path;
-						}
-					}
-				}
+		if (node["ocr"]["keys-path"]) {
+			if (file_path path = file_root/ node["ocr"]["keys-path"].as<std::string>();
+				std::filesystem::is_regular_file(path)) {
+				spdlog::info("found key path at {}", path.string());
+				return path;
 			}
 		}
 		throw std::runtime_error{std::format("couldn't find key in {}", config_path.string())};
@@ -82,118 +71,17 @@ namespace iwra {
 
 
 	Config::file_path Config::getPath(const ModelType model_type, const FileType file_type) {
-		const FileType opposite_file_type = file_type == FileType::Model ? FileType::Param : FileType::Model;
-		const std::vector<std::string>& model_type_alias = model_type == ModelType::Det ? det_alias : rec_alias;
-		const std::vector<std::string>& file_type_alias = file_type == FileType::Model ? model_alias : param_alias;
-		const std::vector<std::string>& opposite_file_type_alias = file_type == FileType::Model
-		                                                           ? param_alias
-		                                                           : model_alias;
-		const std::vector<std::string>& file_extensions         = file_type == FileType::Model ? model_ext : param_ext;
 		const std::string               model_type_name         = enum2String(model_type);
 		const std::string               file_type_name          = enum2String(file_type);
-		const std::string               opposite_file_type_name = enum2String(opposite_file_type);
 
-		spdlog::info("looking for {} {} path...", model_type_name, file_type_name);
-		spdlog::info("looking for model name...");
-		for (const std::string& alias : model_name_alias) {
-			if (node[alias]) {
-				file_path name = node[alias].as<std::string>();
-				if (name.empty()) {
-					continue;
-				}
-				spdlog::info("found model name: {}", name.string());
-				for (const std::string& connector : connectors) {
-					for (const std::string& det : model_type_alias) {
-						for (const std::string& ext : file_extensions) {
-							if (file_path path = (file_root / name / connector / det).replace_extension(ext);
-								std::filesystem::is_regular_file(path)) {
-								spdlog::info("found {} {} path at {}", model_type_name, file_type_name, path.string());
-								return path;
-							}
-						}
-					}
-				}
+		if (node["ocr"][model_type_name][file_type_name + "-path"]) {
+			if (file_path path = file_root / node["ocr"][model_type_name][file_type_name + "-path"].as<std::string>();
+				std::filesystem::is_regular_file(path)) {
+				spdlog::info("found key path at {}", path.string());
+				return path;
 			}
 		}
-		spdlog::info("looking for {} structure...", model_type_name);
-		for (const std::string& det : model_type_alias) {
-			if (node[det]) {
-				spdlog::info("found {0} structure. looking for {0} {1} path...", model_type_name, file_type_name);
-				YAML::Node det_node = node[det];
-				for (const std::string& alias : file_type_alias) {
-					for (const std::string& connector : connectors) {
-						for (const std::string& suffix : suffixes) {
-							std::string curr_name = alias;
-							curr_name.append(connector).append(suffix);
-							if (det_node[curr_name]) {
-								if (file_path path = file_root / det_node[curr_name].as<std::string>();
-									std::filesystem::is_regular_file(path)) {
-									spdlog::info(
-										"found {} {} path at {}",
-										model_type_name,
-										file_type_name,
-										path.string()
-									);
-									return path;
-								}
-							}
-						}
-					}
-				}
 
-				spdlog::info("looking for {} {} path...", model_type_name, opposite_file_type_name);
-				for (const std::string& alias : opposite_file_type_alias) {
-					for (const std::string& connector : connectors) {
-						for (const std::string& suffix : suffixes) {
-							std::string curr_name = alias;
-							curr_name.append(connector).append(suffix);
-							if (det_node[curr_name]) {
-								if (file_path param_path = file_root / det_node[curr_name].as<std::string>();
-									std::filesystem::is_regular_file(param_path)) {
-									for (const std::string& ext : file_extensions) {
-										if (file_path model_path = param_path.replace_extension(ext);
-											std::filesystem::is_regular_file(model_path)) {
-											spdlog::info(
-												"found {} {} path at {}",
-												model_type_name,
-												file_type_name,
-												model_path.string()
-											);
-											return model_path;
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-		spdlog::info("looking for {} {} path outside of structure...", model_type_name, file_type_name);
-		for (const std::string& det : model_type_alias) {
-			for (const std::string& connector0 : connectors) {
-				for (const std::string& alias : file_type_alias) {
-					for (const std::string& connector1 : connectors) {
-						for (const std::string& suffix : suffixes) {
-							std::string curr_name = det;
-							curr_name.append(connector0).append(alias).append(connector1).append(suffix);
-							if (node[curr_name]) {
-								if (file_path path = file_root / node[curr_name].as<std::string>();
-									std::filesystem::is_regular_file(path)) {
-									spdlog::info(
-										"found {} {} path at {}",
-										model_type_name,
-										file_type_name,
-										path.string()
-									);
-									return path;
-								}
-							}
-						}
-					}
-				}
-			}
-		}
 		spdlog::error("couldn't find {} {} in {}", model_type_name, file_type_name, config_path.string());
 		throw std::runtime_error{
 			std::format("couldn't find {} {} in {}", model_type_name, file_type_name, config_path.string())
@@ -217,24 +105,22 @@ namespace iwra {
 	}
 
 	Config::file_path Config::getHTMLTemplatePath() {
-		for (const std::string& connector : connectors) {
-			if (const std::string curr_name = "html" + connector + "template"; node[curr_name]) {
-				if (file_path path = config_path.parent_path() / node[curr_name].as<std::string>();
-					std::filesystem::is_regular_file(path)) {
-					spdlog::info("found html template path at {}", path.string());
-					return path;
-				}
+		if (node["html-template-path"]) {
+			if (file_path path = config_path.parent_path() / node["html-template-path"].as<std::string>();
+				std::filesystem::is_regular_file(path)) {
+				spdlog::info("found html template path at {}", path.string());
+				return path;
 			}
 		}
-		spdlog::error("couldn't find html template path in {}", config_path.parent_path().string());
+		spdlog::error("couldn't find html template path in {}", config_path.string());
 		throw std::runtime_error{
-			std::format("couldn't find html template path in {}", config_path.parent_path().string())
+			std::format("couldn't find html template path in {}", config_path.string())
 		};
 	}
 
 	Config::file_path Config::getDictPath() {
-		if (const std::string curr_name = "dictionary"; node[curr_name]) {
-			if (file_path path = config_path.parent_path() / node[curr_name].as<std::string>();
+		if (node["dictionary-path"]) {
+			if (file_path path = config_path.parent_path() / node["dictionary-path"].as<std::string>();
 				std::filesystem::exists(path)) {
 				spdlog::info("found dict path at {}", path.string());
 				return path;
@@ -242,21 +128,26 @@ namespace iwra {
 				spdlog::error("couldn't find dict at {}", path.string());
 			}
 		}
-		spdlog::error("couldn't find dict in {}", config_path.parent_path().string());
+		spdlog::error("couldn't find dict in {}", config_path.string());
 		throw std::runtime_error{
-			std::format("couldn't find dict path in {}", config_path.parent_path().string())
+			std::format("couldn't find dict path in {}", config_path.string())
 		};
 	}
 
 	bool Config::getRefresh() {
-		for (const auto& refresh : refresh_alias)
-			if (node[refresh])
-				return node[refresh].as<bool>();
+		if (node["refresh"]) {
+			return node["refresh"].as<bool>();
+		}
+		spdlog::warn("couldn't find refresh in {}", config_path.string());
 		return false;
 	}
 
-	int Config::getRefreshIntervalMs() {
-		std::string string_duration = getRefreshIntervalAsString();
+	std::optional<int> Config::getRefreshIntervalMs() {
+		const auto opt = getRefreshIntervalAsString();
+		if (!opt.has_value()) {
+			return std::nullopt;
+		}
+		std::string string_duration = opt.value();
 		trim(string_duration);
 		int value{};
 		if (auto [ptr, ec] = std::from_chars(
@@ -270,32 +161,42 @@ namespace iwra {
 			if (extra == "ms")
 				return value;
 		}
-		return -1;
+		return std::nullopt;
 	}
 
-	std::string Config::getRefreshIntervalAsString() {
-		for (const auto& interval : refresh_interval_alias)
-			if (node[interval])
-				return node[interval].as<std::string>();
-		return "-1";
+	std::optional<std::string> Config::getRefreshIntervalAsString() {
+		if (node["refresh-interval"]) {
+			return node["refresh-interval"].as<std::string>();
+		}
+		spdlog::warn("couldn't find refresh interval in {}", config_path.string());
+		return std::nullopt;
 	}
 
-	std::string Config::getAnkiCardType() {
-		if (node["anki"])
-			for (const auto& connector : connectors)
-				if (const std::string curr = "card" + connector + "type";
-					node["anki"][curr])
-					return node["anki"][curr].as<std::string>();
-		return "-1";
+	std::optional<std::string> Config::getAnkiCardType() {
+		if (node["anki"]) {
+			if (node["anki"]["card-type"]) {
+				return node["anki"]["card-type"].as<std::string>();
+			}
+			spdlog::error("couldn't find anki card type in {}", config_path.string());
+			throw std::runtime_error{
+				std::format("couldn't find anki card type in {}", config_path.string())
+			};
+		}
+		spdlog::warn("couldn't find anki in {}", config_path.string());
+		return std::nullopt;
 	}
 
-	std::string Config::getAnkiDeckName() {
-
-		if (node["anki"])
-			for (const auto& connector : connectors)
-				if (const std::string curr = "deck" + connector + "name";
-					node["anki"][curr])
-					return node["anki"][curr].as<std::string>();
-		return "-1";
+	std::optional<std::string> Config::getAnkiDeckName() {
+		if (node["anki"]) {
+			if (node["anki"]["deck-name"]) {
+				return node["anki"]["deck-name"].as<std::string>();
+			}
+			spdlog::error("couldn't find anki deck name in {}", config_path.string());
+			throw std::runtime_error{
+				std::format("couldn't find anki deck name in {}", config_path.string())
+			};
+		}
+		spdlog::warn("couldn't find anki in {}", config_path.string());
+		return std::nullopt;
 	}
 } // ocr

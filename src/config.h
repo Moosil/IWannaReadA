@@ -29,13 +29,13 @@ namespace iwra {
 
 		file_path getDictPath();
 
-		std::string getAnkiCardType();
+		std::optional<std::string> getAnkiCardType();
 
-		std::string getAnkiDeckName();
+		std::optional<std::string> getAnkiDeckName();
 
 		bool getRefresh();
 
-		int getRefreshIntervalMs();
+		std::optional<int> getRefreshIntervalMs();
 
 	private:
 		enum class ModelType {
@@ -50,62 +50,12 @@ namespace iwra {
 
 		YAML::Node node;
 
-		static inline const std::vector<std::string> suffixes = {
-			"",
-			"file",
-			"filepath",
-			"file-path",
-			"file_path",
-			"path"
-		};
-
-		static inline const std::vector<std::string> root_alias = {
-			"file_root",
-			"file_root_path",
-			"file-root",
-			"file-root-path",
-			"root",
-			"root_path",
-			"root-path",
-			"model_root",
-			"model_root_path",
-			"model-root",
-			"model-root-path"
-		};
-
-		static inline const std::vector<std::string> model_name_alias = {"model_name", "model-name", "name"};
-
-
-		static inline const std::vector<std::string> model_alias = {"model", "bin"};
-		static inline const std::vector<std::string> model_ext   = {"bin"};
-		static inline const std::vector<std::string> param_alias = {"param", "params"};
-		static inline const std::vector<std::string> param_ext   = {"param"};
-
-		static inline const std::vector<std::string> det_alias = {"det"};
-		static inline const std::vector<std::string> rec_alias = {"rec"};
-
-		static inline const std::vector<std::string> key_alias = {
-			"key",
-			"keys",
-			"letter",
-			"letters",
-			"character",
-			"characters",
-			"char",
-			"chars"
-		};
-
-		static inline const std::vector<std::string> refresh_alias = {"refresh"};
-		static inline const std::vector<std::string> refresh_interval_alias = {"refresh_interval", "refresh-interval", "interval", "refresh_duration", "refresh-duration", "duration"};
-
-		static inline const std::vector<std::string> connectors = {"", "-", "_"};
-
 		file_path config_path;
 		file_path file_root;
 
 		file_path getPath(ModelType model_type, FileType file_type);
 
-		std::string getRefreshIntervalAsString();
+		std::optional<std::string> getRefreshIntervalAsString();
 
 		static std::string enum2String(ModelType model_type);
 

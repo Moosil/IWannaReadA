@@ -31,11 +31,11 @@ std::future<std::vector<OCRResult> > runOCR(
 
 	Config                      yaml{"../config.yaml"};
 	const bool                  refresh            = yaml.getRefresh();
-	const int                   refresh_interval   = yaml.getRefreshIntervalMs();
+	const int                   refresh_interval   = yaml.getRefreshIntervalMs().value();
 	const std::filesystem::path dict_path          = yaml.getDictPath();
 	const std::filesystem::path html_template_path = yaml.getHTMLTemplatePath();
-	const std::string           anki_card_type     = yaml.getAnkiCardType();
-	const std::string           anki_deck_name     = yaml.getAnkiDeckName();
+	const std::string           anki_card_type     = yaml.getAnkiCardType().value();
+	const std::string           anki_deck_name     = yaml.getAnkiDeckName().value();
 
 	try {
 		SetConsoleOutputCP(CP_UTF8);

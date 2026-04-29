@@ -1,25 +1,21 @@
-# if model_root is not supplied, defaults to working directory
-model_root: "models"
+file-root: "."
 
-# if only 1 is supplied, assumes both have same name
-# if no file extension is supplied, assumes model is .bin, param is .param
-det:
-  model: "PP-OCRv5_mobile_det"
-  param: "PP-OCRv5_mobile_det.param"
+ocr:
+  keys-path: "ppocr_keys_v5.txt"
+  det:
+    model-path: "PP-OCRv5_mobile_det"
+    param-path: "PP-OCRv5_mobile_det.param"
+  rec:
+    model-path: "PP-OCRv5_mobile_rec.bin"
+    param-path: "PP-OCRv5_mobile_rec"
 
-# model is either model or bin
-# param is either param or params
-rec:
-  bin: "PP-OCRv5_mobile_rec.bin"
-  params: "PP-OCRv5_mobile_rec"
-
-key: "ppocr_keys_v5.txt"
 
 refresh: on
-refresh_interval: 100ms
+refresh-interval: 100ms
 
-html_template: "html_template.html"
-dictionary: "dictionaries/cedict_ts.u8"
+html-template-path: "html_template.html"
+dictionary-path: "dictionaries/cedict_ts.u8"
 
 anki:
-  template:
+  card-type: "Chinese Card Cloze"
+  deck-name: "中文::看句子练习句子"
