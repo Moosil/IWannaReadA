@@ -15,6 +15,8 @@ namespace iwra {
 
 		file_path getRootPath();
 
+		file_path getOcrRootPath();
+
 		file_path getKeyPath();
 
 		file_path getDetModelPath();
@@ -52,6 +54,7 @@ namespace iwra {
 
 		file_path config_path;
 		file_path file_root;
+		file_path ocr_file_root;
 
 		file_path getPath(ModelType model_type, FileType file_type);
 

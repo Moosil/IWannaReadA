@@ -507,12 +507,12 @@ namespace iwra {
 				break;
 			}
 			case 4: {
-				const auto        find_pos     = utf8Find(sentence, utf8::peek_next(character.begin(), character.end()));
+				auto        [find_pos_first, find_pos_second]     = utf8Find(sentence, character);
 				const std::string sentence_add = std::format(
 					"{}{{{{c1::{}}}}}{}",
-					std::string(sentence.begin(), find_pos),
+					std::string(sentence.begin(), find_pos_first),
 					phrase,
-					std::string(find_pos + 1, sentence.end())
+					std::string(find_pos_second, sentence.end())
 				);
 
 				anki->add_note(phrase, pinyin, definition, sentence_add);

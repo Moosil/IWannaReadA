@@ -16,11 +16,6 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(httplib CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
 
-# Check if found
-if(NOT LEXBOR_INCLUDE_DIR OR NOT LEXBOR_LIBRARY)
-    message(FATAL_ERROR "lexbor not found")
-endif()
-
 if(MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
@@ -39,8 +34,6 @@ add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/ocr_engine.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/det.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/det.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/util.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/util.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/rec.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/rec.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
@@ -52,20 +45,22 @@ add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/tooltip.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/implwebview2.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/implwebview2.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/log.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/log.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/anki_connect.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/anki_connect.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/ccedict.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/dict_parser.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/util_utf8.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/util_pinyin.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/util_ocr.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/util.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/util.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/util_ocr.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/util_ocr.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/util_pinyin.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/util_pinyin.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/util_text.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/util_text.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/util_pinyin.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/util_utf8.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/log.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/util_utf8.h
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC src ${LEXBOR_INCLUDE_DIR})

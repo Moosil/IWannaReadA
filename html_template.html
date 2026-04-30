@@ -409,9 +409,9 @@
 								key: "contextmenu",
 								x: event.screenX,
 								y: event.screenY,
-								character: words.flatMap(c => c["simp"]).join(" "),
+								character: words.flat().map(c => c["simp"]).join(""),
 								word: contextWord,
-								pinyin: words.flatMap(c => c["pinyin"]).join(" "),
+								pinyin: words.flat().map(c => c["pinyin"]).join(" "),
 								sentence: contextSentence,
 								definition: definitions.join('\n')
 							};

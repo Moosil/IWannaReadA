@@ -12,6 +12,7 @@ namespace iwra {
 		node{YAML::LoadFile(path.string())},
 		config_path{path} {
 		file_root = getRootPath();
+		ocr_file_root = getOcrRootPath();
 	}
 
 	// ReSharper disable once CppNotAllPathsReturnValue
@@ -56,11 +57,33 @@ namespace iwra {
 		return path;
 	}
 
+	Config::file_path Config::getOcrRootPath() {
+		spdlog::info("looking for ocr root path...");
+		if (node["ocr"]["file-root"]) {
+			file_path path = node["ocr"]["file-root"].as<std::string>();
+			if (!path.empty()) {
+				if (path.is_relative()) {
+					if (file_path res = config_path.parent_path() / path; std::filesystem::is_directory(res)) {
+						spdlog::info("found ocr root path at {}", res.string());
+						return res;
+					}
+				}
+				if (std::filesystem::is_directory(path)) {
+					spdlog::info("found ocr root path at {}", path.string());
+					return path;
+				}
+			}
+		}
+		const file_path path = config_path.parent_path();
+		spdlog::info("not found ocr root path. Defaulting to {}", path.string());
+		return path;
+	}
+
 
 	Config::file_path Config::getKeyPath() {
 		spdlog::info("looking for key path...");
 		if (node["ocr"]["keys-path"]) {
-			if (file_path path = file_root/ node["ocr"]["keys-path"].as<std::string>();
+			if (file_path path = ocr_file_root / node["ocr"]["keys-path"].as<std::string>();
 				std::filesystem::is_regular_file(path)) {
 				spdlog::info("found key path at {}", path.string());
 				return path;
@@ -75,7 +98,7 @@ namespace iwra {
 		const std::string               file_type_name          = enum2String(file_type);
 
 		if (node["ocr"][model_type_name][file_type_name + "-path"]) {
-			if (file_path path = file_root / node["ocr"][model_type_name][file_type_name + "-path"].as<std::string>();
+			if (file_path path = ocr_file_root / node["ocr"][model_type_name][file_type_name + "-path"].as<std::string>();
 				std::filesystem::is_regular_file(path)) {
 				spdlog::info("found key path at {}", path.string());
 				return path;

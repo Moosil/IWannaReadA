@@ -155,7 +155,7 @@ namespace Anki {
 		return client->Post("/", request, "application/json");
 	}
 
-	inline httplib::Result Interface::post_and_receive(const nlohmann::json& json) const {
+	httplib::Result Interface::post_and_receive(const nlohmann::json& json) const {
 		const auto str = json.dump();
 		return post_and_receive(str);
 	}

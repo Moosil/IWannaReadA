@@ -1,13 +1,16 @@
 #include "dict_parser.h"
 
-#include <ranges>
+
 #include <spdlog/spdlog.h>
 #include <utf8/cpp20.h>
+
+#include <ranges>
 #include <regex>
 
 #include "log.h"
 #include "util_pinyin.h"
 #include "util_utf8.h"
+
 
 namespace iwra {
 	std::vector<std::vector<std::string>> split_pinyin(const std::string& pinyin, const bool is_v2_syntax) {
@@ -81,13 +84,14 @@ namespace iwra {
 		// Source - https://stackoverflow.com/a/3072840
 		// Posted by Abhay
 		// Retrieved 2026-04-22, License - CC BY-SA 2.5
-		std::ifstream inFile("file");
+		std::ifstream inFile(file_path);
 		const auto entry_cnt = std::count(std::istreambuf_iterator(inFile),
 				   std::istreambuf_iterator<char>(), '\n');
 		dictionary.reserve(entry_cnt);
 
-		std::string line;
 		startTimeFunction();
+
+		std::string line;
 		while (std::getline(file, line)) {
 			if (!line.empty() && line[0] != '#') {
 				entry curr = parse(line).value();
@@ -137,48 +141,50 @@ namespace iwra {
 		if (end_pinyin_pos == std::string::npos) { return std::nullopt; }
 		pinyin.assign(line, start_pinyin_pos, end_pinyin_pos - start_pinyin_pos);
 
-		if (!is_v2_syntax) {
-			std::erase(simp, ' ');
-			std::erase(trad, ' ');
-		}
-
 		std::size_t hanzi_len = 0;
 		if (is_v2_syntax) {
-			bool is_combined = false;
-			bool alphanum_chain = false;
 			auto it = simp.begin();
 			const auto end = simp.end();
+			enum State { Normal, Combined, AlnumChain };
+			State st = Normal;
 			while (it != end) {
 				const char32_t c = utf8::next(it, end);
-				if (c == U'{') {
-					is_combined = true;
-					if (alphanum_chain) {
-						alphanum_chain = false;
-						hanzi_len++;
+				switch (st) {
+					case Normal: {
+						if (c == U'{') {
+							st = Combined;
+						} else if (isAlphanum(c)) {
+							st = AlnumChain;
+						} else {
+							hanzi_len++;
+						}
+						break;
 					}
-				} else if (c == U'}') {
-					is_combined = false;
-					hanzi_len++;
-				} else if (!is_combined && isAlphanum(c)) {
-					alphanum_chain = true;
-				} else if (!is_combined) {
-					hanzi_len++;
-					if (alphanum_chain && !isAlphanum(c)) {
-						alphanum_chain = false;
-						hanzi_len++;
+					case Combined: {
+						if (c == U'}') {
+							hanzi_len++;
+							st = Normal;
+						}
+						break;
+					}
+					case AlnumChain: {
+						if (!isAlphanum(c)) {
+							if (c == U'{') {
+								st = Combined;
+								hanzi_len++;
+							} else {
+								st = Normal;
+								hanzi_len += 2;
+							}
+						}
 					}
 				}
 			}
-			if (alphanum_chain) {
+			if (st == AlnumChain) {
 				hanzi_len++;
 			}
 		} else {
-			auto it = simp.begin();
-			const auto end = simp.end();
-			while (it != end) {
-				utf8::next(it, end);
-				hanzi_len++;
-			}
+			hanzi_len = utf8Length(simp);
 		}
 
 
@@ -220,7 +226,7 @@ namespace iwra {
 							"·",
 							"·"
 						);
-						utf8::next(simp_it, simp_end);
+						continue;
 					}
 
 					if (isPinyin(curr)) {
