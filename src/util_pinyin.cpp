@@ -6,8 +6,13 @@
 #include <array>
 
 
-bool iwra::isPinyin(const std::string& in) {
-	if (in.back() - U'0' < 1 || in.back() - U'0' > 5) { return false; }
+bool iwra::_isPinyin(const std::string_view& in) {
+	if (in.back() - U'0' < 1 || in.back() - U'0' > 5) {
+		return false;
+	}
+	if (in.size() == 1) {
+		return false;
+	}
 
 	auto       it  = in.begin();
 	const auto end = in.end();
@@ -16,7 +21,7 @@ bool iwra::isPinyin(const std::string& in) {
 	bool vowel_finished = false;
 	while (it != end) {
 		const char32_t c = utf8::next(it, end);
-		if (c == U'a' || c == U'e' || c == U'i' || c == U'o' || c == U'u' || c == U':') {
+		if (c == U'a' || c == U'e' || c == U'i' || c == U'o' || c == U'u' || c == U':' || c== U'A' || c == U'E' || c == U'I' || c == U'O' || c == U'U') {
 			if (vowel_finished) {
 				return false;
 			}
@@ -24,6 +29,24 @@ bool iwra::isPinyin(const std::string& in) {
 		} else if (has_vowel) {
 			vowel_finished = true;
 		}
+	}
+	return true;
+}
+
+bool iwra::isPinyin(const std::string_view& in) {
+	std::size_t start = 0;
+	std::size_t end = in.find_first_of("12345", start);
+
+	if (end == std::string_view::npos || end == 0) {
+		return false;
+	}
+
+	while (start != in.size()) {
+		if (!_isPinyin(in.substr(start, end - start + 1))) {
+			return false;
+		}
+		start = end + 1;
+		end = in.find_first_of("12345", start);
 	}
 	return true;
 }
@@ -67,34 +90,51 @@ std::string iwra::pinyinNumberToTone(const std::string& in_pinyin) {
 			"ē","é","ĕ","è","e",
 			"ī","í","ǐ","ì","i",
 			"ō","ó","ǒ","ò","o",
-			"ū","ú","ǔ","ù","",
-			"ǖ","ǘ","ǚ","ǜ","ü"
+			"ū","ú","ǔ","ù","u",
+			"ǖ","ǘ","ǚ","ǜ","ü",
+			"Ā","Á","Ǎ","À","A",
+			"Ē","É","Ě","È","E",
+			"Ī","Í","Ǐ","Ì","I",
+			"Ō","Ó","Ǒ","Ò","O",
+			"Ū","Ú","Ǔ","Ù","U",
+			"Ǖ","Ǘ","Ǚ","Ǜ","Ü",
 		};
 		if (const auto it0 = curr.find('a');
 			it0 != std::string::npos) {
 			curr.replace(it0, 1, tone_lut[number]);
-		}
-		else if (const auto it1 = curr.find('e');
+		} else if (const auto it1 = curr.find('A');
 			it1 != std::string::npos) {
-			curr.replace(it1, 1, tone_lut[number + 5]);
-		}
-		else if (const auto it2 = curr.find("ou");
+			curr.replace(it1, 1, tone_lut[number + 30]);
+		} else if (const auto it2 = curr.find('e');
 			it2 != std::string::npos) {
-			curr.replace(it2, 1, tone_lut[number + 15]);
-		}
-		else if (const auto it3 = curr.find_last_of("aeiou:");
+			curr.replace(it2, 1, tone_lut[number + 5]);
+		} else if (const auto it3 = curr.find('E');
 			it3 != std::string::npos) {
-			const char32_t    letter = curr[it3];
+			curr.replace(it3, 1, tone_lut[number + 35]);
+		} else if (const auto it4 = curr.find("ou");
+			it4 != std::string::npos) {
+			curr.replace(it4, 1, tone_lut[number + 15]);
+		} else if (const auto it5 = curr.find("Ou");
+			it5 != std::string::npos) {
+			curr.replace(it5, 1, tone_lut[number + 45]);
+		} else if (const auto it6 = curr.find_last_of("aeiou:");
+			it6 != std::string::npos) {
+			const char32_t    letter = curr[it6];
 			const std::size_t offset =
 					(letter == 'a') ?  0 :
 					(letter == 'e') ?  5 :
 					(letter == 'i') ? 10 :
 					(letter == 'o') ? 15 :
 					(letter == 'u') ? 20 :
-					25 ;
+					(letter == ':') ? (curr[it6] == 'u' ? 25 : 55) :
+					(letter == 'A') ? 30 :
+					(letter == 'E') ? 35 :
+					(letter == 'I') ? 40 :
+					(letter == 'O') ? 45 :
+					(letter == 'U') ? 50 : 10000000000000;
 
 			const std::size_t v_offset = (letter == ':') ? 1 : 0;
-			curr.replace(it3 - v_offset, 1 + v_offset, tone_lut[number + offset]);
+			curr.replace(it6 - v_offset, 1 + v_offset, tone_lut[number + offset]);
 		}
 		out += curr + ' ';
 	}

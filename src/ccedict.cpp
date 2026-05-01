@@ -3,6 +3,7 @@
 
 #include <spdlog/spdlog.h>
 #include <utf8/cpp20.h>
+#include <mio/mmap.hpp>
 
 #include <ranges>
 #include <regex>
@@ -13,7 +14,7 @@
 
 
 namespace iwra {
-	std::vector<std::vector<std::string>> split_pinyin(const std::string& pinyin, const bool is_v2_syntax) {
+	std::vector<std::vector<std::string>> split_pinyin(const std::string_view& pinyin, const bool is_v2_syntax) {
 		std::vector<std::vector<std::string>> res;
 		std::vector<std::string> curr_word;
 		std::string carry;
@@ -21,48 +22,66 @@ namespace iwra {
 		auto it = pinyin.begin();
 		const auto end = pinyin.end();
 
-		bool is_combined = false;
-		bool is_connected = false;
+		enum State {Normal, Combined, Connected};
+
+		State st = Normal;
 
 		while (it != end) {
 			const char32_t c = utf8::next(it, end);
-			if (c == U'{') {
-				is_combined = true;
-			} else if (c == U'}') {
-				is_combined = false;
-			} else if (c == U' ') {
+			if (c == U' ') {
+				st = Normal;
 				if (!carry.empty()) {
-					if (!is_v2_syntax && isTone(carry.back())) {
-						curr_word.emplace_back(carry);
-						carry.clear();
-					} else {
-						if (is_connected) {
-							curr_word.emplace_back(carry);
-						} else {
-							auto carry_it = carry.begin();
-							const auto carry_end = carry.end();
-							while (carry_it != carry_end) {
-								curr_word.emplace_back(toUtf8(utf8::next(carry_it, carry_end)));
-							}
-						}
-					}
+					curr_word.emplace_back(carry);
 					carry.clear();
 				}
 
 				res.emplace_back(curr_word);
-				curr_word = {};
-			} else if (is_v2_syntax && !is_combined && (isTone(c) || c == U'-')) {
-				if (isTone(c)) {
-					curr_word.emplace_back(carry + toUtf8(c));
-				} else if (c == U'-') {
-					if (!carry.empty() && is_connected) {
-						curr_word.emplace_back(carry);
+				curr_word.clear();
+				continue;
+			}
+			switch (st) {
+				case Normal: {
+					if (c == U'{') {
+						st = Combined;
+						break;
 					}
-					is_connected = true;
+					if (is_v2_syntax) {
+						if (isTone(c)) {
+							curr_word.emplace_back(carry + toUtf8(c));
+							carry.clear();
+							break;
+						}
+						if (c == U'-') {
+							if (!carry.empty()) {
+								curr_word.emplace_back(carry);
+								carry.clear();
+							}
+							st = Connected;
+							break;
+						}
+					}
+					carry += toUtf8(c);
+					break;
 				}
-				carry.clear();
-			} else {
-				carry += toUtf8(c);
+				case Combined: {
+					if (c == U'}') {
+						st = Normal;
+						break;
+					}
+					carry += toUtf8(c);
+					break;
+				}
+				case Connected: {
+					if (c == U'-') {
+						if (!carry.empty()) {
+							curr_word.emplace_back(carry);
+							carry.clear();
+						}
+						break;
+					}
+					carry += toUtf8(c);
+					break;
+				}
 			}
 		}
 		if (!carry.empty()) {
@@ -75,42 +94,36 @@ namespace iwra {
 	}
 
 	bool DictParser::load(const std::filesystem::path& file_path) {
-		file.open(file_path, std::ios::binary);
-		if (!file) {
-			spdlog::error("ccedict file did not open at: {}", file_path.string());
-			return false;
-		}
-
-		// Source - https://stackoverflow.com/a/3072840
-		// Posted by Abhay
-		// Retrieved 2026-04-22, License - CC BY-SA 2.5
-		std::ifstream inFile(file_path);
-		const auto entry_cnt = std::count(std::istreambuf_iterator(inFile),
-				   std::istreambuf_iterator<char>(), '\n');
-		dictionary.reserve(entry_cnt);
-
 		startTimeFunction();
-
-		std::string line;
-		while (std::getline(file, line)) {
-			if (!line.empty() && line[0] != '#') {
-				entry curr = parse(line).value();
-				const std::string simp = curr.get_simp();
-				const std::string trad = curr.get_trad();
-				if (const auto simp_it = dictionary.find(simp); simp_it != dictionary.end()) {
-					simp_it->second.push_back(curr);
-				} else {
-					dictionary.insert({simp, {curr}});
-				}
-				if (simp != trad) {
-					if (const auto trad_it = dictionary.find(trad); trad_it != dictionary.end()) {
-						trad_it->second.push_back(curr);
-					} else {
-						dictionary.insert({trad, {curr}});
-					}
+		std::vector<std::string_view> lines;
+		mio::mmap_source mmap(file_path.string());
+		auto start = mmap.begin();
+		auto it = std::ranges::find(mmap, '\r');
+		const auto end = mmap.end();
+		while (it != end) {
+			if (*start != '#') {
+				if (std::string_view line = {start, it}; !line.empty()) {
+					lines.emplace_back(line);
 				}
 			}
+			start = it + 2;
+			it = std::find(start, end, '\r');
 		}
+		std::mutex mutex;
+
+		#pragma omp parallel for
+		for (int i = 0; i < lines.size(); i++) {
+			entry curr = parse(lines[i]).value();
+			const std::string simp = curr.get_simp();
+			const std::string trad = curr.get_trad();
+			mutex.lock();
+			dictionary[simp].emplace_back(curr);
+			if (simp != trad) {
+				dictionary[trad].emplace_back(curr);
+			}
+			mutex.unlock();
+		}
+
 		for (auto& value : dictionary | std::views::values) {
 			std::ranges::reverse(value);
 		}
@@ -118,19 +131,16 @@ namespace iwra {
 		return true;
 	}
 
-	std::optional<DictParser::entry> DictParser::parse(const std::string& line) {
-		entry res{};
-		std::string trad;
-		std::string simp;
-		std::string pinyin;
+	std::optional<DictParser::entry> DictParser::parse(const std::string_view& line) {
+		entry            res{};
 
 		const std::string::size_type end_trad_pos = line.find(' ');
 		if (end_trad_pos == std::string::npos) { return std::nullopt; }
-		trad.assign(line, 0, end_trad_pos);
+		std::string_view trad = line.substr(0, end_trad_pos);
 
 		const std::string::size_type end_simp_pos = line.find(' ', end_trad_pos+1);
 		if (end_simp_pos == std::string::npos) { return std::nullopt; }
-		simp.assign(line, end_trad_pos+1, end_simp_pos - end_trad_pos-1);
+		std::string_view simp = line.substr(end_trad_pos + 1, end_simp_pos - end_trad_pos - 1);
 
 		const std::string::size_type sb = line.find('[');
 		if (sb == std::string::npos) { return std::nullopt; }
@@ -139,121 +149,67 @@ namespace iwra {
 
 		const std::string::size_type end_pinyin_pos = (is_v2_syntax) ? line.find("]]", start_pinyin_pos) : line.find(']', start_pinyin_pos);
 		if (end_pinyin_pos == std::string::npos) { return std::nullopt; }
-		pinyin.assign(line, start_pinyin_pos, end_pinyin_pos - start_pinyin_pos);
+		const std::string_view pinyin = line.substr(start_pinyin_pos, end_pinyin_pos - start_pinyin_pos);
 
-		std::size_t hanzi_len = 0;
-		if (is_v2_syntax) {
-			auto it = simp.begin();
-			const auto end = simp.end();
-			enum State { Normal, Combined, AlnumChain };
-			State st = Normal;
-			while (it != end) {
-				const char32_t c = utf8::next(it, end);
-				switch (st) {
-					case Normal: {
-						if (c == U'{') {
-							st = Combined;
-						} else if (isAlphanum(c)) {
-							st = AlnumChain;
-						} else {
-							hanzi_len++;
-						}
-						break;
-					}
-					case Combined: {
-						if (c == U'}') {
-							hanzi_len++;
-							st = Normal;
-						}
-						break;
-					}
-					case AlnumChain: {
-						if (!isAlphanum(c)) {
-							if (c == U'{') {
-								st = Combined;
-								hanzi_len++;
-							} else {
-								st = Normal;
-								hanzi_len += 2;
-							}
-						}
-					}
+		const auto pinyin_split = split_pinyin(pinyin, is_v2_syntax);
+		auto simp_it = simp.begin();
+		const auto simp_end = simp.end();
+		auto trad_it = trad.begin();
+		const auto trad_end = trad.end();
+		for (auto& curr_split : pinyin_split) {
+			word curr_word{};
+			for (std::size_t i = 0; i < curr_split.size(); i++) {
+				const std::string& curr = curr_split[i];
+				char32_t curr_simp = utf8::next(simp_it, simp_end);
+				char32_t curr_trad = utf8::next(trad_it, trad_end);
+
+				if (curr_simp == U'{' || curr_simp == U'}') {
+					curr_simp = utf8::next(simp_it, simp_end);
+					curr_trad = utf8::next(trad_it, trad_end);
 				}
-			}
-			if (st == AlnumChain) {
-				hanzi_len++;
-			}
-		} else {
-			hanzi_len = utf8Length(simp);
-		}
 
-
-		auto pinyin_split = split_pinyin(pinyin, is_v2_syntax);
-		std::size_t pinyin_len = 0;
-		for (const auto& v : pinyin_split) pinyin_len += v.size();
-		if (pinyin_len == hanzi_len) {
-			auto simp_it = simp.begin();
-			const auto simp_end = simp.end();
-			auto trad_it = trad.begin();
-			const auto trad_end = trad.end();
-			for (const auto& v : pinyin_split) {
-				word curr_word{};
-				for (const auto& curr : v) {
+				// punctuation check
+				if (curr_simp == U'·') {
 					curr_word.characters.emplace_back(
-						toUtf8(utf8::next(simp_it, simp_end)),
-						toUtf8(utf8::next(trad_it, trad_end)),
-						pinyinNumberToTone(curr)
+						"·",
+						"·",
+						"·"
 					);
-				}
-				res.word.emplace_back(curr_word);
-			}
-		} else {
-			auto simp_it = simp.begin();
-			const auto simp_end = simp.end();
-			auto trad_it = trad.begin();
-			const auto trad_end = trad.end();
-			for (auto& curr_split : pinyin_split) {
-				word curr_word{};
-				for (std::size_t i = 0; i < curr_split.size(); i++) {
-					const std::string& curr = curr_split[i];
-					const char32_t curr_simp = utf8::next(simp_it, simp_end);
-					const char32_t curr_trad = utf8::next(trad_it, trad_end);
-
-					// punctuation check
-					if (curr_simp == U'·' && utf8Find(curr, U'·') != curr.end()) {
-						curr_word.characters.emplace_back(
-							"·",
-							"·",
-							"·"
-						);
+					if (curr == "·") {
 						continue;
 					}
-
-					if (isPinyin(curr)) {
-						curr_word.characters.emplace_back(
-							toUtf8(curr_trad),
-							toUtf8(curr_simp),
-							pinyinNumberToTone(curr)
-						);
-					} else {
-						std::size_t curr_len = curr.length();
-
-						std::string simp_tot = toUtf8(curr_simp);
-						std::string trad_tot = toUtf8(curr_trad);
-						for (; i < std::min(i + curr_len, curr_split.size()); i++) {
-							simp_tot += toUtf8(utf8::next(simp_it, simp_end));
-							trad_tot += toUtf8(utf8::next(trad_it, trad_end));
-						}
-
-						curr_word.characters.emplace_back(
-							simp_tot,
-							trad_tot,
-							pinyinNumberToTone(curr)
-						);
-					}
+					curr_simp = utf8::next(simp_it, simp_end);
+					curr_trad = utf8::next(trad_it, trad_end);
 				}
-				res.word.emplace_back(curr_word);
+
+				if (curr_simp == U'{' || curr_simp == U'}') {
+					curr_simp = utf8::next(simp_it, simp_end);
+					curr_trad = utf8::next(trad_it, trad_end);
+				}
+
+				if (isPinyin(curr)) {
+					curr_word.characters.emplace_back(
+						toUtf8(curr_trad),
+						toUtf8(curr_simp),
+						pinyinNumberToTone(curr)
+					);
+				} else {
+					const std::size_t curr_len = curr.length();
+					std::string simp_tot = toUtf8(curr_simp);
+					std::string trad_tot = toUtf8(curr_trad);
+					for (; i < std::min(i + curr_len - 1, curr_split.size()); i++) {
+						simp_tot += toUtf8(utf8::next(simp_it, simp_end));
+						trad_tot += toUtf8(utf8::next(trad_it, trad_end));
+					}
+
+					curr_word.characters.emplace_back(
+						simp_tot,
+						trad_tot,
+						curr
+					);
+				}
 			}
+			res.word.emplace_back(curr_word);
 		}
 
 		// spdlog::info("{}/{} [{}]", res.get_simp(), res.get_trad(), res.get_pinyin());

@@ -5,7 +5,11 @@
 
 
 namespace iwra {
-	bool isPinyin(const std::string& in);
+	bool isPinyin(const std::string_view& in);
+
+	bool _isPinyin(const std::string_view& in);
+
+	bool isTone(const std::string_view& c);
 
 	bool isTone(char c);
 

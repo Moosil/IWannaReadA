@@ -41,5 +41,8 @@
   }, {
     "name" : "darts-clone",
     "version>=" : "1767ab87cffe#3"
+  }, {
+    "name" : "mio",
+    "version>=" : "2023-03-03"
   } ]
 }

@@ -65,15 +65,16 @@ namespace iwra {
 			[[nodiscard]] std::string get_pinyin() const {
 				std::string pinyin;
 				for (const auto& w : word) {
-					pinyin += w.get_pinyin();
+					pinyin += w.get_pinyin() + ' ';
 				}
+				pinyin.pop_back();
 				return pinyin;
 			}
 		};
 
 		bool load(const std::filesystem::path& file_path);
 
-		static std::optional<entry> parse(const std::string& line);
+		static std::optional<entry> parse(const std::string_view& line);
 
 		std::vector<entry> get_entry(const std::string& hanzi);
 
