@@ -109,19 +109,20 @@ namespace iwra {
 			start = it + 2;
 			it = std::find(start, end, '\r');
 		}
-		std::mutex mutex;
+		std::vector<entry> parsed(lines.size());
 
 		#pragma omp parallel for
 		for (int i = 0; i < lines.size(); i++) {
-			entry curr = parse(lines[i]).value();
+			parsed[i] = parse(lines[i]).value();
+		}
+
+		for (const auto& curr : parsed) {
 			const std::string simp = curr.get_simp();
 			const std::string trad = curr.get_trad();
-			mutex.lock();
 			dictionary[simp].emplace_back(curr);
 			if (simp != trad) {
 				dictionary[trad].emplace_back(curr);
 			}
-			mutex.unlock();
 		}
 
 		for (auto& value : dictionary | std::views::values) {
