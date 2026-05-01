@@ -109,7 +109,9 @@ namespace iwra {
 			start = it + 2;
 			it = std::find(start, end, '\r');
 		}
-		std::vector<entry> parsed(lines.size());
+		const std::size_t min_length = lines.size();
+		std::vector<entry> parsed(min_length);
+		dictionary.reserve(min_length);
 
 		#pragma omp parallel for
 		for (int i = 0; i < lines.size(); i++) {

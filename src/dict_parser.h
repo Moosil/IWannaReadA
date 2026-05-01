@@ -78,7 +78,6 @@ namespace iwra {
 
 		std::vector<entry> get_entry(const std::string& hanzi);
 
-		std::ifstream file;
 		std::unordered_map<std::string, std::vector<entry>> dictionary;
 	};
 }
