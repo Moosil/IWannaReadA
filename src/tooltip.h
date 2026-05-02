@@ -109,6 +109,8 @@ namespace iwra {
 
 		void onNavigationComplete();
 
+		void addAnkiCard(const std::string& character, const std::string& phrase, const std::string& pinyin, const std::string& sentence, const std::string& definition) const;
+
 		void createContextMenu(int x, int y, const std::string& character, const std::string& phrase, const std::string& pinyin, const std::string&
 		                       sentence,
 		                       const std::string& definition

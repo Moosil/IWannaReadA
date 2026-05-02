@@ -50,6 +50,21 @@
 				gap: 4px;
 			}
 
+			.gui-button-group {
+				position: absolute;
+				top: 10px;
+				right: 10px;
+			}
+
+			.anki-button {
+				background-color: var(--surface0);
+				color: var(--text);
+				text-align: center;
+				cursor: pointer;
+				border: 2px solid var(--surface1);
+				align-self: center;
+			}
+
 			.headword {
 				display: inline-flex;
 				gap: 8px;
@@ -297,12 +312,60 @@
 			}
 
 			/**
+			 * @param {Element} element
+			 * @param {Array} words
+			 * @param {Array} definitions
+			 * @param {string} contextWord
+			 * @param {string} contextSentence
+			 */
+			function fillAnkiButton(element, words, definitions, contextWord, contextSentence) {
+				element.addEventListener("click", () => {
+					const jsonObject = {
+						key: "ankiadd",
+						character: words.flat().map(c => c["simp"]).join(""),
+						word: contextWord,
+						pinyin: words.flat().map(c => c["pinyin"]).join(" "),
+						sentence: contextSentence,
+						definition: definitions.join('\n')
+					};
+					// noinspection JSUnresolvedReference
+					window.chrome.webview.postMessage(jsonObject); // is part of Microsoft Edge Webview2
+				});
+				element.textContent = "+";
+			}
+
+			/**
+			 * @param {Element} element
+			 * @param {Array} words
+			 * @param {Array} definitions
+			 * @param {string} contextWord
+			 * @param {string} contextSentence
+			 */
+			function fillGuiButtonList(element, words, definitions, contextWord, contextSentence) {
+				const ankiButtonList = element.getElementsByClassName("anki-button");
+				if (ankiButtonList.length === 0) {
+					const newAnkiButton = document.createElement("button");
+					newAnkiButton.classList.add("anki-button");
+					element.appendChild(newAnkiButton);
+					newAnkiButton.setAttribute("title", "add anki card");
+					fillAnkiButton(newAnkiButton, words, definitions, contextWord, contextSentence);
+				} else {
+					fillAnkiButton(ankiButtonList[0], words, definitions, contextWord, contextSentence);
+				}
+			}
+
+			/**
              * @param {Element} element
              * @param {Array} words
+             * @param {Array} definitions
+             * @param {string} contextWord
+             * @param {string} contextSentence
              */
-			function fillHeadwords(element, words) {
+			function fillHeadwords(element, words, definitions, contextWord, contextSentence) {
 				fillHeadword(element.firstElementChild, words, "simp");
-				fillHeadword(element.lastElementChild, words, "trad");
+				fillHeadword(element.firstElementChild.nextElementSibling, words, "trad");
+				const guiButtonList = element.lastElementChild;
+				fillGuiButtonList(guiButtonList, words, definitions, contextWord, contextSentence);
 			}
 
 			/**
@@ -346,8 +409,10 @@
              * @param {Element} entry
              * @param {Array} words
              * @param {Array} definitions
+             * @param {string} contextWord
+             * @param {string} contextSentence
              */
-			function fillEntry(entry, words, definitions) {
+			function fillEntry(entry, words, definitions, contextWord, contextSentence) {
 				{
 					const headwordList = entry.getElementsByClassName("headword");
 					if (headwordList.length === 0) {
@@ -358,9 +423,11 @@
 						newHeadword.appendChild(document.createElement("span"));
 						newHeadword.firstElementChild.classList.add("spacing");
 						newHeadword.lastElementChild.classList.add("spacing");
-						fillHeadwords(newHeadword, words);
+						newHeadword.appendChild(document.createElement("span"));
+						newHeadword.lastElementChild.classList.add("gui-button-group");
+						fillHeadwords(newHeadword, words, definitions, contextWord, contextSentence);
 					} else {
-						fillHeadwords(headwordList[0], words);
+						fillHeadwords(headwordList[0], words, definitions, contextWord, contextSentence);
 					}
 				}
 
@@ -421,10 +488,10 @@
 						});
 
 						entryContainer.appendChild(newEntry);
-						fillEntry(newEntry, words, definitions);
+						fillEntry(newEntry, words, definitions, contextWord, contextSentence);
 					} else {
 						entryContainer.children[i].classList.remove("hidden");
-						fillEntry(entryList[i], words, definitions);
+						fillEntry(entryList[i], words, definitions, contextWord, contextSentence);
 					}
 				}
 

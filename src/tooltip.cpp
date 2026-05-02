@@ -355,7 +355,7 @@ namespace iwra {
 		const auto        script_utf16  = utf8::utf8to16(script);
 
 		width = std::max(min_width, max_webpage_width);
-		spdlog::info("script: {}", script);
+		// spdlog::info("script: {}", script);
 
 		if (dict_data.height == -1) {
 			height = min_height;
@@ -450,6 +450,14 @@ namespace iwra {
 					json.at("sentence"),
 					json.at("definition")
 				);
+			} else if (it.value() == "ankiadd") {
+				addAnkiCard(
+					json.at("character"),
+					json.at("word"),
+					json.at("pinyin"),
+					json.at("sentence"),
+					json.at("definition")
+				);
 			} else {
 				//mousedown
 			}
@@ -467,6 +475,24 @@ namespace iwra {
 			&token
 		);
 		log(add_msg_err, "ICoreWebView2::add_WebMessageReceived", ERR_LEVEL::WARN);
+	}
+
+	void TooltipWnd::addAnkiCard(
+		const std::string& character,
+		const std::string& phrase,
+		const std::string& pinyin,
+		const std::string& sentence,
+		const std::string& definition
+	) const {
+		auto        [find_pos_first, find_pos_second]     = utf8Find(sentence, character);
+		const std::string sentence_add = std::format(
+			"{}{{{{c1::{}}}}}{}",
+			std::string(sentence.begin(), find_pos_first),
+			phrase,
+			std::string(find_pos_second, sentence.end())
+		);
+
+		anki->add_note(phrase, pinyin, definition, sentence_add);
 	}
 
 
@@ -507,15 +533,7 @@ namespace iwra {
 				break;
 			}
 			case 4: {
-				auto        [find_pos_first, find_pos_second]     = utf8Find(sentence, character);
-				const std::string sentence_add = std::format(
-					"{}{{{{c1::{}}}}}{}",
-					std::string(sentence.begin(), find_pos_first),
-					phrase,
-					std::string(find_pos_second, sentence.end())
-				);
-
-				anki->add_note(phrase, pinyin, definition, sentence_add);
+				addAnkiCard(character, phrase, pinyin, sentence, definition);
 			}
 			default:
 				break;
