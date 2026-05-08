@@ -13,7 +13,6 @@
 #include <wrl/event.h>
 
 #include "dict_parser.h"
-#include "implwebview2.h"
 #include "log.h"
 #include "util.h"
 #include "util_ocr.h"
@@ -33,8 +32,6 @@ namespace iwra {
 
 		constexpr int style           = WS_POPUP;
 		constexpr int extended_styles = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_TRANSPARENT;
-		width                    = min_width;
-		height                   = min_height;
 
 		hwnd = CreateWindowEx(
 			extended_styles,
@@ -100,15 +97,12 @@ namespace iwra {
 		wv_init->try_init_env();
 	}
 
-	void TooltipWnd::initCurrDict() {
-		if (!hover_word || !hover_block || results.empty())
-			return;
-
-		spdlog::info("inited dict of {}", hover_word->text);
+	bool TooltipWnd::initCurrDict() {
+		spdlog::info("inited dict of {}", current_word->text);
 		std::string       lookup_string;
-		const std::string first_char = hover_word->text;
+		const std::string first_char = current_word->text;
 		dictionary_data[first_char]  = {};
-		for (const auto* curr = hover_word; curr != hover_block->results.data() + hover_block->results.size(); ++curr) {
+		for (auto curr = current_word; curr != current_block->results.end()._Ptr; ++curr) {
 			lookup_string += curr->text;
 			if (auto dict_entry = parser->get_entry(lookup_string);
 				!dict_entry.empty()) {
@@ -118,6 +112,7 @@ namespace iwra {
 			}
 		};
 		std::ranges::reverse(dictionary_data[first_char].entries);
+		return !dictionary_data[first_char].entries.empty();
 	}
 
 	std::vector<OCRResultPacked> TooltipWnd::ocrSplitText(const Poly2I& rect, const Text& text, const bool horizontal) {
@@ -186,7 +181,7 @@ namespace iwra {
 			if (intersections.empty()) {
 				std::vector<cv::Point> poly{};
 				poly.append_range(moved_rect);
-				out.emplace_back(split_line, horizontal, poly);
+				out.emplace_back(split_line, poly, horizontal);
 			} else {
 				if (horizontal) {
 					std::ranges::reverse(intersections);
@@ -214,44 +209,105 @@ namespace iwra {
 		}
 	}
 
-	void TooltipWnd::updateWindowSize() const {
-		SetWindowPos(
-			hwnd,
-			HWND_TOPMOST,
-			0,
-			0,
-			width,
-			height,
-			SWP_NOZORDER | SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOREDRAW
-		);
-		InvalidateRect(hwnd, nullptr, FALSE);
-	}
-
 	void TooltipWnd::updateWindowPosition() const {
-		if (!hover_word)
+		if (!current_word) {
 			return;
+		}
 
 		const auto [screen_width, screen_height] = getScreenSize();
 
 		int top;
 		// choose above or below hover word based on which haas more room
-		if (const int room_left_top = getTop(hover_word->rect);
-			screen_height - getBottom(hover_word->rect) > room_left_top) {
+		if (const int room_left_top = getTop(current_word->rect);
+			screen_height - getBottom(current_word->rect) > room_left_top) {
 			// window is too tall (it goes above top of screen)
-			top = getBottom(hover_word->rect) + height;
+			top = getBottom(current_word->rect) + height;
 		} else {
 			// window can extend up and is below screen
 			top = room_left_top;
 		}
 		int left;
-		if (getRight(hover_word->rect) + width > screen_width) {
+		if (getRight(current_word->rect) + width > screen_width) {
 			// window is too width (it goes past right of screen)
 			left = screen_width - width;
 		} else {
 			// window can extend right and is left of screen edge
-			left = getLeft(hover_word->rect);
+			left = getLeft(current_word->rect);
 		}
 		SetWindowPos(hwnd, HWND_TOPMOST, left, top - height, -1, -1, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+	}
+
+	const DictionaryData* TooltipWnd::getDictDataOrInit(const std::string& key) {
+		const auto it = dictionary_data.find(key);
+		if (it == dictionary_data.end()) {
+			if (!initCurrDict()) {
+				return nullptr;
+			}
+			return &dictionary_data.at(key);
+		}
+
+		if (it->second.entries.empty()) {
+			if (!initCurrDict()) {
+				return nullptr;
+			}
+			return &dictionary_data.at(key);
+		}
+		return &it->second;
+	}
+
+	void TooltipWnd::updateWindowEntry(const DictionaryData* dict_data, const std::string& phrase, const std::string& sentence) const {
+		nlohmann::json page_data = nlohmann::json::array();
+		for (const auto& entry : dict_data->entries) {
+			// if entry.simp is a prefix of the hovered phrase
+			if (!phrase.starts_with(entry.get_simp()) && !phrase.starts_with(entry.get_trad())) {
+				spdlog::warn("{} doesn't begin with {} or {}, thus discarding", phrase, entry.get_simp(), entry.get_trad());
+				continue;
+			}
+
+			nlohmann::json def_json = nlohmann::json::array();
+			for (const auto& def : entry.definitions) {
+				def_json.push_back(def);
+			}
+
+			nlohmann::json words = nlohmann::json::array();
+			for (const auto& [characters] : entry.word) {
+				nlohmann::json word_json = nlohmann::json::array();
+				for (const auto& [simp, trad, pinyin] : characters) {
+					nlohmann::json char_json = nlohmann::json::object();
+					char_json["simp"]        = simp;
+					char_json["trad"]        = trad;
+					char_json["pinyin"]      = pinyin;
+					word_json.push_back(char_json);
+				}
+				words.push_back(word_json);
+			}
+
+			nlohmann::json entry_json = nlohmann::json::object();
+			entry_json["words"] = words;
+			entry_json["def"]         = def_json;
+			entry_json["c_word"]      = dict_data->phrase;
+			entry_json["c_sent"]      = sentence;
+			page_data.push_back(entry_json);
+		}
+		const std::string page_data_str = page_data.dump();
+		const std::string script        = "setPage(" + page_data_str + ")";
+		const auto        script_utf16  = utf8::utf8to16(script);
+
+		// spdlog::info("script: {}", script);
+
+		const HRESULT err = webview->ExecuteScript(
+			utf8ToWide(script).c_str(),
+			Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+				// ReSharper disable once CppParameterMayBeConst
+				[](HRESULT errorCode0, LPCWSTR resultObjectAsJson) -> HRESULT {
+					log(errorCode0, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
+					return S_OK;
+				}
+			).Get()
+		);
+		log(err, "ICoreWebView2::ExecuteScript", ERR_LEVEL::FATAL);
+
+		updateWindowPosition();
 	}
 
 	std::vector<std::string> splitHanzi(const std::string& hanzi, const std::string& pinyin) {
@@ -288,148 +344,29 @@ namespace iwra {
 	}
 
 	void TooltipWnd::refreshWindow() {
-		need_refresh = false;
-		if (!is_hovering)
-			return;
-
-		if (!inited_web_view2)
-			return;
-
-		if (!hover_word)
-			return;
-
-		const auto it = dictionary_data.find(hover_word->text);
-		if (it == dictionary_data.end()) {
-			initCurrDict();
-			need_refresh = true;
+		if (!inited_web_view2) {
 			return;
 		}
-		// if (it != dictionary_data.end()) {
-		// 	spdlog::info(it->first);
-		// }
 
-		if (it->second.entries.empty()) {
-			//TODO deal with dictionary having that entry but nothing in that entry
-			spdlog::warn("{}'s dictionary had entry but no contents: NOT IMPLEMENTED", hover_word->text);
+		if (!current_word) {
+			return;
 		}
 
-		spdlog::info("loading {}", getPhrase(hover_word, hover_block));
-		auto&          dict_data = it->second;
-		nlohmann::json page_data = nlohmann::json::array();
-		for (const auto& entry : dict_data.entries) {
-			spdlog::info("adding {} to tooltip", entry.get_simp());
-			// if entry.simp is a prefix of the hovered phrase
-			if (const std::string phrase = getPhrase(hover_word, hover_block);
-				!phrase.starts_with(entry.get_simp()) && !phrase.starts_with(entry.get_trad())) {
-				spdlog::info("nvm");
-				continue;
-			}
-
-			nlohmann::json def_json = nlohmann::json::array();
-			for (const auto& def : entry.definitions) {
-				def_json.push_back(def);
-			}
-
-			nlohmann::json words = nlohmann::json::array();
-			for (const auto& [characters] : entry.word) {
-				nlohmann::json word_json = nlohmann::json::array();
-				for (const auto& [simp, trad, pinyin] : characters) {
-					nlohmann::json char_json = nlohmann::json::object();
-					char_json["simp"]        = simp;
-					char_json["trad"]        = trad;
-					char_json["pinyin"]      = pinyin;
-					word_json.push_back(char_json);
-				}
-				words.push_back(word_json);
-			}
-
-			nlohmann::json entry_json = nlohmann::json::object();
-			entry_json["words"] = words;
-			entry_json["def"]         = def_json;
-			entry_json["c_word"]      = dict_data.phrase;
-			entry_json["c_sent"]      = getSentence(hover_block);
-			page_data.push_back(entry_json);
+		if (current_phrase == current_word->text) {
+			return;
 		}
-		const std::string page_data_str = page_data.dump();
-		const std::string script        = "setPage(" + page_data_str + ")";
-		const auto        script_utf16  = utf8::utf8to16(script);
 
-		width = std::max(min_width, max_webpage_width);
-		// spdlog::info("script: {}", script);
-
-		if (dict_data.height == -1) {
-			height = min_height;
-			updateWindowSize();
-			updateWindowPosition();
-			const Poly2I  hover_word_rect = hover_word->rect;
-			const HRESULT err0            = webview->ExecuteScript(
-				utf8ToWide(script).c_str(),
-				Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
-					// ReSharper disable once CppParameterMayBeConst
-					[this, &dict_data, &hover_word_rect](HRESULT errorCode0, LPCWSTR resultObjectAsJson) -> HRESULT {
-						log(errorCode0, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
-						const HRESULT err1 = webview->ExecuteScript(
-							get_height_script,
-							Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
-								// ReSharper disable CppParameterMayBeConst
-								[this, &dict_data, &hover_word_rect](HRESULT errorCode1, LPCWSTR result) -> HRESULT {
-									// ReSharper restore CppParameterMayBeConst
-									log(errorCode1, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
-									if (SUCCEEDED(errorCode1) && result && is_hovering) {
-										const int calc_webpage_height = _wtoi(result);
-
-										height = std::clamp(
-											std::min(
-												calc_webpage_height,
-												std::max(
-													getTop(hover_word_rect),
-													getScreenSize().second - getBottom(hover_word_rect)
-												)
-											),
-											min_height,
-											max_height
-										);
-										dict_data.height = calc_webpage_height;
-										updateWindowSize();
-										updateWindowPosition();
-									}
-									return S_OK;
-								}
-							).Get()
-						);
-						log(err1, "ICoreWebView2::ExecuteScript", ERR_LEVEL::WARN);
-						return S_OK;
-					}
-				).Get()
-			);
-			log(err0, "ICoreWebView2::ExecuteScript", ERR_LEVEL::FATAL);
-		} else {
-			const HRESULT err0 = webview->ExecuteScript(
-				utf8ToWide(script).c_str(),
-				Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
-					// ReSharper disable once CppParameterMayBeConst
-					[](HRESULT errorCode0, LPCWSTR resultObjectAsJson) -> HRESULT {
-						log(errorCode0, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
-						return S_OK;
-					}
-				).Get()
-			);
-			log(err0, "ICoreWebView2::ExecuteScript", ERR_LEVEL::FATAL);
-
-			height = std::clamp(
-				std::min(
-					dict_data.height,
-					std::max(
-						getTop(hover_word->rect),
-						getScreenSize().second - getBottom(hover_word->rect)
-					)
-				),
-				min_height,
-				max_height
-			);
-			updateWindowSize();
-			updateWindowPosition();
+		const auto* dict_data = getDictDataOrInit(current_word->text);
+		if (!dict_data) {
+			return;
 		}
+
+		current_phrase = current_word->text;
+
+		const std::string phrase = getPhrase(current_word, current_block);
+		const std::string sentence = getSentence(current_block);
+
+		updateWindowEntry(dict_data, phrase, sentence);
 	}
 
 	// ReSharper disable once CppMemberFunctionMayBeConst
@@ -458,6 +395,9 @@ namespace iwra {
 					json.at("sentence"),
 					json.at("definition")
 				);
+			} else if (it.value() == "changepage") {
+				const auto* dict_data = getDictDataOrInit(json.at("to"));
+				updateWindowEntry(dict_data, "", "");
 			} else {
 				//mousedown
 			}
@@ -551,7 +491,7 @@ namespace iwra {
 
 	std::string TooltipWnd::getPhrase(const OCRResultPacked* hover_word, const OCRBlock* hover_block) {
 		std::string result;
-		for (const auto* curr = hover_word; curr != hover_block->results.data() + hover_block->results.size(); ++curr) {
+		for (const auto* curr = hover_word; curr != hover_block->results.end()._Ptr; ++curr) {
 			result += curr->text;
 		}
 		return result;
@@ -572,15 +512,12 @@ namespace iwra {
 			case WM_CONTEXTMENU: {
 				const auto x = GET_X_LPARAM(lparam);
 				const int  y = GET_Y_LPARAM(lparam);
-				if (hover_word) {
-					createContextMenu(x, y, hover_word->text, hover_word->text, ":(", getSentence(hover_block), ":(");
+				if (current_word && current_block) {
+					createContextMenu(x, y, current_word->text, current_word->text, ":(", getSentence(current_block), ":(");
 				}
 				break;
 			}
 			case WM_SIZE: {
-				width  = LOWORD(lparam);
-				height = HIWORD(lparam);
-
 				if (wv_controller) {
 					RECT rc;
 					GetClientRect(hwnd, &rc);
@@ -636,9 +573,6 @@ namespace iwra {
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	}
 
-	TooltipWnd::~TooltipWnd() {
-	}
-
 	std::unique_ptr<TooltipWnd> TooltipWnd::initTooltip(
 		const std::vector<OCRResult>& res,
 		const cv::Rect&               rect,
@@ -660,9 +594,7 @@ namespace iwra {
 			isInitialised = true;
 		}
 
-		auto wnd = std::unique_ptr<TooltipWnd>(new TooltipWnd(res, rect, webpage_path, parser, anki));
-
-		return wnd;
+		return std::make_unique<TooltipWnd>(res, rect, webpage_path, parser, anki);
 	}
 
 	// 40ms
@@ -670,8 +602,8 @@ namespace iwra {
 		processOCRResults(new_res, cv::Point{rect.x, rect.y}, results);
 
 		rect        = new_rect;
-		hover_block = nullptr;
-		hover_word  = nullptr;
+		current_block = nullptr;
+		current_word  = nullptr;
 		if (GetAsyncKeyState(VK_SHIFT) & (1 << 15)) {
 			refreshHovering();
 			if (is_hovering) {
@@ -692,51 +624,61 @@ namespace iwra {
 
 		const cv::Point mouse_pos{win_mouse_pos.x, win_mouse_pos.y};
 
-		if (results.empty())
-			return;
-
-		if (rect.contains(mouse_pos)) {
-			if (is_hovering && hover_word && !hover_word->rect.empty() && cv::pointPolygonTest(
-				    hover_word->rect,
-				    mouse_pos,
-				    false
-			    ) > 0) {
-				// caching previous rect (optimisation)
-			} else {
-				const auto intersect_iter = std::ranges::find_if(
-					results,
-					[&mouse_pos](const OCRBlock& block) -> bool {
-						// returns positive (inside), negative (outside), or zero (on an edge) value
-						if (block.poly.empty())
-							return false;
-						return cv::pointPolygonTest(block.poly, mouse_pos, false) > 0;
-					}
-				);
-				if (intersect_iter != results.end()) {
-					const auto word_iter = std::ranges::find_if(
-						intersect_iter->results,
-						[&mouse_pos](const OCRResultPacked& res) -> bool {
-							// returns positive (inside), negative (outside), or zero (on an edge) value
-							return cv::pointPolygonTest(res.rect, mouse_pos, false) > 0;
-						}
-					);
-					if (word_iter != intersect_iter->results.end()) {
-						is_hovering  = true;
-						hover_word   = &*word_iter;
-						hover_block  = &*intersect_iter;
-						need_refresh = true;
-					} else {
-						is_hovering = false;
-					}
-				} else {
-					// mouse isn't in any of the OCR areas
-					is_hovering = false;
-				}
-			}
-		} else {
-			// if mouse is in the captured rect
+		if (results.empty()) {
 			is_hovering = false;
+			return;
 		}
+
+		// if mouse is in the captured rect
+		if (!rect.contains(mouse_pos)) {
+			is_hovering = false;
+			return;
+		}
+
+		// caching previous rect (optimisation)
+		if (is_hovering) {
+			if (current_word && !current_word->rect.empty() && cv::pointPolygonTest(
+				current_word->rect,
+				mouse_pos,
+				false
+			) > 0) {
+				return;
+			}
+		}
+
+		const auto intersect_iter = std::ranges::find_if(
+			results,
+			[&mouse_pos](const OCRBlock& block) -> bool {
+				// returns positive (inside), negative (outside), or zero (on an edge) value
+				if (block.poly.empty())
+					return false;
+				return cv::pointPolygonTest(block.poly, mouse_pos, false) > 0;
+			}
+		);
+
+		// mouse isn't in any of the OCR areas
+		if (intersect_iter == results.end()) {
+			is_hovering = false;
+			return;
+		}
+
+		const auto word_iter = std::ranges::find_if(
+			intersect_iter->results,
+			[&mouse_pos](const OCRResultPacked& res) -> bool {
+				// returns positive (inside), negative (outside), or zero (on an edge) value
+				return cv::pointPolygonTest(res.rect, mouse_pos, false) > 0;
+			}
+		);
+
+		if (word_iter == intersect_iter->results.end()) {
+			is_hovering = false;
+			return;
+		}
+
+		is_hovering  = true;
+		need_refresh = true;
+		current_word   = word_iter._Ptr;
+		current_block  = intersect_iter._Ptr;
 	}
 
 	void TooltipWnd::updateLoop() {
@@ -752,8 +694,9 @@ namespace iwra {
 				UpdateWindow(hwnd);
 			}
 		}
-		if (need_refresh) {
+		if (need_refresh && is_hovering) {
 			refreshWindow();
+			need_refresh = false;
 		}
 
 		MSG msg;
@@ -761,5 +704,9 @@ namespace iwra {
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
+	}
+
+	HWND TooltipWnd::getHwnd() const {
+		return hwnd;
 	}
 }

@@ -89,7 +89,7 @@ std::future<std::vector<OCRResult> > runOCR(
 						spdlog::info("hotkey fired");
 						if (!ss_wnd) {
 							if (tt_wnd) {
-								DestroyWindow(tt_wnd->hwnd);
+								DestroyWindow(tt_wnd->getHwnd());
 								tt_wnd.reset();
 							}
 							ss_wnd = ScreenshotWnd::startScreenShot(&ss, &rect);

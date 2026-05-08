@@ -24,12 +24,11 @@ namespace Anki {
 		};
 		Interface(Interface&& other) noexcept:
 			client{std::move(other.client)},
-			deck_name{other.deck_name},
-			card_type{other.card_type} {
+			deck_name{std::move(other.deck_name)},
+			card_type{std::move(other.card_type)} {
 		};
 
 		static nlohmann::json get_request_body(const std::string& request_name, const nlohmann::json& params = nullptr);
-		;
 
 		static nlohmann::json get_find_note_request(const std::string& query);
 
