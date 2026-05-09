@@ -22,12 +22,15 @@
 
 namespace iwra {
 	TooltipWnd::TooltipWnd(
-		const std::vector<OCRResult>& res,
-		const cv::Rect& rect,
-		const std::filesystem::path& webpage_path,
-		const std::shared_ptr<DictParser>& parser,
+		const std::vector<OCRResult>&           res,
+		const cv::Rect&                         rect,
+		const std::filesystem::path&            webpage_path,
+		const std::shared_ptr<DictParser>&      parser,
 		const std::shared_ptr<Anki::Interface>& anki
-	): rect{rect}, parser{parser}, anki{anki} {
+	) :
+		rect{rect},
+		parser{parser},
+		anki{anki} {
 		processOCRResults(res, cv::Point{rect.x, rect.y}, results);
 
 		constexpr int style           = WS_POPUP;
@@ -97,22 +100,22 @@ namespace iwra {
 		wv_init->try_init_env();
 	}
 
-	bool TooltipWnd::initCurrDict() {
-		spdlog::info("inited dict of {}", current_word->text);
-		std::string       lookup_string;
-		const std::string first_char = current_word->text;
-		dictionary_data[first_char]  = {};
-		for (auto curr = current_word; curr != current_block->results.end()._Ptr; ++curr) {
-			lookup_string += curr->text;
+	bool TooltipWnd::initDictEntry(const std::string& key, const std::string& phrase) {
+		auto       it        = phrase.begin();
+		const auto end       = phrase.end();
+		dictionary_data[key] = {};
+
+		std::string lookup_string;
+		do {
+			lookup_string += toUtf8(utf8::next(it, end));
 			if (auto dict_entry = parser->get_entry(lookup_string);
 				!dict_entry.empty()) {
-				spdlog::info("loading entry: {}", lookup_string);
-				dictionary_data[first_char].entries.append_range(dict_entry);
-				dictionary_data[first_char].phrase = lookup_string;
+				dictionary_data[key].entries.append_range(dict_entry);
+				dictionary_data[key].phrase = lookup_string;
 			}
-		};
-		std::ranges::reverse(dictionary_data[first_char].entries);
-		return !dictionary_data[first_char].entries.empty();
+		} while (it != end);
+		std::ranges::reverse(dictionary_data[key].entries);
+		return !dictionary_data[key].entries.empty();
 	}
 
 	std::vector<OCRResultPacked> TooltipWnd::ocrSplitText(const Poly2I& rect, const Text& text, const bool horizontal) {
@@ -237,17 +240,17 @@ namespace iwra {
 		SetWindowPos(hwnd, HWND_TOPMOST, left, top - height, -1, -1, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 	}
 
-	const DictionaryData* TooltipWnd::getDictDataOrInit(const std::string& key) {
+	const DictionaryData* TooltipWnd::getDictDataOrInit(const std::string& key, const std::string& phrase) {
 		const auto it = dictionary_data.find(key);
 		if (it == dictionary_data.end()) {
-			if (!initCurrDict()) {
+			if (!initDictEntry(key, phrase)) {
 				return nullptr;
 			}
 			return &dictionary_data.at(key);
 		}
 
 		if (it->second.entries.empty()) {
-			if (!initCurrDict()) {
+			if (!initDictEntry(key, phrase)) {
 				return nullptr;
 			}
 			return &dictionary_data.at(key);
@@ -255,12 +258,21 @@ namespace iwra {
 		return &it->second;
 	}
 
-	void TooltipWnd::updateWindowEntry(const DictionaryData* dict_data, const std::string& phrase, const std::string& sentence) const {
+	void TooltipWnd::updateWindowEntry(
+		const DictionaryData* dict_data,
+		const std::string&    phrase,
+		const std::string&    sentence
+	) const {
 		nlohmann::json page_data = nlohmann::json::array();
 		for (const auto& entry : dict_data->entries) {
 			// if entry.simp is a prefix of the hovered phrase
 			if (!phrase.starts_with(entry.get_simp()) && !phrase.starts_with(entry.get_trad())) {
-				spdlog::warn("{} doesn't begin with {} or {}, thus discarding", phrase, entry.get_simp(), entry.get_trad());
+				spdlog::warn(
+					"{} doesn't begin with {} or {}, thus discarding",
+					phrase,
+					entry.get_simp(),
+					entry.get_trad()
+				);
 				continue;
 			}
 
@@ -283,7 +295,7 @@ namespace iwra {
 			}
 
 			nlohmann::json entry_json = nlohmann::json::object();
-			entry_json["words"] = words;
+			entry_json["words"]       = words;
 			entry_json["def"]         = def_json;
 			entry_json["c_word"]      = dict_data->phrase;
 			entry_json["c_sent"]      = sentence;
@@ -291,9 +303,6 @@ namespace iwra {
 		}
 		const std::string page_data_str = page_data.dump();
 		const std::string script        = "setPage(" + page_data_str + ")";
-		const auto        script_utf16  = utf8::utf8to16(script);
-
-		// spdlog::info("script: {}", script);
 
 		const HRESULT err = webview->ExecuteScript(
 			utf8ToWide(script).c_str(),
@@ -311,22 +320,25 @@ namespace iwra {
 	}
 
 	std::vector<std::string> splitHanzi(const std::string& hanzi, const std::string& pinyin) {
-		std::string post_pinyin = pinyin+' ';
+		std::string              post_pinyin = pinyin + ' ';
 		std::vector<std::size_t> lengths;
-		std::size_t prev = 0;
-		for (std::size_t it = post_pinyin.find(' '); it != std::string::npos; prev = it, it = post_pinyin.find(' ', it+1)) {
-			if (const int number = post_pinyin[it-1] - '0';
+		std::size_t              prev = 0;
+		for (std::size_t it = post_pinyin.find(' '); it != std::string::npos; prev = it, it = post_pinyin.find(
+			                                                                      ' ',
+			                                                                      it + 1
+		                                                                      )) {
+			if (const int number = post_pinyin[it - 1] - '0';
 				1 < number && number > 5) {
 				post_pinyin.erase(it, 1);
 				it -= 1;
 				if (it > 0) {
-					if (const int prev_number = post_pinyin[it-1] - '0';
+					if (const int prev_number = post_pinyin[it - 1] - '0';
 						1 < prev_number && prev_number > 5) {
-						lengths.back() += it-prev;
+						lengths.back() += it - prev;
 						continue;
 					}
 				}
-				lengths.push_back(it-prev);
+				lengths.push_back(it - prev);
 			} else {
 				lengths.push_back(1);
 			}
@@ -334,7 +346,7 @@ namespace iwra {
 
 		std::vector<std::string> res;
 
-		std::size_t total_len = 0;
+		std::size_t          total_len = 0;
 		const std::u16string hanzi_u16 = utf8::utf8to16(hanzi);
 		for (const auto length : lengths) {
 			res.push_back(utf8::utf16to8(hanzi_u16.substr(total_len, length)));
@@ -356,14 +368,15 @@ namespace iwra {
 			return;
 		}
 
-		const auto* dict_data = getDictDataOrInit(current_word->text);
+
+		const std::string phrase = getPhrase(current_word, current_block);
+		spdlog::info("phrase: {}", phrase);
+		const auto* dict_data = getDictDataOrInit(current_word->text, phrase);
 		if (!dict_data) {
 			return;
 		}
 
-		current_phrase = current_word->text;
-
-		const std::string phrase = getPhrase(current_word, current_block);
+		current_phrase             = current_word->text;
 		const std::string sentence = getSentence(current_block);
 
 		updateWindowEntry(dict_data, phrase, sentence);
@@ -396,8 +409,10 @@ namespace iwra {
 					json.at("definition")
 				);
 			} else if (it.value() == "changepage") {
-				const auto* dict_data = getDictDataOrInit(json.at("to"));
-				updateWindowEntry(dict_data, "", "");
+				const std::string to  = json.at("to");
+				current_phrase        = to;
+				const auto* dict_data = getDictDataOrInit(to, to);
+				updateWindowEntry(dict_data, to, to);
 			} else {
 				//mousedown
 			}
@@ -424,8 +439,8 @@ namespace iwra {
 		const std::string& sentence,
 		const std::string& definition
 	) const {
-		auto        [find_pos_first, find_pos_second]     = utf8Find(sentence, character);
-		const std::string sentence_add = std::format(
+		auto              [find_pos_first, find_pos_second] = utf8Find(sentence, character);
+		const std::string sentence_add                      = std::format(
 			"{}{{{{c1::{}}}}}{}",
 			std::string(sentence.begin(), find_pos_first),
 			phrase,
@@ -513,7 +528,15 @@ namespace iwra {
 				const auto x = GET_X_LPARAM(lparam);
 				const int  y = GET_Y_LPARAM(lparam);
 				if (current_word && current_block) {
-					createContextMenu(x, y, current_word->text, current_word->text, ":(", getSentence(current_block), ":(");
+					createContextMenu(
+						x,
+						y,
+						current_word->text,
+						current_word->text,
+						":(",
+						getSentence(current_block),
+						":("
+					);
 				}
 				break;
 			}
@@ -574,13 +597,12 @@ namespace iwra {
 	}
 
 	std::unique_ptr<TooltipWnd> TooltipWnd::initTooltip(
-		const std::vector<OCRResult>& res,
-		const cv::Rect&               rect,
-		const std::filesystem::path&  webpage_path,
-		const std::shared_ptr<DictParser>& parser,
+		const std::vector<OCRResult>&           res,
+		const cv::Rect&                         rect,
+		const std::filesystem::path&            webpage_path,
+		const std::shared_ptr<DictParser>&      parser,
 		const std::shared_ptr<Anki::Interface>& anki
 	) {
-
 		if (!isInitialised) {
 			WNDCLASS wc{};
 			wc.lpfnWndProc   = &wndProcSetup;
@@ -601,7 +623,7 @@ namespace iwra {
 	void TooltipWnd::updateRectRes(const std::vector<OCRResult>& new_res, const cv::Rect& new_rect) {
 		processOCRResults(new_res, cv::Point{rect.x, rect.y}, results);
 
-		rect        = new_rect;
+		rect          = new_rect;
 		current_block = nullptr;
 		current_word  = nullptr;
 		if (GetAsyncKeyState(VK_SHIFT) & (1 << 15)) {
@@ -638,10 +660,10 @@ namespace iwra {
 		// caching previous rect (optimisation)
 		if (is_hovering) {
 			if (current_word && !current_word->rect.empty() && cv::pointPolygonTest(
-				current_word->rect,
-				mouse_pos,
-				false
-			) > 0) {
+				    current_word->rect,
+				    mouse_pos,
+				    false
+			    ) > 0) {
 				return;
 			}
 		}
@@ -675,10 +697,10 @@ namespace iwra {
 			return;
 		}
 
-		is_hovering  = true;
-		need_refresh = true;
-		current_word   = word_iter._Ptr;
-		current_block  = intersect_iter._Ptr;
+		is_hovering   = true;
+		need_refresh  = true;
+		current_word  = word_iter._Ptr;
+		current_block = intersect_iter._Ptr;
 	}
 
 	void TooltipWnd::updateLoop() {

@@ -6,7 +6,7 @@
 #pragma comment(lib,"Shcore.lib")
 
 #include <fstream>
-#include <ranges>'
+#include <ranges>
 
 #include "log.h"
 

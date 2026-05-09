@@ -69,7 +69,7 @@ namespace iwra {
 
 		void initWebView2();
 
-		bool initCurrDict();
+		bool initDictEntry(const std::string& key, const std::string& phrase);
 
 		static void processOCRResults(
 			const std::vector<OCRResult>& res,
@@ -81,7 +81,7 @@ namespace iwra {
 
 		void updateWindowPosition() const;
 
-		const DictionaryData* getDictDataOrInit(const std::string& key);
+		const DictionaryData* getDictDataOrInit(const std::string& key, const std::string& phrase);
 
 		void updateWindowEntry(const DictionaryData* dict_data, const std::string& phrase, const std::string& sentence) const;
 

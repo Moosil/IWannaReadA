@@ -55,8 +55,6 @@ add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/util.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/util_ocr.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/util_ocr.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/util_pinyin.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/util_pinyin.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/util_text.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/util_text.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/util_utf8.cpp

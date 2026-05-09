@@ -1,5 +1,7 @@
 #include "log.h"
 
+#include <spdlog/spdlog.h>
+
 
 void iwra::log(HRESULT err, std::string function_name, const ERR_LEVEL err_level) {
 	if (SUCCEEDED(err)) {
