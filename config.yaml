@@ -14,7 +14,6 @@ ocr:
 refresh: on
 refresh-interval: 100ms
 
-html-template-path: "html_template.html"
 dictionary-path: "dictionaries/cedict_ts.u8"
 
 anki:
