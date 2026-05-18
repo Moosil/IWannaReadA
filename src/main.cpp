@@ -1,4 +1,4 @@
-#include <shellscalingapi.h>
+#include <opencv2/core/mat.hpp>
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -6,6 +6,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <Qt6/QtWidgets/QtWidgets>
 #include <spdlog/spdlog.h>
 #pragma comment(lib,"Shcore.lib")
 
@@ -25,10 +26,7 @@ std::future<std::vector<OCRResult> > runOCR(
 	const cv::Mat&   image
 );
 
-[[noreturn]] int main() {
-	// fixes scaling of screenshots on monitors with DPI
-	iwra::log(SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE), "SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE)");
-
+int main(int argc, char* argv[]) {
 	Config                      yaml{"../config.yaml"};
 	const bool                  refresh            = yaml.getRefresh();
 	const int                   refresh_interval   = yaml.getRefreshIntervalMs().value();
@@ -37,33 +35,45 @@ std::future<std::vector<OCRResult> > runOCR(
 	const std::string           anki_card_type     = yaml.getAnkiCardType().value();
 	const std::string           anki_deck_name     = yaml.getAnkiDeckName().value();
 
+	SetConsoleOutputCP(CP_UTF8);
+	SetConsoleCP(CP_UTF8);
+
+	const auto engine = OCREngine(yaml);
+
+	enum AppState {
+		None = 0,
+		Screenshot,
+		Tooltip,
+	};
+	AppState state = None;
+	cv::Mat                              ss;
+	cv::Rect                             rect;
+	std::future<std::vector<OCRResult> > pending_result;
+	s_time                               prev = std::chrono::steady_clock::now();
+
+	auto anki = std::make_shared<Anki::Interface>(anki_deck_name, anki_card_type);
+	auto dict_parser = std::make_shared<DictParser>();
+	dict_parser->load(dict_path);
+	spdlog::info("loaded dictionary successfully");
+
+	auto screenshot_overlay = new ScreenshotWnd(nullptr, &ss, &rect);
+	screenshot_overlay->setWindowFlags(
+		Qt::FramelessWindowHint |
+		Qt::Tool |
+		Qt::WindowStaysOnTopHint |
+		Qt::NoDropShadowWindowHint
+	);
+	QApplication app(argc, argv);
+
+	screenshot_overlay->showFullScreen();
+	screenshot_overlay->raise();
+	screenshot_overlay->activateWindow();
+
+	auto tt_wnd = new TooltipWindow();
+
+	return app.exec();
+
 	try {
-		SetConsoleOutputCP(CP_UTF8);
-		SetConsoleCP(CP_UTF8);
-
-		const auto engine = OCREngine(yaml);
-
-		if (RegisterHotKey(
-			nullptr,
-			1,
-			MOD_NOREPEAT,
-			VK_SNAPSHOT
-		)) {
-			spdlog::info("hotkey registered successfully");
-		}
-
-		MSG                                  msg = {nullptr};
-		std::unique_ptr<ScreenshotWnd>       ss_wnd;
-		std::unique_ptr<TooltipWnd>          tt_wnd;
-		cv::Mat                              ss;
-		cv::Rect                             rect;
-		std::future<std::vector<OCRResult> > pending_result;
-		s_time                               prev = std::chrono::steady_clock::now();
-
-		auto anki = std::make_shared<Anki::Interface>(anki_deck_name, anki_card_type);
-		auto dict_parser = std::make_shared<DictParser>();
-		dict_parser->load(dict_path);
-		spdlog::info("loaded dictionary successfully");
 		while (true) {
 			if (ss_wnd) {
 				ss_wnd->update();
@@ -79,7 +89,7 @@ std::future<std::vector<OCRResult> > runOCR(
 							rect.x + rect.width,
 							rect.y + rect.height
 						);
-						tt_wnd = TooltipWnd::initTooltip(output, rect, html_template_path, dict_parser, anki);
+						tt_wnd = TooltipWindow::initTooltip(output, rect, html_template_path, dict_parser, anki);
 						prev   = std::chrono::steady_clock::now();
 					}
 				}

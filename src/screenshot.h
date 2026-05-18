@@ -1,44 +1,44 @@
 #pragma once
 
-#include <Windows.h>
-#include <opencv2/core/mat.hpp>
+#include <qgraphicsview.h>
+#include <qlabel.h>
+#include <qmainwindow.h>
 #include <opencv2/core/types.hpp>
 
+#include "screenshot_viewer.h"
+
 namespace iwra {
-	class ScreenshotWnd {
-	private:
-		static inline const std::string className     = "ScreenshotWnd";
-		static inline bool              isInitialised = false;
+	class ScreenshotWnd : public QMainWindow {
+		Q_OBJECT
 
-		bool       is_dragging = false;
-		POINT      start{0, 0};
-		POINT      end{0, 0};
-		HBITMAP    desktop;
-		cv::Mat*   screenshot;
-		cv::Rect* rect;
-
-		HDC     darkenDC;
-		HBITMAP darkenBitmap;
-		LONG    width, height;
-
-		static LRESULT CALLBACK wndProcSetup(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
-
-		LRESULT CALLBACK wndProc(UINT msg, WPARAM wparam, LPARAM lparam);
+		bool              is_dragging = false;
+		QPoint            start{0, 0};
+		QPoint            end{0, 0};
+		QPixmap           desktop;
+		cv::Mat*          mat;
+		cv::Rect*         rect;
+		QGraphicsView*    view;
+		QGraphicsScene*   scene;
+		ScreenshotViewer* screenshot_viewer;
 
 	public:
-		HWND hwnd;
-		bool is_running = true;
+		ScreenshotWnd() = delete;
 
-		ScreenshotWnd() = default;
+		ScreenshotWnd(QWidget* parent, cv::Mat* screenshot_mat, cv::Rect* screenshot_rect);
 
-		static std::unique_ptr<ScreenshotWnd> startScreenShot(cv::Mat* ss, cv::Rect* rect);
+		[[nodiscard]] QPixmap captureEntireScreen() const;
 
-		static HBITMAP captureEntireScreen();
+		[[nodiscard]] QPixmap captureScreenRegion(cv::Rect capture_rect) const;
 
-		static HBITMAP captureScreenRegion(cv::Rect rect);
+		static cv::Mat QPixmap2cvMat(const QPixmap& pixmap);
 
-		static cv::Mat hBitmap2cvMat(HBITMAP h_bitmap);
+		void updateScreenshotLabel() const;
 
-		void update() const;
+	protected:
+		void mousePressEvent(QMouseEvent* event) override;
+
+		void mouseMoveEvent(QMouseEvent* event) override;
+
+		void mouseReleaseEvent(QMouseEvent* event) override;
 	};
 }

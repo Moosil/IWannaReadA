@@ -15,6 +15,7 @@ find_package(clip CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(httplib CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
+find_package(Qt6 CONFIG REQUIRED COMPONENTS Widgets)
 
 if(MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
@@ -28,6 +29,7 @@ set(TARGET lto PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 add_compile_definitions(WIN32_LEAN_AND_MEAN)
 
 add_subdirectory(third_party/utfcpp)
+add_subdirectory(third_party/QHotkey)
 
 add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/ocr_engine.cpp
@@ -43,8 +45,6 @@ add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/screenshot.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/tooltip.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/tooltip.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/implwebview2.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/implwebview2.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/log.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/log.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/anki_connect.cpp
@@ -59,6 +59,10 @@ add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/util_text.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/util_utf8.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/util_utf8.h
+        src/screenshot_viewer.cpp
+        src/screenshot_viewer.h
+        src/tooltip_entry.cpp
+        src/tooltip_entry.h
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC src ${LEXBOR_INCLUDE_DIR})
@@ -76,4 +80,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         clip::clip
         nlohmann_json::nlohmann_json
         httplib::httplib
+        Qt6::Widgets
+        qhotkey
 )
