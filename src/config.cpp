@@ -127,20 +127,6 @@ namespace iwra {
 		return getPath(ModelType::Rec, FileType::Param);
 	}
 
-	Config::file_path Config::getHTMLTemplatePath() {
-		if (node["html-template-path"]) {
-			if (file_path path = config_path.parent_path() / node["html-template-path"].as<std::string>();
-				std::filesystem::is_regular_file(path)) {
-				spdlog::info("found html template path at {}", path.string());
-				return path;
-			}
-		}
-		spdlog::error("couldn't find html template path in {}", config_path.string());
-		throw std::runtime_error{
-			std::format("couldn't find html template path in {}", config_path.string())
-		};
-	}
-
 	Config::file_path Config::getDictPath() {
 		if (node["dictionary-path"]) {
 			if (file_path path = config_path.parent_path() / node["dictionary-path"].as<std::string>();

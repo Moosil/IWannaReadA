@@ -27,8 +27,6 @@ namespace iwra {
 
 		file_path getRecParamPath();
 
-		file_path getHTMLTemplatePath();
-
 		file_path getDictPath();
 
 		std::optional<std::string> getAnkiCardType();

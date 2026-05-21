@@ -2,102 +2,29 @@
 
 
 #include <clip.h>
-#include <filesystem>
 #include <ranges>
-#include <WebView2.h>
-#include <Windowsx.h>
 #include <nlohmann/json.hpp>
 #include <opencv2/imgproc.hpp>
 #include <spdlog/spdlog.h>
 #include <utf8/cpp20.h>
-#include <wrl/event.h>
 
 #include "dict_parser.h"
-#include "log.h"
 #include "util.h"
 #include "util_ocr.h"
-#include "util_text.h"
 #include "util_utf8.h"
 
 
 namespace iwra {
 	TooltipWnd::TooltipWnd(
-		const std::vector<OCRResult>&           res,
-		const cv::Rect&                         rect,
-		const std::filesystem::path&            webpage_path,
+		QWidget*                                parent,
 		const std::shared_ptr<DictParser>&      parser,
 		const std::shared_ptr<Anki::Interface>& anki
 	) :
-		rect{rect},
+		QMainWindow{parent},
+		hover_hotkey{new QHotkey(QKeySequence("ctrl+shift+3"), true, this)},
 		parser{parser},
 		anki{anki} {
-		processOCRResults(res, cv::Point{rect.x, rect.y}, results);
 
-		constexpr int style           = WS_POPUP;
-		constexpr int extended_styles = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_TRANSPARENT;
-
-		hwnd = CreateWindowEx(
-			extended_styles,
-			className.c_str(),
-			"tt",
-			style,
-			0,
-			0,
-			width,
-			height,
-			nullptr,
-			nullptr,
-			GetModuleHandle(nullptr),
-			this
-		);
-
-		webpage_html = readFile(webpage_path);
-
-		log(SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE), "SetWindowDisplayAffinity");
-	}
-
-	void TooltipWnd::initWebView2() {
-		HRESULT err = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-		log(err, "CoInitializeEx", ERR_LEVEL::FATAL);
-		wchar_t* version;
-		err = GetAvailableCoreWebView2BrowserVersionString(nullptr, &version);
-		log(err, "GetAvailableCoreWebView2BrowserVersionString", ERR_LEVEL::WARN);
-		if (SUCCEEDED(err)) {
-			CoTaskMemFree(version);
-		}
-		wv_init = std::make_unique<WebView2::Impl>(
-			hwnd,
-			RECT{0, 0, width, height},
-			[this](ICoreWebView2Controller* controller, ICoreWebView2* wv) {
-				if (!controller || !wv) {
-					return;
-				}
-				wv_controller = controller;
-				webview       = wv;
-
-				const HRESULT nav_subscribe_err = webview->add_NavigationCompleted(
-					Microsoft::WRL::Callback<ICoreWebView2NavigationCompletedEventHandler>(
-						[this](ICoreWebView2* sender, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
-							inited_web_view2 = true;
-							onNavigationComplete();
-							return S_OK;
-						}
-					).Get(),
-					nullptr
-				);
-				log(nav_subscribe_err, "ICoreWebView2::add_NavigationCompleted", ERR_LEVEL::WARN);
-
-				const HRESULT nav_err = webview->NavigateToString(
-					utf8ToWide(webpage_html).c_str()
-				);
-				log(nav_err, "ICoreWebView2::NavigateToString", ERR_LEVEL::FATAL);
-
-				if (!is_hovering) {
-					ShowWindow(hwnd, SW_HIDE);
-				}
-			}
-		);
-		wv_init->try_init_env();
 	}
 
 	bool TooltipWnd::initDictEntry(const std::string& key, const std::string& phrase) {
@@ -212,7 +139,7 @@ namespace iwra {
 		}
 	}
 
-	void TooltipWnd::updateWindowPosition() const {
+	void TooltipWnd::updateWindowPosition() {
 		if (!current_word) {
 			return;
 		}
@@ -224,20 +151,20 @@ namespace iwra {
 		if (const int room_left_top = getTop(current_word->rect);
 			screen_height - getBottom(current_word->rect) > room_left_top) {
 			// window is too tall (it goes above top of screen)
-			top = getBottom(current_word->rect) + height;
+			top = getBottom(current_word->rect) + height();
 		} else {
 			// window can extend up and is below screen
 			top = room_left_top;
 		}
 		int left;
-		if (getRight(current_word->rect) + width > screen_width) {
+		if (getRight(current_word->rect) + width() > screen_width) {
 			// window is too width (it goes past right of screen)
-			left = screen_width - width;
+			left = screen_width - width();
 		} else {
 			// window can extend right and is left of screen edge
 			left = getLeft(current_word->rect);
 		}
-		SetWindowPos(hwnd, HWND_TOPMOST, left, top - height, -1, -1, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+		move(left, top - height());
 	}
 
 	const DictionaryData* TooltipWnd::getDictDataOrInit(const std::string& key, const std::string& phrase) {
@@ -262,59 +189,20 @@ namespace iwra {
 		const DictionaryData* dict_data,
 		const std::string&    phrase,
 		const std::string&    sentence
-	) const {
-		nlohmann::json page_data = nlohmann::json::array();
-		for (const auto& entry : dict_data->entries) {
-			// if entry.simp is a prefix of the hovered phrase
-			if (!phrase.starts_with(entry.get_simp()) && !phrase.starts_with(entry.get_trad())) {
-				spdlog::warn(
-					"{} doesn't begin with {} or {}, thus discarding",
-					phrase,
-					entry.get_simp(),
-					entry.get_trad()
-				);
-				continue;
+	) {
+		std::size_t i = 0;
+		for (; i < dict_data->entries.size(); ++i) {
+			if (i < entries.size()) {
+				entries[i]->show();
+				entries[i]->update(dict_data->entries[i]);
+			} else {
+				entries.push_back(new TooltipEntry(this));
+				entries[i]->update(dict_data->entries[i]);
 			}
-
-			nlohmann::json def_json = nlohmann::json::array();
-			for (const auto& def : entry.definitions) {
-				def_json.push_back(def);
-			}
-
-			nlohmann::json words = nlohmann::json::array();
-			for (const auto& [characters] : entry.word) {
-				nlohmann::json word_json = nlohmann::json::array();
-				for (const auto& [simp, trad, pinyin] : characters) {
-					nlohmann::json char_json = nlohmann::json::object();
-					char_json["simp"]        = simp;
-					char_json["trad"]        = trad;
-					char_json["pinyin"]      = pinyin;
-					word_json.push_back(char_json);
-				}
-				words.push_back(word_json);
-			}
-
-			nlohmann::json entry_json = nlohmann::json::object();
-			entry_json["words"]       = words;
-			entry_json["def"]         = def_json;
-			entry_json["c_word"]      = dict_data->phrase;
-			entry_json["c_sent"]      = sentence;
-			page_data.push_back(entry_json);
 		}
-		const std::string page_data_str = page_data.dump();
-		const std::string script        = "setPage(" + page_data_str + ")";
-
-		const HRESULT err = webview->ExecuteScript(
-			utf8ToWide(script).c_str(),
-			Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
-				// ReSharper disable once CppParameterMayBeConst
-				[](HRESULT errorCode0, LPCWSTR resultObjectAsJson) -> HRESULT {
-					log(errorCode0, "ExecuteScript::Invoke", ERR_LEVEL::WARN);
-					return S_OK;
-				}
-			).Get()
-		);
-		log(err, "ICoreWebView2::ExecuteScript", ERR_LEVEL::FATAL);
+		for (; i < entries.size(); ++i) {
+			entries[i]->hide();
+		}
 
 		updateWindowPosition();
 	}
@@ -356,10 +244,6 @@ namespace iwra {
 	}
 
 	void TooltipWnd::refreshWindow() {
-		if (!inited_web_view2) {
-			return;
-		}
-
 		if (!current_word) {
 			return;
 		}
@@ -367,7 +251,6 @@ namespace iwra {
 		if (current_phrase == current_word->text) {
 			return;
 		}
-
 
 		const std::string phrase = getPhrase(current_word, current_block);
 		spdlog::info("phrase: {}", phrase);
@@ -380,56 +263,6 @@ namespace iwra {
 		const std::string sentence = getSentence(current_block);
 
 		updateWindowEntry(dict_data, phrase, sentence);
-	}
-
-	// ReSharper disable once CppMemberFunctionMayBeConst
-	HRESULT TooltipWnd::onWebMessageReceived(ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) {
-		wchar_t*      json_string;
-		const HRESULT err = args->get_WebMessageAsJson(&json_string);
-		log(err, "ICoreWebView2WebMessageReceivedEventArgs::get_WebMessageAsJson", ERR_LEVEL::WARN);
-
-		nlohmann::json json = nlohmann::json::parse(wideToUtf8(json_string));
-		if (const auto it = json.find("key"); it != json.end()) {
-			if (it.value() == "contextmenu") {
-				createContextMenu(
-					json.at("x"),
-					json.at("y"),
-					json.at("character"),
-					json.at("word"),
-					json.at("pinyin"),
-					json.at("sentence"),
-					json.at("definition")
-				);
-			} else if (it.value() == "ankiadd") {
-				addAnkiCard(
-					json.at("character"),
-					json.at("word"),
-					json.at("pinyin"),
-					json.at("sentence"),
-					json.at("definition")
-				);
-			} else if (it.value() == "changepage") {
-				const std::string to  = json.at("to");
-				current_phrase        = to;
-				const auto* dict_data = getDictDataOrInit(to, to);
-				updateWindowEntry(dict_data, to, to);
-			} else {
-				//mousedown
-			}
-		}
-		return S_OK;
-	}
-
-	void TooltipWnd::onNavigationComplete() {
-		EventRegistrationToken token       = {};
-		const HRESULT          add_msg_err = webview->add_WebMessageReceived(
-			Microsoft::WRL::Callback<ICoreWebView2WebMessageReceivedEventHandler>(
-				this,
-				&TooltipWnd::onWebMessageReceived
-			).Get(),
-			&token
-		);
-		log(add_msg_err, "ICoreWebView2::add_WebMessageReceived", ERR_LEVEL::WARN);
 	}
 
 	void TooltipWnd::addAnkiCard(
@@ -450,52 +283,6 @@ namespace iwra {
 		anki->add_note(phrase, pinyin, definition, sentence_add);
 	}
 
-
-	void TooltipWnd::createContextMenu(
-		const int          x,
-		const int          y,
-		const std::string& character,
-		const std::string& phrase,
-		const std::string& pinyin,
-		const std::string& sentence,
-		const std::string& definition
-	) const {
-		const HMENU& menu = CreatePopupMenu();
-		AppendMenu(menu, MF_STRING, 1, "Copy character");
-		AppendMenu(menu, MF_STRING, 2, "Copy phrase");
-		AppendMenu(menu, MF_STRING, 3, "Copy sentence");
-		AppendMenu(menu, MF_STRING, 4, "Add to Anki");
-		const int selected = TrackPopupMenu(
-			menu,
-			TPM_LEFTALIGN | TPM_BOTTOMALIGN | TPM_RETURNCMD | TPM_LEFTBUTTON | TPM_NOANIMATION,
-			x,
-			y,
-			0,
-			hwnd,
-			nullptr
-		);
-		switch (selected) {
-			case 1: {
-				clip::set_text(character);
-				break;
-			}
-			case 2: {
-				clip::set_text(phrase);
-				break;
-			}
-			case 3: {
-				clip::set_text(sentence);
-				break;
-			}
-			case 4: {
-				addAnkiCard(character, phrase, pinyin, sentence, definition);
-			}
-			default:
-				break;
-		}
-		DestroyMenu(menu);
-	}
-
 	std::string TooltipWnd::getSentence(OCRBlock* hover_block) {
 		return hover_block->results
 		       | std::ranges::views::transform(
@@ -512,139 +299,18 @@ namespace iwra {
 		return result;
 	}
 
-	LRESULT TooltipWnd::wndProc(const UINT msg, const WPARAM wparam, const LPARAM lparam) {
-		switch (msg) {
-			case WM_CREATE: {
-				if (!inited_web_view2) {
-					ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-					initWebView2();
-				}
-				break;
-			}
-			// case WM_KEYDOWN: {
-			// 	break;
-			// }
-			case WM_CONTEXTMENU: {
-				const auto x = GET_X_LPARAM(lparam);
-				const int  y = GET_Y_LPARAM(lparam);
-				if (current_word && current_block) {
-					createContextMenu(
-						x,
-						y,
-						current_word->text,
-						current_word->text,
-						":(",
-						getSentence(current_block),
-						":("
-					);
-				}
-				break;
-			}
-			case WM_SIZE: {
-				if (wv_controller) {
-					RECT rc;
-					GetClientRect(hwnd, &rc);
-					const HRESULT err = wv_controller->put_Bounds(rc);
-					log(err, "ICoreWebView2Controller.put_Bounds", ERR_LEVEL::WARN);
-				};
-				break;
-			}
-			case WM_PAINT: {
-				if (is_hovering) {
-					PAINTSTRUCT ps;
-					BeginPaint(hwnd, &ps);
-
-					EndPaint(hwnd, &ps);
-					return 0;
-				}
-				break;
-			}
-			case WM_DESTROY: {
-				break;
-			}
-			case WM_NCDESTROY: {
-				SetWindowLongPtr(hwnd, GWLP_USERDATA, 0);
-				break;
-			}
-			default: {
-			};
-		}
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	}
-
-	// ReSharper disable CppParameterMayBeConst
-	LRESULT CALLBACK TooltipWnd::wndProcSetup(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-		// ReSharper restore CppParameterMayBeConst
-		TooltipWnd* self;
-
-		if (msg == WM_NCCREATE) {
-			const auto cs = reinterpret_cast<CREATESTRUCT*>(lparam);
-			self          = static_cast<TooltipWnd*>(cs->lpCreateParams);
-			self->hwnd    = hwnd;
-			SetLastError(0);
-			SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
-			if (GetLastError() != 0) {
-				return false;
-			}
-		} else {
-			self = reinterpret_cast<TooltipWnd*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
-		}
-
-		if (self) {
-			return self->wndProc(msg, wparam, lparam);
-		}
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	}
-
-	std::unique_ptr<TooltipWnd> TooltipWnd::initTooltip(
-		const std::vector<OCRResult>&           res,
-		const cv::Rect&                         rect,
-		const std::filesystem::path&            webpage_path,
-		const std::shared_ptr<DictParser>&      parser,
-		const std::shared_ptr<Anki::Interface>& anki
-	) {
-		if (!isInitialised) {
-			WNDCLASS wc{};
-			wc.lpfnWndProc   = &wndProcSetup;
-			wc.hInstance     = GetModuleHandle(nullptr);
-			wc.lpszClassName = className.c_str();
-			wc.hbrBackground = reinterpret_cast<HBRUSH>((COLOR_WINDOW));
-			if (!RegisterClassA(&wc)) {
-				spdlog::error("registering window class failed");
-				return nullptr;
-			}
-			isInitialised = true;
-		}
-
-		return std::make_unique<TooltipWnd>(res, rect, webpage_path, parser, anki);
-	}
-
 	// 40ms
-	void TooltipWnd::updateRectRes(const std::vector<OCRResult>& new_res, const cv::Rect& new_rect) {
+	void TooltipWnd::updateResRect(const std::vector<OCRResult>& new_res, const cv::Rect& new_rect) {
 		processOCRResults(new_res, cv::Point{rect.x, rect.y}, results);
-
 		rect          = new_rect;
 		current_block = nullptr;
 		current_word  = nullptr;
-		if (GetAsyncKeyState(VK_SHIFT) & (1 << 15)) {
-			refreshHovering();
-			if (is_hovering) {
-				ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-				UpdateWindow(hwnd);
-			} else {
-				if (inited_web_view2) {
-					ShowWindow(hwnd, SW_HIDE);
-				}
-				UpdateWindow(hwnd);
-			}
-		}
 	}
 
 	void TooltipWnd::refreshHovering() {
-		POINT win_mouse_pos;
-		GetCursorPos(&win_mouse_pos);
+		const QPoint qt_cursor_pos = QCursor::pos();
 
-		const cv::Point mouse_pos{win_mouse_pos.x, win_mouse_pos.y};
+		const cv::Point mouse_pos{qt_cursor_pos.x(), qt_cursor_pos.y()};
 
 		if (results.empty()) {
 			is_hovering = false;
@@ -698,37 +364,8 @@ namespace iwra {
 		}
 
 		is_hovering   = true;
-		need_refresh  = true;
 		current_word  = word_iter._Ptr;
 		current_block = intersect_iter._Ptr;
-	}
-
-	void TooltipWnd::updateLoop() {
-		if (GetAsyncKeyState(VK_SHIFT) & (1 << 15)) {
-			refreshHovering();
-			if (is_hovering) {
-				ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-				UpdateWindow(hwnd);
-			} else {
-				if (inited_web_view2) {
-					ShowWindow(hwnd, SW_HIDE);
-				}
-				UpdateWindow(hwnd);
-			}
-		}
-		if (need_refresh && is_hovering) {
-			refreshWindow();
-			need_refresh = false;
-		}
-
-		MSG msg;
-		while (PeekMessage(&msg, hwnd, 0, 0, PM_REMOVE)) {
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
-		}
-	}
-
-	HWND TooltipWnd::getHwnd() const {
-		return hwnd;
+		refreshWindow();
 	}
 }

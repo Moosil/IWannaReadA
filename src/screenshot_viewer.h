@@ -15,8 +15,10 @@ namespace iwra {
 
 		void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override;
 
+		void update_pixmap_rect(const QPixmap& new_pixmap, const QRect& new_rect);
+
 	private:
-		QPixmap pixemap;
+		QPixmap pixmap;
 		QRect rect;
 	};
 }

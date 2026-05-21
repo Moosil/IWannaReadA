@@ -8,23 +8,21 @@
 #include "screenshot_viewer.h"
 
 namespace iwra {
-	class ScreenshotWnd : public QMainWindow {
+	class ScreenshotWindow : public QMainWindow {
 		Q_OBJECT
 
 		bool              is_dragging = false;
-		QPoint            start{0, 0};
-		QPoint            end{0, 0};
+		QPoint            start{-1, -1};
+		QPoint            end{-1, -1};
 		QPixmap           desktop;
-		cv::Mat*          mat;
-		cv::Rect*         rect;
-		QGraphicsView*    view;
 		QGraphicsScene*   scene;
+		QGraphicsView*    view;
 		ScreenshotViewer* screenshot_viewer;
 
 	public:
-		ScreenshotWnd() = delete;
+		ScreenshotWindow() = delete;
 
-		ScreenshotWnd(QWidget* parent, cv::Mat* screenshot_mat, cv::Rect* screenshot_rect);
+		explicit ScreenshotWindow(QWidget* parent);
 
 		[[nodiscard]] QPixmap captureEntireScreen() const;
 
@@ -40,5 +38,10 @@ namespace iwra {
 		void mouseMoveEvent(QMouseEvent* event) override;
 
 		void mouseReleaseEvent(QMouseEvent* event) override;
+
+		void showEvent(QShowEvent* event) override;
+
+	signals:
+		void activated(const cv::Mat& screenshot_mat, const cv::Rect& rect);
 	};
 }

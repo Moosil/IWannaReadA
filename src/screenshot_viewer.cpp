@@ -14,15 +14,25 @@ namespace iwra {
 	}
 
 	void  ScreenshotViewer::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) {
-		painter->drawPixmap(boundingRect(), pixemap, boundingRect());
-		painter->setBrush(QColor(0,0,0,127));
+		painter->drawPixmap(0, 0, pixmap);
 
-		const auto [width, height] = getScreenSize();
+		QPainterPath path;
+		path.setFillRule(Qt::OddEvenFill);
+		path.addRect(boundingRect());
+		path.addRect(rect);
 
-		painter->drawRect(0, 0, width, rect.y());
-		painter->drawRect(0, rect.top(), width, height - rect.top());
+		painter->setBrush(QColor(0, 0, 0, 120));
+		painter->setPen(Qt::NoPen);
+		painter->drawPath(path);
 
-		painter->drawRect(0, rect.y(), rect.x(), rect.top());
-		painter->drawRect(rect.right(), rect.y(), width - rect.right(), rect.top());
+		painter->setBrush(Qt::NoBrush);
+		painter->setPen(QPen(Qt::white, 2));
+		painter->drawRect(rect);
+	}
+
+	void ScreenshotViewer::update_pixmap_rect(const QPixmap& new_pixmap, const QRect& new_rect) {
+		pixmap = new_pixmap;
+		rect = new_rect;
+		update();
 	}
 }

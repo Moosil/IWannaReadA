@@ -1,5 +1,6 @@
 #include "screenshot.h"
 
+#include <qhotkey.h>
 #include <qevent.h>
 #include <qgraphicsview.h>
 #include <qscreen.h>
@@ -11,29 +12,35 @@
 
 
 namespace iwra {
-	ScreenshotWnd::ScreenshotWnd(QWidget* parent, cv::Mat* screenshot_mat, cv::Rect* screenshot_rect) :
-		QMainWindow(parent),
-		desktop(captureEntireScreen()),
-		mat{screenshot_mat},
-		rect{screenshot_rect},
-		view(new QGraphicsView),
-		scene(new QGraphicsScene),
-		screenshot_viewer(new ScreenshotViewer) {
+	ScreenshotWindow::ScreenshotWindow(QWidget* parent):
+		QMainWindow{parent},
+		scene{new QGraphicsScene(this)},
+		view{new QGraphicsView(scene)},
+		screenshot_viewer{new ScreenshotViewer} {
 		scene->addItem(screenshot_viewer);
-		view->setScene(scene);
 		setCentralWidget(view);
+
+		view->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+		setMouseTracking(true);
+
+		setWindowFlags(
+			Qt::FramelessWindowHint |
+			Qt::Tool |
+			Qt::WindowStaysOnTopHint |
+			Qt::NoDropShadowWindowHint
+		);
 	}
 
-	QPixmap ScreenshotWnd::captureEntireScreen() const {
+	QPixmap ScreenshotWindow::captureEntireScreen() const {
 		const auto [width, height] = getScreenSize();
 		return captureScreenRegion(cv::Rect(0, 0, width, height));
 	}
 
-	QPixmap ScreenshotWnd::captureScreenRegion(const cv::Rect capture_rect) const {
+	QPixmap ScreenshotWindow::captureScreenRegion(const cv::Rect capture_rect) const {
 		return this->screen()->grabWindow(0, capture_rect.x, capture_rect.y, capture_rect.width, capture_rect.height);
 	}
 
-	cv::Mat ScreenshotWnd::QPixmap2cvMat(const QPixmap& pixmap) {
+	cv::Mat ScreenshotWindow::QPixmap2cvMat(const QPixmap& pixmap) {
 		if (pixmap.isNull()) {
 			return cv::Mat();
 		}
@@ -49,7 +56,7 @@ namespace iwra {
 		return mat.clone();
 	}
 
-	void ScreenshotWnd::updateScreenshotLabel() const {
+	void ScreenshotWindow::updateScreenshotLabel() const {
 		if (desktop.isNull()) {
 			spdlog::error("screenshot failed: desktop (QPixmap) is null");
 			return;
@@ -58,18 +65,20 @@ namespace iwra {
 		const auto [top, bottom] = std::minmax(start.y(), end.y());
 		const auto r_width       = right - left;
 		const auto r_height      = bottom - top;
-		screenshot_viewer->update(top, left, r_width, r_height);
+		screenshot_viewer->update_pixmap_rect(desktop, {left, top, r_width, r_height});
 	}
 
-	void ScreenshotWnd::mousePressEvent(QMouseEvent* event) {
+	void ScreenshotWindow::mousePressEvent(QMouseEvent* event) {
 		if (event->button() == Qt::LeftButton) {
 			is_dragging = true;
 			start       = event->pos();
+			end = event->pos();
+			updateScreenshotLabel();
 		}
 		QMainWindow::mousePressEvent(event);
 	}
 
-	void ScreenshotWnd::mouseMoveEvent(QMouseEvent* event) {
+	void ScreenshotWindow::mouseMoveEvent(QMouseEvent* event) {
 		if (is_dragging) {
 			end = event->pos();
 			updateScreenshotLabel();
@@ -77,8 +86,9 @@ namespace iwra {
 		QMainWindow::mouseMoveEvent(event);
 	}
 
-	void ScreenshotWnd::mouseReleaseEvent(QMouseEvent* event) {
-		if (is_dragging == false && event->button() == Qt::LeftButton) {
+	void ScreenshotWindow::mouseReleaseEvent(QMouseEvent* event) {
+		if (is_dragging && event->button() == Qt::LeftButton) {
+			is_dragging = false;
 			end = event->pos();
 
 			if (start.x() != -1 && start.y() != -1) {
@@ -86,11 +96,17 @@ namespace iwra {
 				const auto [top, bottom] = std::minmax(start.y(), end.y());
 				const auto r_width       = right - left;
 				const auto r_height      = bottom - top;
-				const auto pixmap        = captureScreenRegion(cv::Rect(left, top, r_width, r_height));
-				*mat                     = QPixmap2cvMat(pixmap);
-				*rect                    = {left, top, r_width, r_height};
+				const auto pixmap        = desktop.copy(left, top, r_width, r_height);
+				emit activated(QPixmap2cvMat(pixmap), {left, top, r_width, r_height});
 			}
 		}
 		QMainWindow::mouseReleaseEvent(event);
+	}
+
+	void ScreenshotWindow::showEvent(QShowEvent* event) {
+		start = {-1, -1};
+		end = {-1, -1};
+		desktop = captureEntireScreen();
+		updateScreenshotLabel();
 	}
 }
