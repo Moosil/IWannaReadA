@@ -2,7 +2,7 @@
 
 #include <qlabel.h>
 #include <qwidget.h>
-#include <qlayout.h>
+#include <qboxlayout.h>
 
 #include "dict_parser.h"
 

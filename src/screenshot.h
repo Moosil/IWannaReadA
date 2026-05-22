@@ -12,8 +12,8 @@ namespace iwra {
 		Q_OBJECT
 
 		bool              is_dragging = false;
-		QPoint            start{-1, -1};
-		QPoint            end{-1, -1};
+		QPointF            start{-1, -1};
+		QPointF            end{-1, -1};
 		QPixmap           desktop;
 		QGraphicsScene*   scene;
 		QGraphicsView*    view;

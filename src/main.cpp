@@ -26,7 +26,7 @@ int main(int argc, char* argv[]) {
 
 	auto anki = std::make_shared<Anki::Interface>(anki_deck_name, anki_card_type);
 	auto dict_parser = std::make_shared<DictParser>();
-	// dict_parser->load(dict_path);
+	dict_parser->load(dict_path);
 	spdlog::info("loaded dictionary successfully");
 
 

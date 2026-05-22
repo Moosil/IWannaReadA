@@ -1,8 +1,10 @@
 #pragma once
 
 #include <qhotkey.h>
-#include <unordered_map>
 #include <qmainwindow.h>
+#include <qboxlayout.h>
+
+#include <unordered_map>
 
 #include "anki_connect.h"
 #include "common.h"
@@ -40,6 +42,7 @@ namespace iwra {
 		std::string current_phrase{};
 
 		QHotkey* hover_hotkey;
+		int timer_id;
 		bool     is_hovering{false};
 
 		std::vector<OCRBlock>                           results;
@@ -47,6 +50,8 @@ namespace iwra {
 		std::shared_ptr<DictParser>                     parser;
 		std::unordered_map<std::string, DictionaryData> dictionary_data;
 
+		QWidget* centralWidget;
+		QVBoxLayout* layout;
 		std::vector<TooltipEntry*> entries{};
 
 		std::shared_ptr<Anki::Interface> anki;
@@ -82,5 +87,7 @@ namespace iwra {
 		static std::string getSentence(OCRBlock* hover_block);
 
 		static std::string getPhrase(const OCRResultPacked* hover_word, const OCRBlock* hover_block);
+	protected:
+		void timerEvent(QTimerEvent* event) override;
 	};
 }

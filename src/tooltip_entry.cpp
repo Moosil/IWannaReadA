@@ -10,6 +10,7 @@ namespace iwra {
 		hanzi{new QLabel(this)},
 		pinyin{new QLabel(this)}
 	{
+		setLayout(layout);
 		layout->addWidget(hanzi);
 		layout->addWidget(pinyin);
 	}
@@ -23,7 +24,9 @@ namespace iwra {
 				definitions[i]->show();
 				definitions[i]->setText(QString::fromStdString(entry.definitions[i]));
 			} else {
-				definitions.push_back(new QLabel(this));
+				auto* new_definition = new QLabel(this);
+				layout->addWidget(new_definition);
+				definitions.push_back(new_definition);
 				definitions[i]->setText(QString::fromStdString(entry.definitions[i]));
 			}
 		}

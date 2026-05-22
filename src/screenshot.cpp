@@ -12,7 +12,7 @@
 
 
 namespace iwra {
-	ScreenshotWindow::ScreenshotWindow(QWidget* parent):
+	ScreenshotWindow::ScreenshotWindow(QWidget* parent) :
 		QMainWindow{parent},
 		scene{new QGraphicsScene(this)},
 		view{new QGraphicsView(scene)},
@@ -26,8 +26,8 @@ namespace iwra {
 		setWindowFlags(
 			Qt::FramelessWindowHint |
 			Qt::Tool |
-			Qt::WindowStaysOnTopHint |
-			Qt::NoDropShadowWindowHint
+			Qt::NoDropShadowWindowHint /* |
+			Qt::WindowStaysOnTopHint*/
 		);
 	}
 
@@ -42,15 +42,20 @@ namespace iwra {
 
 	cv::Mat ScreenshotWindow::QPixmap2cvMat(const QPixmap& pixmap) {
 		if (pixmap.isNull()) {
-			return cv::Mat();
+			return {};
 		}
-		const QImage  image = pixmap.toImage();
+
+		QImage image = pixmap.toImage();
+		if (image.format() != QImage::Format_RGB888) {
+			image = image.convertToFormat(QImage::Format_RGB888);
+		}
+
 		const cv::Mat mat(
 			image.height(),
 			image.width(),
-			CV_8UC4,
+			CV_8UC3,
 			const_cast<unsigned char*>(image.constBits()),
-			image.bytesPerLine()
+			static_cast<std::size_t>(image.bytesPerLine())
 		);
 
 		return mat.clone();
@@ -61,8 +66,8 @@ namespace iwra {
 			spdlog::error("screenshot failed: desktop (QPixmap) is null");
 			return;
 		}
-		const auto [left, right] = std::minmax(start.x(), end.x());
-		const auto [top, bottom] = std::minmax(start.y(), end.y());
+		const auto [left, right] = static_cast<std::tuple<int, int>>(std::minmax(start.x(), end.x()));;
+		const auto [top, bottom] = static_cast<std::tuple<int, int>>(std::minmax(start.y(), end.y()));
 		const auto r_width       = right - left;
 		const auto r_height      = bottom - top;
 		screenshot_viewer->update_pixmap_rect(desktop, {left, top, r_width, r_height});
@@ -71,8 +76,8 @@ namespace iwra {
 	void ScreenshotWindow::mousePressEvent(QMouseEvent* event) {
 		if (event->button() == Qt::LeftButton) {
 			is_dragging = true;
-			start       = event->pos();
-			end = event->pos();
+			start       = event->globalPosition();
+			end         = event->globalPosition();
 			updateScreenshotLabel();
 		}
 		QMainWindow::mousePressEvent(event);
@@ -80,7 +85,7 @@ namespace iwra {
 
 	void ScreenshotWindow::mouseMoveEvent(QMouseEvent* event) {
 		if (is_dragging) {
-			end = event->pos();
+			end = event->globalPosition();
 			updateScreenshotLabel();
 		}
 		QMainWindow::mouseMoveEvent(event);
@@ -89,23 +94,24 @@ namespace iwra {
 	void ScreenshotWindow::mouseReleaseEvent(QMouseEvent* event) {
 		if (is_dragging && event->button() == Qt::LeftButton) {
 			is_dragging = false;
-			end = event->pos();
+			end         = event->globalPosition();
 
 			if (start.x() != -1 && start.y() != -1) {
-				const auto [left, right] = std::minmax(start.x(), end.x());
-				const auto [top, bottom] = std::minmax(start.y(), end.y());
+				const auto [left, right] = static_cast<std::tuple<int, int>>(std::minmax(start.x(), end.x()));
+				const auto [top, bottom] = static_cast<std::tuple<int, int>>(std::minmax(start.y(), end.y()));
 				const auto r_width       = right - left;
 				const auto r_height      = bottom - top;
 				const auto pixmap        = desktop.copy(left, top, r_width, r_height);
-				emit activated(QPixmap2cvMat(pixmap), {left, top, r_width, r_height});
+				const auto cvMat         = QPixmap2cvMat(pixmap);
+				emit activated(cvMat, {left, top, r_width, r_height});
 			}
 		}
 		QMainWindow::mouseReleaseEvent(event);
 	}
 
 	void ScreenshotWindow::showEvent(QShowEvent* event) {
-		start = {-1, -1};
-		end = {-1, -1};
+		start   = {-1, -1};
+		end     = {-1, -1};
 		desktop = captureEntireScreen();
 		updateScreenshotLabel();
 	}

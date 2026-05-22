@@ -19,12 +19,32 @@ namespace iwra {
 		QWidget*                                parent,
 		const std::shared_ptr<DictParser>&      parser,
 		const std::shared_ptr<Anki::Interface>& anki
-	) :
+	):
 		QMainWindow{parent},
 		hover_hotkey{new QHotkey(QKeySequence("ctrl+shift+3"), true, this)},
 		parser{parser},
+		centralWidget{new QWidget(this)},
+		layout{new QVBoxLayout(centralWidget)},
 		anki{anki} {
 
+		setCentralWidget(centralWidget);
+		centralWidget->setLayout(layout);
+
+		connect(hover_hotkey, &QHotkey::activated, this, [this]() {
+			timer_id = startTimer(0, Qt::PreciseTimer);
+		});
+
+		connect(hover_hotkey, &QHotkey::released, this, [this]() {
+			killTimer(timer_id);
+			timer_id = 0;
+		});
+
+		setWindowFlags(
+			Qt::FramelessWindowHint |
+			Qt::Tool |
+			Qt::NoDropShadowWindowHint |
+			Qt::WindowStaysOnTopHint
+		);
 	}
 
 	bool TooltipWnd::initDictEntry(const std::string& key, const std::string& phrase) {
@@ -196,7 +216,9 @@ namespace iwra {
 				entries[i]->show();
 				entries[i]->update(dict_data->entries[i]);
 			} else {
-				entries.push_back(new TooltipEntry(this));
+				auto* new_entry = new TooltipEntry(this);
+				layout->addWidget(new_entry);
+				entries.push_back(new_entry);
 				entries[i]->update(dict_data->entries[i]);
 			}
 		}
@@ -299,23 +321,33 @@ namespace iwra {
 		return result;
 	}
 
+	void TooltipWnd::timerEvent(QTimerEvent* event) {
+		if (is_hovering) {
+			show();
+		} else {
+			hide();
+		}
+		refreshHovering();
+		QMainWindow::timerEvent(event);
+	}
+
 	// 40ms
 	void TooltipWnd::updateResRect(const std::vector<OCRResult>& new_res, const cv::Rect& new_rect) {
-		processOCRResults(new_res, cv::Point{rect.x, rect.y}, results);
+		processOCRResults(new_res, {new_rect.x, new_rect.y}, results);
 		rect          = new_rect;
 		current_block = nullptr;
 		current_word  = nullptr;
 	}
 
 	void TooltipWnd::refreshHovering() {
-		const QPoint qt_cursor_pos = QCursor::pos();
-
-		const cv::Point mouse_pos{qt_cursor_pos.x(), qt_cursor_pos.y()};
-
 		if (results.empty()) {
 			is_hovering = false;
 			return;
 		}
+
+		const QPoint qt_cursor_pos = QCursor::pos();
+
+		const cv::Point mouse_pos{qt_cursor_pos.x(), qt_cursor_pos.y()};
 
 		// if mouse is in the captured rect
 		if (!rect.contains(mouse_pos)) {
