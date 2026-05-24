@@ -76,6 +76,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         fmt::fmt
         utf8cpp
         clip::clip
+        nlohmann_json::nlohmann_json
         httplib::httplib
         Qt6::Widgets
         Qt6::Concurrent
