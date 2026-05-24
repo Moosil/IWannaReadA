@@ -12,12 +12,23 @@ namespace iwra {
 	public:
 		explicit TooltipEntry(QWidget* parent);
 
-		void update(const DictParser::entry& entry);
+		void update(const DictParser::entry& entry) const;
 	private:
 		QVBoxLayout* layout;
-		QLabel* hanzi{};
-		QLabel* pinyin{};
 
-		std::vector<QLabel*> definitions{};
+		QWidget* headword;
+		QHBoxLayout* headword_layout;
+
+		QWidget* simp_headword;
+		QVBoxLayout* simp_headword_layout;
+		QLabel* simp_hanzi;
+		QLabel* simp_pinyin;
+
+		QWidget* trad_headword;
+		QVBoxLayout* trad_headword_layout;
+		QLabel* trad_hanzi;
+		QLabel* trad_pinyin;
+
+		QLabel* definitions;
 	};
 }

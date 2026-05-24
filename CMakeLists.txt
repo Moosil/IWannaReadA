@@ -10,8 +10,6 @@ find_package(ncnn CONFIG REQUIRED)
 find_package(OpenCV CONFIG REQUIRED)
 find_package(Clipper2 CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
-find_package(turbobase64 CONFIG REQUIRED)
-find_package(unofficial-webview2 CONFIG REQUIRED)
 find_package(clip CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(httplib CONFIG REQUIRED)
@@ -53,7 +51,6 @@ add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/anki_connect.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/ccedict.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/dict_parser.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/util.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/util.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/util_ocr.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/util_ocr.h
@@ -65,6 +62,7 @@ add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/screenshot_viewer.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/tooltip_entry.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/tooltip_entry.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/util_qt.h
 )
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
@@ -78,6 +76,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         fmt::fmt
         utf8cpp
         clip::clip
+        httplib::httplib
         Qt6::Widgets
         Qt6::Concurrent
         qhotkey

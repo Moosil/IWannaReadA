@@ -12,12 +12,15 @@ namespace iwra {
 
 	std::string& rtrim(std::string& str);
 
-	std::string& trim(std::string& str);
+	inline std::string& trim(std::string& str) {
+		return ltrim(rtrim(str));
+	}
 
-	std::string trim_copy(const std::string& str);
+	inline std::string trim_copy(const std::string& str) {
+		auto s = str;
+		return ltrim(rtrim(s));
+	}
 	// End attribution
 
-	std::wstring utf8ToWide(const std::string& str);
 
-	std::string wideToUtf8(const std::wstring& wstr);
 }

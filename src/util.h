@@ -1,17 +1,12 @@
 #pragma once
 
-#include <string>
-#include <chrono>
-#include <filesystem>
+#include <qguiapplication.h>
+#include <qscreen.h>
 
-
-struct IDWriteTextFormat;
-struct IDWriteFactory;
 
 namespace iwra {
-	std::pair<int, int> getScreenSize();
-
-	std::string pinyinNumberToTone(const std::string& in_pinyin);
-
-	std::string readFile(const std::filesystem::path& path);
+	inline std::pair<int, int> getScreenSize() {
+		const QSize screenSize = QGuiApplication::primaryScreen()->size();
+		return {screenSize.width(), screenSize.height()};
+	}
 } // ocr

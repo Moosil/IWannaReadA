@@ -3,6 +3,7 @@
 #include <qhotkey.h>
 #include <qmainwindow.h>
 #include <qboxlayout.h>
+#include <qscrollbar.h>
 
 #include <unordered_map>
 
@@ -10,6 +11,7 @@
 #include "common.h"
 #include "dict_parser.h"
 #include "tooltip_entry.h"
+#include "../cmake-build-debug/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qscrollarea.h"
 
 namespace iwra {
 	struct DictionaryData {
@@ -42,7 +44,7 @@ namespace iwra {
 		std::string current_phrase{};
 
 		QHotkey* hover_hotkey;
-		int timer_id;
+		int timer_id{0};
 		bool     is_hovering{false};
 
 		std::vector<OCRBlock>                           results;
@@ -52,6 +54,7 @@ namespace iwra {
 
 		QWidget* centralWidget;
 		QVBoxLayout* layout;
+		QScrollArea* scrollbar;
 		std::vector<TooltipEntry*> entries{};
 
 		std::shared_ptr<Anki::Interface> anki;

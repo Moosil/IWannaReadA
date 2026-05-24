@@ -29,25 +29,4 @@ namespace iwra {
 		str.erase(it1.base(), str.end());
 		return str;
 	}
-
-	std::string& trim(std::string& str) {
-		return ltrim(rtrim(str));
-	}
-
-	std::string trim_copy(const std::string& str) {
-		auto s = str;
-		return ltrim(rtrim(s));
-	}
-
-	std::wstring utf8ToWide(const std::string& str) {
-		const std::u16string u16str = utf8::utf8to16(str);
-		const auto           wcstr  = reinterpret_cast<const wchar_t*>(u16str.c_str());
-		return wcstr;
-	}
-
-	std::string wideToUtf8(const std::wstring& wstr) {
-		const std::u16string u16str = reinterpret_cast<const char16_t*>(wstr.c_str());
-		const auto           str    = utf8::utf16to8(u16str);
-		return str;
-	}
 }

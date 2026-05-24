@@ -9,8 +9,10 @@
 #include <utf8/cpp20.h>
 
 #include "dict_parser.h"
+#include "screenshot.h"
 #include "util.h"
 #include "util_ocr.h"
+#include "util_qt.h"
 #include "util_utf8.h"
 
 
@@ -25,16 +27,22 @@ namespace iwra {
 		parser{parser},
 		centralWidget{new QWidget(this)},
 		layout{new QVBoxLayout(centralWidget)},
+		scrollbar{new QScrollArea(this)},
 		anki{anki} {
 
-		setCentralWidget(centralWidget);
-		centralWidget->setLayout(layout);
-
 		connect(hover_hotkey, &QHotkey::activated, this, [this]() {
+			if (timer_id != 0) {
+				spdlog::warn("timer is already running");
+				return;
+			}
 			timer_id = startTimer(0, Qt::PreciseTimer);
 		});
 
 		connect(hover_hotkey, &QHotkey::released, this, [this]() {
+			if (timer_id == 0) {
+				spdlog::warn("can't kill timer that hasn't started");
+				return;
+			}
 			killTimer(timer_id);
 			timer_id = 0;
 		});
@@ -44,7 +52,25 @@ namespace iwra {
 			Qt::Tool |
 			Qt::NoDropShadowWindowHint |
 			Qt::WindowStaysOnTopHint
-		);
+			);
+
+		layout->setContentsMargins(0, 0, 0, 0);
+		layout->setSpacing(8);
+		layout->setAlignment(Qt::AlignTop);
+
+		setCentralWidget(scrollbar);
+		compactifyWidget(centralWidget);
+		centralWidget->setLayout(layout);
+
+		scrollbar->setWidget(centralWidget);
+		scrollbar->setWidgetResizable(true);
+		compactifyWidget(scrollbar);
+		scrollbar->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+		scrollbar->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+		scrollbar->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
+
+		setMinimumSize(256, 128);
+		setMaximumSize(256, 256);
 	}
 
 	bool TooltipWnd::initDictEntry(const std::string& key, const std::string& phrase) {
@@ -217,6 +243,7 @@ namespace iwra {
 				entries[i]->update(dict_data->entries[i]);
 			} else {
 				auto* new_entry = new TooltipEntry(this);
+				new_entry->setFixedWidth(256 - 12);
 				layout->addWidget(new_entry);
 				entries.push_back(new_entry);
 				entries[i]->update(dict_data->entries[i]);
@@ -225,6 +252,8 @@ namespace iwra {
 		for (; i < entries.size(); ++i) {
 			entries[i]->hide();
 		}
+
+		scrollbar->verticalScrollBar()->setSliderPosition(0);
 
 		updateWindowPosition();
 	}

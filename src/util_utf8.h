@@ -10,9 +10,15 @@ namespace iwra {
 
 	std::string::const_iterator utf8Find(const std::string& in, char32_t to_find);
 
-	std::string toUtf8(char32_t c);
+	inline std::string toUtf8(const char32_t c) {
+		std::string out;
+		utf8::append(c, std::back_inserter(out));
+		return out;
+	}
 
-	bool isAlphanum(char32_t c);
+	inline bool isAlphanum(const char32_t c) {
+		return (U'a' <= c && c <= U'z') || (U'A' <= c && c <= U'Z') || (U'0' <= c && c <= U'9');
+	}
 
 	std::size_t utf8Length(const std::string& in);
 }

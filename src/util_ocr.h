@@ -61,13 +61,30 @@ namespace iwra {
 		return res;
 	}
 
-	Clipper2Lib::Path64 rect2path(const Poly2I& rect);
+	inline Clipper2Lib::Path64 rect2path(const Poly2I& rect) {
+		return {
+			Clipper2Lib::Point64(rect[0].x, rect[0].y),
+			Clipper2Lib::Point64(rect[1].x, rect[1].y),
+			Clipper2Lib::Point64(rect[2].x, rect[2].y),
+			Clipper2Lib::Point64(rect[3].x, rect[3].y)
+		};
+	}
 
-	Clipper2Lib::Path64 rect2path(const Poly2F& rect);
+	inline Clipper2Lib::Path64 rect2path(const Poly2F& rect) {
+		return {
+			Clipper2Lib::Point64(rect[0].x, rect[0].y),
+			Clipper2Lib::Point64(rect[1].x, rect[1].y),
+			Clipper2Lib::Point64(rect[2].x, rect[2].y),
+			Clipper2Lib::Point64(rect[3].x, rect[3].y)
+		};
+	}
 
 	cv::RotatedRect unclip(const Poly2F& rect, float unclip_ratio);
 
-	float distance(cv::Point2f a, cv::Point2f b);
+	inline float distance(const cv::Point2f a, const cv::Point2f b) {
+		const auto c = b - a;
+		return std::sqrt(c.x * c.x + c.y * c.y);
+	}
 
 	float getUnclipDistance(const Poly2F& rect, float unclip_ratio);
 

@@ -354,7 +354,7 @@ namespace iwra {
 		// spdlog::info("{}/{} [{}]", res.get_simp(), res.get_trad(), res.get_pinyin());
 
 		std::string::size_type curr_pos;
-		std::string::size_type prev_pos = end_pinyin_pos+3;
+		std::string::size_type prev_pos = end_pinyin_pos + (is_v2_syntax ? 4 : 3);
 		while ((curr_pos = line.find('/', prev_pos)) != std::string::npos) {
 			res.definitions.emplace_back(line.substr(prev_pos, curr_pos - prev_pos));
 			prev_pos = curr_pos+1;
