@@ -1,9 +1,8 @@
+#include <qapplication.h>
+#include <qhotkey.h>
+#include <qtconcurrentrun.h>
 #include <opencv2/core/mat.hpp>
 #include <spdlog/spdlog.h>
-#include <qapplication.h>
-#include <qtconcurrentrun.h>
-#include <qhotkey.h>
-#include <utf8/checked.h>
 
 #include "config.h"
 #include "ocr_engine.h"
@@ -51,7 +50,7 @@ int main(int argc, char* argv[]) {
 	tooltip_window->hide();
 
 
-	app.connect(
+	QObject::connect(
 		screenshot_window,
 		&ScreenshotWindow::activated,
 		&app,
@@ -61,7 +60,7 @@ int main(int argc, char* argv[]) {
 		}
 	);
 
-	app.connect(
+	QObject::connect(
 		screenshot_hotkey,
 		&QHotkey::activated,
 		screenshot_window,
@@ -72,7 +71,7 @@ int main(int argc, char* argv[]) {
 		}
 	);
 
-	return app.exec();
+	return QApplication::exec();
 }
 
 QFuture<void> processScreenshot(
@@ -85,7 +84,8 @@ QFuture<void> processScreenshot(
 
 	return QtConcurrent::run(
 		[&ocr_engine, copy]() {
-			return ocr_engine.run(copy);
+			const auto res = ocr_engine.run(copy);
+			return res;
 		}
 	).then(
 		QtFuture::Launch::Sync,

@@ -18,9 +18,10 @@ namespace iwra {
 		const std::string& rec_model_path,
 		const std::string& rec_param_path,
 		const std::string& keys_path
-	):
+	) :
 		det{det_model_path, det_param_path},
-		rec{rec_model_path, rec_param_path, keys_path} {}
+		rec{rec_model_path, rec_param_path, keys_path} {
+	}
 
 	OCREngine::OCREngine(
 		const std::filesystem::path& det_model_path,
@@ -28,9 +29,10 @@ namespace iwra {
 		const std::filesystem::path& rec_model_path,
 		const std::filesystem::path& rec_param_path,
 		const std::filesystem::path& keys_path
-	):
+	) :
 		det{det_model_path.string(), det_param_path.string()},
-		rec{rec_model_path.string(), rec_param_path.string(), keys_path.string()} {}
+		rec{rec_model_path.string(), rec_param_path.string(), keys_path.string()} {
+	}
 
 	OCREngine::OCREngine(
 		const char* det_model_path,
@@ -38,14 +40,16 @@ namespace iwra {
 		const char* rec_model_path,
 		const char* rec_param_path,
 		const char* keys_path
-	):
+	) :
 		det{det_model_path, det_param_path},
-		rec{rec_model_path, rec_param_path, keys_path} {}
+		rec{rec_model_path, rec_param_path, keys_path} {
+	}
 
 
-	OCREngine::OCREngine(Config& yaml):
+	OCREngine::OCREngine(Config& yaml) :
 		det{yaml.getDetModelPath().string(), yaml.getDetParamPath().string()},
-		rec{yaml.getRecModelPath().string(), yaml.getRecParamPath().string(), yaml.getKeyPath().string()} {}
+		rec{yaml.getRecModelPath().string(), yaml.getRecParamPath().string(), yaml.getKeyPath().string()} {
+	}
 
 
 	std::vector<OCRResult> OCREngine::run(const std::string& image_path) const {

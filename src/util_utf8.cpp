@@ -26,9 +26,13 @@ namespace iwra {
 		const auto end = in.end();
 		while (it != end) {
 			if (utf8::next(it, end) == to_find) {
+				// Iterator must not outlive input
+				// ReSharper disable once CppDFALocalValueEscapesFunction
 				return it;
 			}
 		}
+		// Iterator must not outlive input
+		// ReSharper disable once CppDFALocalValueEscapesFunction
 		return end;
 	}
 

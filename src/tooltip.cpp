@@ -1,7 +1,5 @@
 #include "tooltip.h"
 
-
-#include <clip.h>
 #include <ranges>
 #include <nlohmann/json.hpp>
 #include <opencv2/imgproc.hpp>
@@ -21,7 +19,7 @@ namespace iwra {
 		QWidget*                                parent,
 		const std::shared_ptr<DictParser>&      parser,
 		const std::shared_ptr<Anki::Interface>& anki
-	):
+	) :
 		QMainWindow{parent},
 		hover_hotkey{new QHotkey(QKeySequence("ctrl+shift+3"), true, this)},
 		parser{parser},
@@ -35,10 +33,16 @@ namespace iwra {
 				spdlog::warn("timer is already running");
 				return;
 			}
+			if (is_hovering) {
+				show();
+			} else {
+				hide();
+			}
+			refreshHovering();
 			timer_id = startTimer(0, Qt::PreciseTimer);
 		});
 
-		connect(hover_hotkey, &QHotkey::released, this, [this]() {
+		connect(hover_hotkey, &QHotkey::released, this,[this]() {
 			if (timer_id == 0) {
 				spdlog::warn("can't kill timer that hasn't started");
 				return;
@@ -89,40 +93,6 @@ namespace iwra {
 		} while (it != end);
 		std::ranges::reverse(dictionary_data[key].entries);
 		return !dictionary_data[key].entries.empty();
-	}
-
-	std::vector<OCRResultPacked> TooltipWnd::ocrSplitText(const Poly2I& rect, const Text& text, const bool horizontal) {
-		auto                         it  = text.text.begin();
-		const auto                   end = text.text.end();
-		std::vector<OCRResultPacked> out{};
-		out.reserve(text.char_lengths.size());
-		for (const auto& [lower, upper] : text.char_lengths) {
-			std::string utf16i;
-			try {
-				utf8::append(utf8::next(it, end), utf16i);
-			} catch (const utf8::not_enough_room& _) {
-				continue;
-			}
-			Poly2I char_rect;
-			if (horizontal) {
-				char_rect = {
-					cv::Point{static_cast<int>(std::lerp(rect[0].x, rect[1].x, lower)), rect[0].y},
-					cv::Point{static_cast<int>(std::lerp(rect[0].x, rect[1].x, upper)), rect[1].y},
-					cv::Point{static_cast<int>(std::lerp(rect[3].x, rect[2].x, upper)), rect[2].y},
-					cv::Point{static_cast<int>(std::lerp(rect[3].x, rect[2].x, lower)), rect[3].y}
-				};
-			} else {
-				char_rect = {
-					cv::Point{rect[0].x, static_cast<int>(std::lerp(rect[0].y, rect[3].y, lower))},
-					cv::Point{rect[1].x, static_cast<int>(std::lerp(rect[1].y, rect[2].y, lower))},
-					cv::Point{rect[2].x, static_cast<int>(std::lerp(rect[1].y, rect[2].y, upper))},
-					cv::Point{rect[3].x, static_cast<int>(std::lerp(rect[0].y, rect[3].y, upper))}
-				};
-			}
-			out.emplace_back(char_rect, utf16i);
-		}
-
-		return std::move(out);
 	}
 
 	void TooltipWnd::processOCRResults(
@@ -183,6 +153,40 @@ namespace iwra {
 				}
 			}
 		}
+	}
+
+	std::vector<OCRResultPacked> TooltipWnd::ocrSplitText(const Poly2I& rect, const Text& text, const bool horizontal) {
+		auto                         it  = text.text.begin();
+		const auto                   end = text.text.end();
+		std::vector<OCRResultPacked> out{};
+		out.reserve(text.char_lengths.size());
+		for (const auto& [lower, upper] : text.char_lengths) {
+			std::string utf16i;
+			try {
+				utf8::append(utf8::next(it, end), utf16i);
+			} catch (const utf8::not_enough_room& _) {
+				continue;
+			}
+			Poly2I char_rect;
+			if (horizontal) {
+				char_rect = {
+					cv::Point{static_cast<int>(std::lerp(rect[0].x, rect[1].x, lower)), rect[0].y},
+					cv::Point{static_cast<int>(std::lerp(rect[0].x, rect[1].x, upper)), rect[1].y},
+					cv::Point{static_cast<int>(std::lerp(rect[3].x, rect[2].x, upper)), rect[2].y},
+					cv::Point{static_cast<int>(std::lerp(rect[3].x, rect[2].x, lower)), rect[3].y}
+				};
+			} else {
+				char_rect = {
+					cv::Point{rect[0].x, static_cast<int>(std::lerp(rect[0].y, rect[3].y, lower))},
+					cv::Point{rect[1].x, static_cast<int>(std::lerp(rect[1].y, rect[2].y, lower))},
+					cv::Point{rect[2].x, static_cast<int>(std::lerp(rect[1].y, rect[2].y, upper))},
+					cv::Point{rect[3].x, static_cast<int>(std::lerp(rect[0].y, rect[3].y, upper))}
+				};
+			}
+			out.emplace_back(char_rect, utf16i);
+		}
+
+		return std::move(out);
 	}
 
 	void TooltipWnd::updateWindowPosition() {
@@ -294,6 +298,14 @@ namespace iwra {
 		return res;
 	}
 
+	// 40ms
+	void TooltipWnd::updateResRect(const std::vector<OCRResult>& new_res, const cv::Rect& new_rect) {
+		processOCRResults(new_res, {new_rect.x, new_rect.y}, results);
+		rect          = new_rect;
+		current_block = nullptr;
+		current_word  = nullptr;
+	}
+
 	void TooltipWnd::refreshWindow() {
 		if (!current_word) {
 			return;
@@ -314,58 +326,6 @@ namespace iwra {
 		const std::string sentence = getSentence(current_block);
 
 		updateWindowEntry(dict_data, phrase, sentence);
-	}
-
-	void TooltipWnd::addAnkiCard(
-		const std::string& character,
-		const std::string& phrase,
-		const std::string& pinyin,
-		const std::string& sentence,
-		const std::string& definition
-	) const {
-		auto              [find_pos_first, find_pos_second] = utf8Find(sentence, character);
-		const std::string sentence_add                      = std::format(
-			"{}{{{{c1::{}}}}}{}",
-			std::string(sentence.begin(), find_pos_first),
-			phrase,
-			std::string(find_pos_second, sentence.end())
-		);
-
-		anki->add_note(phrase, pinyin, definition, sentence_add);
-	}
-
-	std::string TooltipWnd::getSentence(OCRBlock* hover_block) {
-		return hover_block->results
-		       | std::ranges::views::transform(
-			       [](auto& r) -> std::string& { return r.text; }
-		       )
-		       | std::views::join | std::ranges::to<std::string>();
-	}
-
-	std::string TooltipWnd::getPhrase(const OCRResultPacked* hover_word, const OCRBlock* hover_block) {
-		std::string result;
-		for (const auto* curr = hover_word; curr != hover_block->results.end()._Ptr; ++curr) {
-			result += curr->text;
-		}
-		return result;
-	}
-
-	void TooltipWnd::timerEvent(QTimerEvent* event) {
-		if (is_hovering) {
-			show();
-		} else {
-			hide();
-		}
-		refreshHovering();
-		QMainWindow::timerEvent(event);
-	}
-
-	// 40ms
-	void TooltipWnd::updateResRect(const std::vector<OCRResult>& new_res, const cv::Rect& new_rect) {
-		processOCRResults(new_res, {new_rect.x, new_rect.y}, results);
-		rect          = new_rect;
-		current_block = nullptr;
-		current_word  = nullptr;
 	}
 
 	void TooltipWnd::refreshHovering() {
@@ -428,5 +388,49 @@ namespace iwra {
 		current_word  = word_iter._Ptr;
 		current_block = intersect_iter._Ptr;
 		refreshWindow();
+	}
+
+	void TooltipWnd::addAnkiCard(
+		const std::string& character,
+		const std::string& phrase,
+		const std::string& pinyin,
+		const std::string& sentence,
+		const std::string& definition
+	) const {
+		auto              [find_pos_first, find_pos_second] = utf8Find(sentence, character);
+		const std::string sentence_add                      = std::format(
+			"{}{{{{c1::{}}}}}{}",
+			std::string(sentence.begin(), find_pos_first),
+			phrase,
+			std::string(find_pos_second, sentence.end())
+		);
+
+		anki->add_note(phrase, pinyin, definition, sentence_add);
+	}
+
+	std::string TooltipWnd::getSentence(OCRBlock* hover_block) {
+		return hover_block->results
+		       | std::ranges::views::transform(
+			       [](auto& r) -> std::string& { return r.text; }
+		       )
+		       | std::views::join | std::ranges::to<std::string>();
+	}
+
+	std::string TooltipWnd::getPhrase(const OCRResultPacked* hover_word, const OCRBlock* hover_block) {
+		std::string result;
+		for (const auto* curr = hover_word; curr != hover_block->results.end()._Ptr; ++curr) {
+			result += curr->text;
+		}
+		return result;
+	}
+
+	void TooltipWnd::timerEvent(QTimerEvent* event) {
+		if (is_hovering) {
+			show();
+		} else {
+			hide();
+		}
+		refreshHovering();
+		QMainWindow::timerEvent(event);
 	}
 }

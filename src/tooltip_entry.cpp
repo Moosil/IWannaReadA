@@ -3,6 +3,7 @@
 #include <qevent.h>
 #include <qmenu.h>
 #include <spdlog/spdlog.h>
+
 #include "util_qt.h"
 
 
@@ -92,7 +93,9 @@ namespace iwra {
 		}
 
 		using namespace std::string_literals;
-		const std::string definition_concat = "<ul style=\"margin-left:10px; -qt-list-indent:0;\"><li>" + (entry.definitions | std::views::join_with("</li><li>"s) | std::ranges::to<std::string>()) + "</li></ul>";
+		const std::string definition_concat = "<ul style=\"margin-left:10px; -qt-list-indent:0;\"><li>" + (
+			                                      entry.definitions | std::views::join_with("</li><li>"s) |
+			                                      std::ranges::to<std::string>()) + "</li></ul>";
 		definitions->setText(QString::fromStdString(definition_concat));
 	}
 
@@ -196,18 +199,38 @@ namespace iwra {
 		const QAction* copy_sentence_action  = menu.addAction("copy sentence");
 		const QAction* add_to_anki_action    = menu.addAction("add_to_anki");
 
-		connect(copy_character_action, &QAction::triggered, this, [this]() {
-			set_clipboard_character();
-		});
-		connect(copy_phrase_action, &QAction::triggered, this, [this]() {
-			set_clipboard_phrase();
-		});
-		connect(copy_sentence_action, &QAction::triggered, this, [this]() {
-			set_clipboard_sentence();
-		});
-		connect(add_to_anki_action, &QAction::triggered, this, [this]() {
-			add_to_anki();
-		});
+		connect(
+			copy_character_action,
+			&QAction::triggered,
+			this,
+			[this]() {
+				set_clipboard_character();
+			}
+		);
+		connect(
+			copy_phrase_action,
+			&QAction::triggered,
+			this,
+			[this]() {
+				set_clipboard_phrase();
+			}
+		);
+		connect(
+			copy_sentence_action,
+			&QAction::triggered,
+			this,
+			[this]() {
+				set_clipboard_sentence();
+			}
+		);
+		connect(
+			add_to_anki_action,
+			&QAction::triggered,
+			this,
+			[this]() {
+				add_to_anki();
+			}
+		);
 
 		menu.exec(event->globalPos());
 

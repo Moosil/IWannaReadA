@@ -11,6 +11,7 @@ namespace iwra {
 	private:
 		Det det;
 		Rec rec;
+
 	public:
 		OCREngine(
 			const std::string& det_model_path,

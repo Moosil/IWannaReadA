@@ -1,60 +1,14 @@
 #include "rec.h"
 
-
-#include <opencv2/core/mat.hpp>
-
 #include <format>
 #include <fstream>
 #include <ranges>
+#include <opencv2/core/mat.hpp>
 
 #include "util_text.h"
 
 
 namespace iwra {
-	Rec::Rec(const std::string& det_model_path, const std::string& det_param_path, const std::string& keys_path) {
-		init(det_model_path, det_param_path, keys_path);
-	}
-
-	void Rec::init(const std::string& det_model_path, const std::string& det_param_path, const std::string& keys_path) {
-		std::string   line;
-		std::ifstream file_stream{keys_path.c_str()};
-		if (!file_stream.is_open()) {
-			throw std::runtime_error(std::format("fatal error to open keys file at {}", keys_path));
-		}
-		while (std::getline(file_stream, line)) {
-			keys.emplace_back(line);
-		}
-
-		net = std::make_unique<ncnn::Net>();
-		net->load_param(det_param_path.c_str());
-		net->load_model(det_model_path.c_str());
-	}
-
-	Rec::Rec(Rec&& other) noexcept :
-		net{std::move(other.net)},
-		keys{std::move(other.keys)} {
-	}
-
-	Rec& Rec::operator=(Rec&& other) noexcept {
-		if (this != &other) {
-			net  = std::move(other.net);
-			keys = std::move(other.keys);
-		}
-		return *this;
-	}
-
-	std::vector<Text> Rec::run(const std::vector<cv::Mat>& images) const {
-		const std::size_t length = images.size();
-		std::vector<Text> text_lines{length};
-
-		#pragma omp parallel for num_threads(10) schedule(dynamic)
-		for (int i = 0; i < static_cast<int>(length); ++i) {
-			text_lines[i] = _run(images[i]);
-		}
-
-		return text_lines;
-	}
-
 	Text Rec::_run(const cv::Mat& image) const {
 		// resize image
 		const float ratio = static_cast<float>(target_height) / static_cast<float>(image.rows);
@@ -137,5 +91,49 @@ namespace iwra {
 			.char_lengths = text_lengths,
 			.scores = text_scores
 		};
+	}
+
+	Rec::Rec(const std::string& det_model_path, const std::string& det_param_path, const std::string& keys_path) {
+		init(det_model_path, det_param_path, keys_path);
+	}
+
+	void Rec::init(const std::string& det_model_path, const std::string& det_param_path, const std::string& keys_path) {
+		std::string   line;
+		std::ifstream file_stream{keys_path.c_str()};
+		if (!file_stream.is_open()) {
+			throw std::runtime_error(std::format("fatal error to open keys file at {}", keys_path));
+		}
+		while (std::getline(file_stream, line)) {
+			keys.emplace_back(line);
+		}
+
+		net = std::make_unique<ncnn::Net>();
+		net->load_param(det_param_path.c_str());
+		net->load_model(det_model_path.c_str());
+	}
+
+	Rec::Rec(Rec&& other) noexcept :
+		net{std::move(other.net)},
+		keys{std::move(other.keys)} {
+	}
+
+	Rec& Rec::operator=(Rec&& other) noexcept {
+		if (this != &other) {
+			net  = std::move(other.net);
+			keys = std::move(other.keys);
+		}
+		return *this;
+	}
+
+	std::vector<Text> Rec::run(const std::vector<cv::Mat>& images) const {
+		const std::size_t length = images.size();
+		std::vector<Text> text_lines{length};
+
+		#pragma omp parallel for num_threads(10) schedule(dynamic)
+		for (int i = 0; i < static_cast<int>(length); ++i) {
+			text_lines[i] = _run(images[i]);
+		}
+
+		return text_lines;
 	}
 } // ocr

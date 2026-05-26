@@ -1,8 +1,5 @@
 #include "util_text.h"
 
-
-#include <utf8/cpp20.h>
-
 #include <locale>
 
 

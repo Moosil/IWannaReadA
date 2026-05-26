@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include <string>
 
 
@@ -20,7 +19,6 @@ namespace iwra {
 		auto s = str;
 		return ltrim(rtrim(s));
 	}
+
 	// End attribution
-
-
 }

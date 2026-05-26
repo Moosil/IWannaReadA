@@ -1,6 +1,5 @@
 #include "config.h"
 
-
 #include <format>
 #include <spdlog/spdlog.h>
 
@@ -15,31 +14,11 @@ namespace iwra {
 		ocr_file_root = getOcrRootPath();
 	}
 
-	// ReSharper disable once CppNotAllPathsReturnValue
-	std::string Config::enum2String(const ModelType model_type) {
-		switch (model_type) {
-			case ModelType::Det:
-				return "det";
-			case ModelType::Rec:
-				return "rec";
-		}
-	}
-
-	// ReSharper disable once CppNotAllPathsReturnValue
-	std::string Config::enum2String(const FileType file_type) {
-		switch (file_type) {
-			case FileType::Model:
-				return "model";
-			case FileType::Param:
-				return "param";
-		}
-	}
-
 	Config::file_path Config::getRootPath() {
 		spdlog::info("looking for root path...");
 		if (node["file-root"]) {
-			file_path path = node["file-root"].as<std::string>();
-			if (!path.empty()) {
+			if (file_path path = node["file-root"].as<std::string>();
+				!path.empty()) {
 				if (path.is_relative()) {
 					if (file_path res = config_path.parent_path() / path; std::filesystem::is_directory(res)) {
 						spdlog::info("found root path at {}", res.string());
@@ -60,8 +39,8 @@ namespace iwra {
 	Config::file_path Config::getOcrRootPath() {
 		spdlog::info("looking for ocr root path...");
 		if (node["ocr"]["file-root"]) {
-			file_path path = node["ocr"]["file-root"].as<std::string>();
-			if (!path.empty()) {
+			if (file_path path = node["ocr"]["file-root"].as<std::string>();
+				!path.empty()) {
 				if (path.is_relative()) {
 					if (file_path res = config_path.parent_path() / path; std::filesystem::is_directory(res)) {
 						spdlog::info("found ocr root path at {}", res.string());
@@ -79,7 +58,6 @@ namespace iwra {
 		return path;
 	}
 
-
 	Config::file_path Config::getKeyPath() {
 		spdlog::info("looking for key path...");
 		if (node["ocr"]["keys-path"]) {
@@ -92,33 +70,15 @@ namespace iwra {
 		throw std::runtime_error{std::format("couldn't find key in {}", config_path.string())};
 	}
 
-
-	Config::file_path Config::getPath(const ModelType model_type, const FileType file_type) {
-		const std::string model_type_name = enum2String(model_type);
-		const std::string file_type_name  = enum2String(file_type);
-
-		if (node["ocr"][model_type_name][file_type_name + "-path"]) {
-			if (file_path path = ocr_file_root / node["ocr"][model_type_name][file_type_name + "-path"].as<
-				                     std::string>();
-				std::filesystem::is_regular_file(path)) {
-				spdlog::info("found key path at {}", path.string());
-				return path;
-			}
-		}
-
-		spdlog::error("couldn't find {} {} in {}", model_type_name, file_type_name, config_path.string());
-		throw std::runtime_error{
-			std::format("couldn't find {} {} in {}", model_type_name, file_type_name, config_path.string())
-		};
-	}
-
 	Config::file_path Config::getDetModelPath() {
 		return getPath(ModelType::Det, FileType::Model);
 	}
 
+
 	Config::file_path Config::getDetParamPath() {
 		return getPath(ModelType::Det, FileType::Param);
 	}
+
 
 	Config::file_path Config::getRecModelPath() {
 		return getPath(ModelType::Rec, FileType::Model);
@@ -142,6 +102,34 @@ namespace iwra {
 		throw std::runtime_error{
 			std::format("couldn't find dict path in {}", config_path.string())
 		};
+	}
+
+	std::optional<std::string> Config::getAnkiCardType() {
+		if (node["anki"]) {
+			if (node["anki"]["card-type"]) {
+				return node["anki"]["card-type"].as<std::string>();
+			}
+			spdlog::error("couldn't find anki card type in {}", config_path.string());
+			throw std::runtime_error{
+				std::format("couldn't find anki card type in {}", config_path.string())
+			};
+		}
+		spdlog::warn("couldn't find anki in {}", config_path.string());
+		return std::nullopt;
+	}
+
+	std::optional<std::string> Config::getAnkiDeckName() {
+		if (node["anki"]) {
+			if (node["anki"]["deck-name"]) {
+				return node["anki"]["deck-name"].as<std::string>();
+			}
+			spdlog::error("couldn't find anki deck name in {}", config_path.string());
+			throw std::runtime_error{
+				std::format("couldn't find anki deck name in {}", config_path.string())
+			};
+		}
+		spdlog::warn("couldn't find anki in {}", config_path.string());
+		return std::nullopt;
 	}
 
 	bool Config::getRefresh() {
@@ -174,6 +162,25 @@ namespace iwra {
 		return std::nullopt;
 	}
 
+	Config::file_path Config::getPath(const ModelType model_type, const FileType file_type) {
+		const std::string model_type_name = enum2String(model_type);
+		const std::string file_type_name  = enum2String(file_type);
+
+		if (node["ocr"][model_type_name][file_type_name + "-path"]) {
+			if (file_path path = ocr_file_root / node["ocr"][model_type_name][file_type_name + "-path"].as<
+				                     std::string>();
+				std::filesystem::is_regular_file(path)) {
+				spdlog::info("found key path at {}", path.string());
+				return path;
+			}
+		}
+
+		spdlog::error("couldn't find {} {} in {}", model_type_name, file_type_name, config_path.string());
+		throw std::runtime_error{
+			std::format("couldn't find {} {} in {}", model_type_name, file_type_name, config_path.string())
+		};
+	}
+
 	std::optional<std::string> Config::getRefreshIntervalAsString() {
 		if (node["refresh-interval"]) {
 			return node["refresh-interval"].as<std::string>();
@@ -182,31 +189,23 @@ namespace iwra {
 		return std::nullopt;
 	}
 
-	std::optional<std::string> Config::getAnkiCardType() {
-		if (node["anki"]) {
-			if (node["anki"]["card-type"]) {
-				return node["anki"]["card-type"].as<std::string>();
-			}
-			spdlog::error("couldn't find anki card type in {}", config_path.string());
-			throw std::runtime_error{
-				std::format("couldn't find anki card type in {}", config_path.string())
-			};
+	// ReSharper disable once CppNotAllPathsReturnValue
+	std::string Config::enum2String(const ModelType model_type) {
+		switch (model_type) {
+			case ModelType::Det:
+				return "det";
+			case ModelType::Rec:
+				return "rec";
 		}
-		spdlog::warn("couldn't find anki in {}", config_path.string());
-		return std::nullopt;
 	}
 
-	std::optional<std::string> Config::getAnkiDeckName() {
-		if (node["anki"]) {
-			if (node["anki"]["deck-name"]) {
-				return node["anki"]["deck-name"].as<std::string>();
-			}
-			spdlog::error("couldn't find anki deck name in {}", config_path.string());
-			throw std::runtime_error{
-				std::format("couldn't find anki deck name in {}", config_path.string())
-			};
+	// ReSharper disable once CppNotAllPathsReturnValue
+	std::string Config::enum2String(const FileType file_type) {
+		switch (file_type) {
+			case FileType::Model:
+				return "model";
+			case FileType::Param:
+				return "param";
 		}
-		spdlog::warn("couldn't find anki in {}", config_path.string());
-		return std::nullopt;
 	}
 } // ocr

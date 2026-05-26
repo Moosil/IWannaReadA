@@ -1,8 +1,7 @@
-#include <spdlog/spdlog.h>
+#include "anki_connect.h"
 
 #include <utility>
-
-#include "anki_connect.h"
+#include <spdlog/spdlog.h>
 
 
 namespace Anki {
@@ -83,7 +82,13 @@ namespace Anki {
 			nlohmann::json add_node_request = get_add_node_request(
 				deck_name,
 				card_type,
-				{{"hanyu", hanyu}, {"pinyin", pinyin}, {"definition (word)", definition}, {"definition (sentence)", "<please input>"}, {"sentence", sentence}}
+				{
+					{"hanyu", hanyu},
+					{"pinyin", pinyin},
+					{"definition (word)", definition},
+					{"definition (sentence)", "<please input>"},
+					{"sentence", sentence}
+				}
 			);
 			const httplib::Result add_node_result = post_and_receive(add_node_request);
 			if (!add_node_result) {

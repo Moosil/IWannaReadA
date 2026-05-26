@@ -40,9 +40,9 @@ namespace iwra {
 	};
 
 	struct Text {
-		std::string                            text;
+		std::string                           text;
 		std::vector<std::pair<float, float> > char_lengths;
-		std::vector<float>                     scores;
+		std::vector<float>                    scores;
 
 		// Convert to std::string
 		explicit operator std::string() const {

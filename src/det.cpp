@@ -1,6 +1,5 @@
 #include "det.h"
 
-
 #include <algorithm>
 #include <filesystem>
 #include <numeric>
@@ -11,81 +10,6 @@
 
 
 namespace iwra {
-	Det::Det(const std::string& det_model_path, const std::string& det_param_path) {
-		init(det_model_path, det_param_path);
-	}
-
-	void Det::init(const std::string& det_model_path, const std::string& det_param_path) {
-		net = std::make_unique<ncnn::Net>();
-		net->load_param(det_param_path.c_str());
-		net->load_model(det_model_path.c_str());
-	}
-
-	Det::Det(Det&& other) noexcept :
-		net{std::move(other.net)} {
-	}
-
-	Det& Det::operator=(Det&& other) noexcept {
-		if (this != &other) {
-			net = std::move(other.net);
-		}
-		return *this;
-	}
-
-	std::vector<TextRect> Det::run(const cv::Mat& image) const {
-		// padding
-		cv::Mat pad_image = image.clone();
-		cv::copyMakeBorder(
-			image,
-			pad_image,
-			padding,
-			padding,
-			padding,
-			padding,
-			cv::BORDER_CONSTANT | cv::BORDER_ISOLATED,
-			cv::Scalar(255.f, 255.f, 255.f)
-		);
-
-		// resize
-		const int target_size = std::min(
-			max_side_len + 2 * padding,
-			std::max(pad_image.rows, pad_image.cols)
-		);
-
-		const int   img_rows  = pad_image.rows,               img_cols  = pad_image.cols;
-		const auto  img_rowsf = static_cast<float>(img_rows), img_colsf = static_cast<float>(img_cols);
-		const float ratio     = static_cast<float>(target_size) / std::max(img_rowsf, img_colsf);
-		const int   rsz_rows  = std::max(static_cast<int>(img_rowsf * ratio) / 32 * 32, 32); // rounding to nearest 32
-		const int   rsz_cols  = std::max(static_cast<int>(img_colsf * ratio) / 32 * 32, 32); // rounding to nearest 32
-
-		ncnn::Mat in_inf = ncnn::Mat::from_pixels_resize(
-			pad_image.data,
-			ncnn::Mat::PIXEL_RGB,
-			img_cols,
-			img_rows,
-			rsz_cols,
-			rsz_rows
-		);
-		in_inf.substract_mean_normalize(mean_values_, norm_values_);
-
-		// inference: image -> Mat float
-		ncnn::Extractor ex = net->create_extractor();
-		ex.input("input", in_inf);
-		ncnn::Mat out_inf;
-		ex.extract("output", out_inf);
-
-		// binarisation: Mat float -> Mat bool
-		constexpr float denorm_values[1] = {255.f};
-		out_inf.substract_mean_normalize(0, denorm_values);
-
-		const cv::Mat pred(rsz_rows, rsz_cols, CV_8UC1);
-		out_inf.to_pixels(pred.data, ncnn::Mat::PIXEL_GRAY);
-		const cv::Mat bitmap = pred > threshold;
-
-
-		return box_from_bitmap(pred, bitmap, img_cols, img_rows);
-	}
-
 	std::vector<TextRect> Det::box_from_bitmap(
 		const cv::Mat& probability_map,
 		const cv::Mat& bitmap,
@@ -205,5 +129,80 @@ namespace iwra {
 		).clone();
 
 		return static_cast<float>(cv::mean(croppedImage, mask)[0] / 255.f);
+	}
+
+	Det::Det(const std::string& det_model_path, const std::string& det_param_path) {
+		init(det_model_path, det_param_path);
+	}
+
+	void Det::init(const std::string& det_model_path, const std::string& det_param_path) {
+		net = std::make_unique<ncnn::Net>();
+		net->load_param(det_param_path.c_str());
+		net->load_model(det_model_path.c_str());
+	}
+
+	Det::Det(Det&& other) noexcept :
+		net{std::move(other.net)} {
+	}
+
+	Det& Det::operator=(Det&& other) noexcept {
+		if (this != &other) {
+			net = std::move(other.net);
+		}
+		return *this;
+	}
+
+	std::vector<TextRect> Det::run(const cv::Mat& image) const {
+		// padding
+		cv::Mat pad_image = image.clone();
+		cv::copyMakeBorder(
+			image,
+			pad_image,
+			padding,
+			padding,
+			padding,
+			padding,
+			cv::BORDER_CONSTANT | cv::BORDER_ISOLATED,
+			cv::Scalar(255.f, 255.f, 255.f)
+		);
+
+		// resize
+		const int target_size = std::min(
+			max_side_len + 2 * padding,
+			std::max(pad_image.rows, pad_image.cols)
+		);
+
+		const int   img_rows  = pad_image.rows,               img_cols  = pad_image.cols;
+		const auto  img_rowsf = static_cast<float>(img_rows), img_colsf = static_cast<float>(img_cols);
+		const float ratio     = static_cast<float>(target_size) / std::max(img_rowsf, img_colsf);
+		const int   rsz_rows  = std::max(static_cast<int>(img_rowsf * ratio) / 32 * 32, 32); // rounding to nearest 32
+		const int   rsz_cols  = std::max(static_cast<int>(img_colsf * ratio) / 32 * 32, 32); // rounding to nearest 32
+
+		ncnn::Mat in_inf = ncnn::Mat::from_pixels_resize(
+			pad_image.data,
+			ncnn::Mat::PIXEL_RGB,
+			img_cols,
+			img_rows,
+			rsz_cols,
+			rsz_rows
+		);
+		in_inf.substract_mean_normalize(mean_values_, norm_values_);
+
+		// inference: image -> Mat float
+		ncnn::Extractor ex = net->create_extractor();
+		ex.input("input", in_inf);
+		ncnn::Mat out_inf;
+		ex.extract("output", out_inf);
+
+		// binarisation: Mat float -> Mat bool
+		constexpr float denorm_values[1] = {255.f};
+		out_inf.substract_mean_normalize(0, denorm_values);
+
+		const cv::Mat pred(rsz_rows, rsz_cols, CV_8UC1);
+		out_inf.to_pixels(pred.data, ncnn::Mat::PIXEL_GRAY);
+		const cv::Mat bitmap = pred > threshold;
+
+
+		return box_from_bitmap(pred, bitmap, img_cols, img_rows);
 	}
 } // ocr

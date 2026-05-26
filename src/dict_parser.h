@@ -1,20 +1,20 @@
 #pragma once
+
 #include <filesystem>
-#include <fstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <ranges>
-#include <variant>
 
 
 namespace iwra {
 	class DictParser {
 	public:
+		virtual ~DictParser() = default;
+
 		struct character {
-			std::string              simp;
-			std::string              trad;
-			std::string              pinyin;
+			std::string simp;
+			std::string trad;
+			std::string pinyin;
 		};
 
 		struct word {
@@ -46,7 +46,7 @@ namespace iwra {
 		};
 
 		struct entry {
-			std::vector<word> words;
+			std::vector<word>        words;
 			std::vector<std::string> definitions;
 
 			[[nodiscard]] std::string get_simp() const {
@@ -75,12 +75,12 @@ namespace iwra {
 			}
 		};
 
-		bool load(const std::filesystem::path& file_path);
+		virtual bool load(const std::filesystem::path& file_path);
 
 		static std::optional<entry> parse(const std::string_view& line);
 
-		std::vector<entry> get_entry(const std::string& hanzi);
+		virtual std::vector<entry> get_entry(const std::string& hanzi);
 
-		std::unordered_map<std::string, std::vector<entry>> dictionary;
+		std::unordered_map<std::string, std::vector<entry> > dictionary;
 	};
 }

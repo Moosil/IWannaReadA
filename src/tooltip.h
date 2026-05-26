@@ -1,17 +1,15 @@
 #pragma once
 
+#include <qboxlayout.h>
 #include <qhotkey.h>
 #include <qmainwindow.h>
-#include <qboxlayout.h>
-#include <qscrollbar.h>
-
+#include <qscrollarea.h>
 #include <unordered_map>
 
 #include "anki_connect.h"
 #include "common.h"
 #include "dict_parser.h"
 #include "tooltip_entry.h"
-#include "../cmake-build-debug/vcpkg_installed/x64-windows/include/Qt6/QtWidgets/qscrollarea.h"
 
 namespace iwra {
 	struct DictionaryData {

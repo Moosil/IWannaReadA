@@ -9,4 +9,5 @@ namespace iwra {
 		const QSize screenSize = QGuiApplication::primaryScreen()->size();
 		return {screenSize.width(), screenSize.height()};
 	}
-} // ocr
+}
+

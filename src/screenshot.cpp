@@ -1,8 +1,8 @@
 #include "screenshot.h"
 
-#include <qhotkey.h>
 #include <qevent.h>
 #include <qgraphicsview.h>
+#include <qhotkey.h>
 #include <qscreen.h>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/core/mat.hpp>

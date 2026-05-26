@@ -1,11 +1,10 @@
 #pragma once
 
 #include <clip.h>
+#include <memory>
+#include <qboxlayout.h>
 #include <qlabel.h>
 #include <qwidget.h>
-#include <qboxlayout.h>
-
-#include <memory>
 
 #include "anki_connect.h"
 #include "dict_parser.h"
@@ -26,13 +25,13 @@ namespace iwra {
 
 	private:
 		std::shared_ptr<Anki::Interface> anki_interface;
-		DictParser::entry entry;
-		std::string phrase;
-		std::string sentence;
+		DictParser::entry                entry;
+		std::string                      phrase;
+		std::string                      sentence;
 
 		QVBoxLayout* layout;
 
-		QWidget* headword;
+		QWidget*     headword;
 		QGridLayout* headword_layout;
 
 		QLabel* definitions;
@@ -58,9 +57,9 @@ namespace iwra {
 			);
 		}
 
-		QLabel* getHanziLabel() const;
+		[[nodiscard]] QLabel* getHanziLabel() const;
 
-		QLabel* getPinyinLabel() const;
+		[[nodiscard]] QLabel* getPinyinLabel() const;
 
 	protected:
 		void contextMenuEvent(QContextMenuEvent* event) override;
