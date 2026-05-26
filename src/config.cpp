@@ -11,7 +11,7 @@ namespace iwra {
 	Config::Config(const std::filesystem::path& path) :
 		node{YAML::LoadFile(path.string())},
 		config_path{path} {
-		file_root = getRootPath();
+		file_root     = getRootPath();
 		ocr_file_root = getOcrRootPath();
 	}
 
@@ -94,11 +94,12 @@ namespace iwra {
 
 
 	Config::file_path Config::getPath(const ModelType model_type, const FileType file_type) {
-		const std::string               model_type_name         = enum2String(model_type);
-		const std::string               file_type_name          = enum2String(file_type);
+		const std::string model_type_name = enum2String(model_type);
+		const std::string file_type_name  = enum2String(file_type);
 
 		if (node["ocr"][model_type_name][file_type_name + "-path"]) {
-			if (file_path path = ocr_file_root / node["ocr"][model_type_name][file_type_name + "-path"].as<std::string>();
+			if (file_path path = ocr_file_root / node["ocr"][model_type_name][file_type_name + "-path"].as<
+				                     std::string>();
 				std::filesystem::is_regular_file(path)) {
 				spdlog::info("found key path at {}", path.string());
 				return path;

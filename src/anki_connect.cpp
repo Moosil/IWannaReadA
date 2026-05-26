@@ -8,7 +8,8 @@
 namespace Anki {
 	Interface::Interface(std::string deck_name, std::string card_type, const int port) :
 		client{std::make_unique<httplib::Client>("127.0.0.1", port)},
-		deck_name{std::move(deck_name)}, card_type{std::move(card_type)} {
+		deck_name{std::move(deck_name)},
+		card_type{std::move(card_type)} {
 		//client->set_connection_timeout(0, 500'000); // 500 ms
 
 		spdlog::info("connected AnkiConnect HTTP client to 127.0.0.1:{}", port);
@@ -31,7 +32,7 @@ namespace Anki {
 	}
 
 	nlohmann::json Interface::get_find_note_request(const std::string& query) {
-		auto params = nlohmann::json::object();
+		auto params     = nlohmann::json::object();
 		params["query"] = query;
 		return get_request_body("findNotes", params);
 	}
@@ -41,7 +42,7 @@ namespace Anki {
 	}
 
 	nlohmann::json Interface::get_card_info_request(const std::vector<CardID>& note_id) {
-		auto params = nlohmann::json::object();
+		auto params     = nlohmann::json::object();
 		params["cards"] = note_id;
 		return get_request_body("cardsInfo", params);
 	}
@@ -50,10 +51,10 @@ namespace Anki {
 		const CardID                              note_id,
 		const std::map<std::string, std::string>& fields
 	) {
-		auto note = nlohmann::json::object();
-		note["id"] = note_id;
+		auto note      = nlohmann::json::object();
+		note["id"]     = note_id;
 		note["fields"] = fields;
-		auto params = nlohmann::json::object();
+		auto params    = nlohmann::json::object();
 		params["note"] = note;
 		return get_request_body("updateNoteFields", params);
 	}
@@ -65,8 +66,8 @@ namespace Anki {
 		const std::string& sentence
 	) const {
 		spdlog::info("[AnkiConnect] attempting to add card: {} | {} | {} | {}", hanyu, pinyin, definition, sentence);
-		const nlohmann::json find_note_request = get_find_note_request("deck:chinese_read_text hanyu:" + hanyu);
-		const httplib::Result find_note_result = post_and_receive(find_note_request);
+		const nlohmann::json  find_note_request = get_find_note_request("deck:chinese_read_text hanyu:" + hanyu);
+		const httplib::Result find_note_result  = post_and_receive(find_note_request);
 		if (!find_note_result) {
 			spdlog::error("[AnkiConnect] findNote failed: HTTP {}", to_string(find_note_result.error()));
 			return;
@@ -82,7 +83,7 @@ namespace Anki {
 			nlohmann::json add_node_request = get_add_node_request(
 				deck_name,
 				card_type,
-				{{"hanyu", hanyu}, {"pinyin", pinyin}, {"definition", definition}, {"sentence", sentence}}
+				{{"hanyu", hanyu}, {"pinyin", pinyin}, {"definition (word)", definition}, {"definition (sentence)", "<please input>"}, {"sentence", sentence}}
 			);
 			const httplib::Result add_node_result = post_and_receive(add_node_request);
 			if (!add_node_result) {
@@ -90,13 +91,14 @@ namespace Anki {
 				return;
 			}
 
-			if (const nlohmann::json add_node_json = get_response_json(add_node_result); !add_node_json["error"].is_null()) {
+			if (const nlohmann::json add_node_json = get_response_json(add_node_result); !add_node_json["error"].
+				is_null()) {
 				spdlog::error("[AnkiConnect] addNote failed: {}", add_node_json["error"].get<std::string>());
 			}
 		} else {
 			const CardID note_id = find_note_json["result"][0].get<CardID>();
 
-			const nlohmann::json                    card_info_request = get_card_info_request(note_id);
+			const nlohmann::json  card_info_request = get_card_info_request(note_id);
 			const httplib::Result card_info_result  = post_and_receive(card_info_request);
 			if (!card_info_result) {
 				spdlog::error("[AnkiConnect] getCardInfo failed: HTTP {}", to_string(find_note_result.error()));
@@ -109,18 +111,29 @@ namespace Anki {
 				return;
 			}
 
-			const std::string old_sentence = card_info_json["result"][0]["fields"]["sentence"]["value"].get<std::string>();
+			const std::string old_sentence = card_info_json["result"][0]["fields"]["sentence"]["value"].get<
+				std::string>();
 
 			if (!old_sentence.contains(sentence)) {
-				nlohmann::json update_note_field_request = get_update_note_field_request(note_id, {{"sentence", old_sentence + "<br>" + sentence}});
+				nlohmann::json update_note_field_request = get_update_note_field_request(
+					note_id,
+					{{"sentence", old_sentence + "<br>" + sentence}, {"definition (sentence)", "<please input>"}}
+				);
 				const httplib::Result update_note_field_result = post_and_receive(update_note_field_request);
 				if (!update_note_field_result) {
-					spdlog::error("[AnkiConnect] updateNoteFields failed: HTTP {}", to_string(update_note_field_result.error()));
+					spdlog::error(
+						"[AnkiConnect] updateNoteFields failed: HTTP {}",
+						to_string(update_note_field_result.error())
+					);
 					return;
 				}
 
-				if (const nlohmann::json update_note_field_json = get_response_json(update_note_field_result); !update_note_field_json["error"].is_null()) {
-					spdlog::error("[AnkiConnect] updateNoteFields failed: {}", update_note_field_json["error"].get<std::string>());
+				if (const nlohmann::json update_note_field_json = get_response_json(update_note_field_result); !
+					update_note_field_json["error"].is_null()) {
+					spdlog::error(
+						"[AnkiConnect] updateNoteFields failed: {}",
+						update_note_field_json["error"].get<std::string>()
+					);
 				}
 			}
 		}
@@ -131,17 +144,17 @@ namespace Anki {
 		const std::string&                        card_type,
 		const std::map<std::string, std::string>& fields
 	) {
-		auto note = nlohmann::json::object();
-		note["deckName"] = deck_name;
+		auto note         = nlohmann::json::object();
+		note["deckName"]  = deck_name;
 		note["modelName"] = card_type;
-		note["fields"] = fields;
-		auto params = nlohmann::json::object();
-		params["note"] = note;
+		note["fields"]    = fields;
+		auto params       = nlohmann::json::object();
+		params["note"]    = note;
 		return get_request_body("addNote", params);
 	}
 
 	inline nlohmann::json Interface::get_multi_request(const std::vector<nlohmann::json>& requests) {
-		auto params = nlohmann::json::object();
+		auto params       = nlohmann::json::object();
 		params["actions"] = requests;
 		return get_request_body("multi", params);
 	}
@@ -152,6 +165,7 @@ namespace Anki {
 	}
 
 	httplib::Result Interface::post_and_receive(const std::string& request) const {
+		spdlog::info("posting: {}", request);
 		return client->Post("/", request, "application/json");
 	}
 

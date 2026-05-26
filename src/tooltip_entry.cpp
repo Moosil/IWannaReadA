@@ -1,12 +1,15 @@
 #include "tooltip_entry.h"
 
+#include <qevent.h>
+#include <qmenu.h>
 #include <spdlog/spdlog.h>
 #include "util_qt.h"
 
 
 namespace iwra {
-	TooltipEntry::TooltipEntry(QWidget* parent):
+	TooltipEntry::TooltipEntry(QWidget* parent, const std::shared_ptr<Anki::Interface>& p_interface) :
 		QWidget{parent},
+		anki_interface{p_interface},
 
 		layout{new QVBoxLayout(this)},
 
@@ -23,9 +26,7 @@ namespace iwra {
 		trad_hanzi{new QLabel(trad_headword)},
 		trad_pinyin{new QLabel(trad_headword)},
 
-		definitions{new QLabel(this)}
-	{
-		{
+		definitions{new QLabel(this)} { {
 			QFont hanzi_font = simp_hanzi->font();
 			hanzi_font.setPointSize(20);
 
@@ -42,7 +43,6 @@ namespace iwra {
 			trad_pinyin->setFont(pinyin_font);
 
 			definitions->setFont(definition_font);
-
 		}
 
 		// debug-layout
@@ -97,15 +97,49 @@ namespace iwra {
 		compactifyLayout(trad_headword_layout);
 	}
 
-	void TooltipEntry::update(const DictParser::entry& entry) const {
+	void TooltipEntry::update(
+		const DictParser::entry& p_entry,
+		const std::string&       p_phrase,
+		const std::string&       p_sentence
+	) {
+		entry    = p_entry;
+		phrase   = p_phrase;
+		sentence = p_sentence;
 		simp_hanzi->setText(QString::fromStdString(entry.get_simp()));
 		simp_pinyin->setText(QString::fromStdString(entry.get_pinyin()));
 		trad_hanzi->setText(QString::fromStdString(entry.get_simp()));
 		trad_pinyin->setText(QString::fromStdString(entry.get_pinyin()));
 
 		using namespace std::string_literals;
-		const std::string definition_concat = entry.definitions | std::views::join_with("\n • "s) | std::ranges::to<std::string>();
+		const std::string definition_concat = entry.definitions | std::views::join_with("\n • "s) | std::ranges::to<
+			                                      std::string>();
 		definitions->setText(" • " + QString::fromStdString(definition_concat));
+	}
+
+	void TooltipEntry::contextMenuEvent(QContextMenuEvent* event) {
+		QMenu menu(this);
+
+		const QAction* copy_character_action = menu.addAction("copy character");
+		const QAction* copy_phrase_action    = menu.addAction("copy phrase");
+		const QAction* copy_sentence_action  = menu.addAction("copy sentence");
+		const QAction* add_to_anki_action    = menu.addAction("add_to_anki");
+
+		connect(copy_character_action, &QAction::triggered, this, [this]() {
+			set_clipboard_character();
+		});
+		connect(copy_phrase_action, &QAction::triggered, this, [this]() {
+			set_clipboard_phrase();
+		});
+		connect(copy_sentence_action, &QAction::triggered, this, [this]() {
+			set_clipboard_sentence();
+		});
+		connect(add_to_anki_action, &QAction::triggered, this, [this]() {
+			add_to_anki();
+		});
+
+		menu.exec(event->globalPos());
+
+		QWidget::contextMenuEvent(event);
 	}
 }
 

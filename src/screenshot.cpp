@@ -26,8 +26,8 @@ namespace iwra {
 		setWindowFlags(
 			Qt::FramelessWindowHint |
 			Qt::Tool |
-			Qt::NoDropShadowWindowHint /* |
-			Qt::WindowStaysOnTopHint*/
+			Qt::NoDropShadowWindowHint |
+			Qt::WindowStaysOnTopHint
 		);
 	}
 

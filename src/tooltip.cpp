@@ -52,7 +52,7 @@ namespace iwra {
 			Qt::Tool |
 			Qt::NoDropShadowWindowHint |
 			Qt::WindowStaysOnTopHint
-			);
+		);
 
 		layout->setContentsMargins(0, 0, 0, 0);
 		layout->setSpacing(8);
@@ -240,13 +240,13 @@ namespace iwra {
 		for (; i < dict_data->entries.size(); ++i) {
 			if (i < entries.size()) {
 				entries[i]->show();
-				entries[i]->update(dict_data->entries[i]);
+				entries[i]->update(dict_data->entries[i], phrase, sentence);
 			} else {
-				auto* new_entry = new TooltipEntry(this);
+				auto* new_entry = new TooltipEntry(this, anki);
 				new_entry->setFixedWidth(256 - 12);
 				layout->addWidget(new_entry);
 				entries.push_back(new_entry);
-				entries[i]->update(dict_data->entries[i]);
+				entries[i]->update(dict_data->entries[i], phrase, sentence);
 			}
 		}
 		for (; i < entries.size(); ++i) {

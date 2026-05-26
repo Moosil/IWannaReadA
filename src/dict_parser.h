@@ -16,6 +16,7 @@ namespace iwra {
 			std::string              trad;
 			std::string              pinyin;
 		};
+
 		struct word {
 			std::vector<character> characters;
 
@@ -43,6 +44,7 @@ namespace iwra {
 				return pinyin;
 			}
 		};
+
 		struct entry {
 			std::vector<word> word;
 			std::vector<std::string> definitions;
