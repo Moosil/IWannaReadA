@@ -17,6 +17,13 @@ namespace iwra {
 		TooltipEntry(QWidget* parent, const std::shared_ptr<Anki::Interface>& p_interface);
 
 		void update(const DictParser::entry& p_entry, const std::string& p_phrase, const std::string& p_sentence);
+
+		void hideHeadwordLayoutItem(int row, int column) const;
+
+		void addSpacerToHeadword(int row, int column, int size) const;
+
+		void addLabelToHeadword(int row, int column, const std::string& text) const;
+
 	private:
 		std::shared_ptr<Anki::Interface> anki_interface;
 		DictParser::entry entry;
@@ -26,17 +33,7 @@ namespace iwra {
 		QVBoxLayout* layout;
 
 		QWidget* headword;
-		QHBoxLayout* headword_layout;
-
-		QWidget* simp_headword;
-		QVBoxLayout* simp_headword_layout;
-		QLabel* simp_hanzi;
-		QLabel* simp_pinyin;
-
-		QWidget* trad_headword;
-		QVBoxLayout* trad_headword_layout;
-		QLabel* trad_hanzi;
-		QLabel* trad_pinyin;
+		QGridLayout* headword_layout;
 
 		QLabel* definitions;
 
@@ -60,6 +57,11 @@ namespace iwra {
 				sentence
 			);
 		}
+
+		QLabel* getHanziLabel() const;
+
+		QLabel* getPinyinLabel() const;
+
 	protected:
 		void contextMenuEvent(QContextMenuEvent* event) override;
 	};

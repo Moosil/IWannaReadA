@@ -46,12 +46,12 @@ namespace iwra {
 		};
 
 		struct entry {
-			std::vector<word> word;
+			std::vector<word> words;
 			std::vector<std::string> definitions;
 
 			[[nodiscard]] std::string get_simp() const {
 				std::string simp;
-				for (const auto& w : word) {
+				for (const auto& w : words) {
 					simp += w.get_simp();
 				}
 				return simp;
@@ -59,7 +59,7 @@ namespace iwra {
 
 			[[nodiscard]] std::string get_trad() const {
 				std::string trad;
-				for (const auto& w : word) {
+				for (const auto& w : words) {
 					trad += w.get_trad();
 				}
 				return trad;
@@ -67,7 +67,7 @@ namespace iwra {
 
 			[[nodiscard]] std::string get_pinyin() const {
 				std::string pinyin;
-				for (const auto& w : word) {
+				for (const auto& w : words) {
 					pinyin += w.get_pinyin() + ' ';
 				}
 				pinyin.pop_back();

@@ -348,7 +348,7 @@ namespace iwra {
 					);
 				}
 			}
-			res.word.emplace_back(curr_word);
+			res.words.emplace_back(curr_word);
 		}
 
 		// spdlog::info("{}/{} [{}]", res.get_simp(), res.get_trad(), res.get_pinyin());
