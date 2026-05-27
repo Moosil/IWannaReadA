@@ -64,6 +64,8 @@ add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/tooltip_entry.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/util_qt.h
         src/cccedict.h
+        src/application.cpp
+        src/application.h
 )
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)

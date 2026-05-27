@@ -6,19 +6,14 @@
 
 #include "util_qt.h"
 
-
 namespace iwra {
-	TooltipEntry::TooltipEntry(QWidget* parent, const std::shared_ptr<Anki::Interface>& p_interface) :
+	TooltipEntry::TooltipEntry(QWidget* parent, const std::shared_ptr<AnkiInterface>& p_interface):
 		QWidget{parent},
 		anki_interface{p_interface},
-
 		layout{new QVBoxLayout(this)},
-
 		headword{new QWidget(this)},
 		headword_layout{new QGridLayout(headword)},
-		definitions{new QLabel(this)} {
-
-		{
+		definitions{new QLabel(this)} { {
 			QFont font = definitions->font();
 			font.setPointSize(10);
 			definitions->setFont(font);
@@ -40,9 +35,9 @@ namespace iwra {
 	}
 
 	void TooltipEntry::update(
-		const DictParser::entry& p_entry,
-		const std::string&       p_phrase,
-		const std::string&       p_sentence
+		const DictionaryParser::Entry& p_entry,
+		const std::string&             p_phrase,
+		const std::string&             p_sentence
 	) {
 		entry    = p_entry;
 		phrase   = p_phrase;
@@ -53,40 +48,40 @@ namespace iwra {
 			for (const auto& [simp, _, pinyin] : characters) {
 				addLabelToHeadword(0, index, pinyin);
 				addLabelToHeadword(1, index, simp);
-				index++;
+				++index;
 			}
 			while (index < headword_layout->columnCount() && !headword_layout->itemAtPosition(0, index)->spacerItem()) {
 				hideHeadwordLayoutItem(0, index);
 				hideHeadwordLayoutItem(1, index);
-				index++;
+				++index;
 			}
 			addSpacerToHeadword(0, index, 4);
 			addSpacerToHeadword(1, index, 4);
-			index++;
+			++index;
 		}
 
-		index--;
+		--index;
 		addSpacerToHeadword(0, index, 8);
 		addSpacerToHeadword(1, index, 8);
-		index++;
+		++index;
 
 		for (const auto& [characters] : p_entry.words) {
 			for (const auto& [_, trad, pinyin] : characters) {
 				addLabelToHeadword(0, index, pinyin);
 				addLabelToHeadword(1, index, trad);
-				index++;
+				++index;
 			}
 			while (index < headword_layout->columnCount() && !headword_layout->itemAtPosition(0, index)->spacerItem()) {
 				hideHeadwordLayoutItem(0, index);
 				hideHeadwordLayoutItem(1, index);
-				index++;
+				++index;
 			}
 			addSpacerToHeadword(0, index, 4);
 			addSpacerToHeadword(1, index, 4);
-			index++;
+			++index;
 		}
 
-		index--;
+		--index;
 		for (; index < headword_layout->columnCount(); ++index) {
 			hideHeadwordLayoutItem(0, index);
 			hideHeadwordLayoutItem(1, index);
@@ -204,7 +199,7 @@ namespace iwra {
 			&QAction::triggered,
 			this,
 			[this]() {
-				set_clipboard_character();
+				setClipboardCharacter();
 			}
 		);
 		connect(
@@ -212,7 +207,7 @@ namespace iwra {
 			&QAction::triggered,
 			this,
 			[this]() {
-				set_clipboard_phrase();
+				setClipboardPhrase();
 			}
 		);
 		connect(
@@ -220,7 +215,7 @@ namespace iwra {
 			&QAction::triggered,
 			this,
 			[this]() {
-				set_clipboard_sentence();
+				setClipboardSentence();
 			}
 		);
 		connect(
@@ -228,7 +223,7 @@ namespace iwra {
 			&QAction::triggered,
 			this,
 			[this]() {
-				add_to_anki();
+				addToAnki();
 			}
 		);
 

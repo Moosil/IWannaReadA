@@ -18,14 +18,14 @@ namespace iwra {
 
 		std::unique_ptr<ncnn::Net> net{};
 
-		static std::vector<TextRect> box_from_bitmap(
+		static std::vector<TextRect> boxFromBitmap(
 			const cv::Mat& probability_map,
 			const cv::Mat& bitmap,
 			int            dest_width,
 			int            dest_height
 		);
 
-		static float box_score(const cv::Mat& bitmap, const Poly2F& rect);
+		static float boxScore(const cv::Mat& bitmap, const Poly2F& rect);
 
 	public:
 		Det() = default;

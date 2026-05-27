@@ -2,7 +2,6 @@
 
 #include <string>
 
-
 namespace iwra {
 	// Source - https://stackoverflow.com/a
 	// Posted by g-217, modified by community. See post 'Timeline' for change history
@@ -15,7 +14,7 @@ namespace iwra {
 		return ltrim(rtrim(str));
 	}
 
-	inline std::string trim_copy(const std::string& str) {
+	inline std::string trimCopy(const std::string& str) {
 		auto s = str;
 		return ltrim(rtrim(s));
 	}

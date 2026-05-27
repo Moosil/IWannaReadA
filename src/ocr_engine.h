@@ -7,11 +7,8 @@
 #include "rec.h"
 
 namespace iwra {
+	// ReSharper disable once CppInconsistentNaming
 	class OCREngine {
-	private:
-		Det det;
-		Rec rec;
-
 	public:
 		OCREngine(
 			const std::string& det_model_path,
@@ -37,10 +34,14 @@ namespace iwra {
 			const char* keys_path
 		);
 
-		explicit OCREngine(Config& yaml);
+		explicit OCREngine(const Config& config);
 
 		std::vector<OCRResult> run(const std::string& image_path) const;
 
 		std::vector<OCRResult> run(const cv::Mat& image) const;
+
+	private:
+		Det det;
+		Rec rec;
 	};
 }

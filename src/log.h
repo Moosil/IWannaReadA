@@ -3,13 +3,7 @@
 #include <chrono>
 #include <source_location>
 
-
 namespace iwra {
-	enum class ERR_LEVEL {
-		WARN = 0,
-		FATAL,
-	};
-
 	static std::chrono::time_point<std::chrono::steady_clock> start_time;
 	static std::source_location                               start_location;
 

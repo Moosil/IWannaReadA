@@ -3,7 +3,6 @@
 #include <qlabel.h>
 #include <qlayout.h>
 
-
 namespace iwra {
 	inline void compactifyWidget(QWidget* widget) {
 		widget->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Maximum);

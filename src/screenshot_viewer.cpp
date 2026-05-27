@@ -4,16 +4,16 @@
 
 #include "util.h"
 
-
 namespace iwra {
-	ScreenshotViewer::ScreenshotViewer(QGraphicsItem* parent): QGraphicsItem{parent} {}
+	ScreenshotViewer::ScreenshotViewer(QGraphicsItem* parent):
+		QGraphicsItem{parent} {}
 
 	QRectF ScreenshotViewer::boundingRect() const {
 		const auto [width, height] = getScreenSize();
 		return {0, 0, static_cast<qreal>(width), static_cast<qreal>(height)};
 	}
 
-	void  ScreenshotViewer::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) {
+	void ScreenshotViewer::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) {
 		painter->drawPixmap(0, 0, pixmap);
 
 		QPainterPath path;
@@ -30,9 +30,9 @@ namespace iwra {
 		painter->drawRect(rect);
 	}
 
-	void ScreenshotViewer::update_pixmap_rect(const QPixmap& new_pixmap, const QRect& new_rect) {
+	void ScreenshotViewer::updatePixmapRect(const QPixmap& new_pixmap, const QRect& new_rect) {
 		pixmap = new_pixmap;
-		rect = new_rect;
+		rect   = new_rect;
 		update();
 	}
 }

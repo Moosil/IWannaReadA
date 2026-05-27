@@ -8,7 +8,6 @@
 
 #include "util_utf8.h"
 
-
 namespace iwra {
 	bool CCCEdictDictParser::load(const std::filesystem::path& file_path) {
 		std::vector<std::string_view> lines;
@@ -18,7 +17,8 @@ namespace iwra {
 		const auto                    end   = mmap.end();
 		while (it != end) {
 			if (*start != '#') {
-				if (std::string_view line = {start, it}; !line.empty()) {
+				if (std::string_view line = {start, it};
+					!line.empty()) {
 					lines.emplace_back(line);
 				}
 			}
@@ -26,17 +26,17 @@ namespace iwra {
 			it    = std::find(start, end, '\r');
 		}
 		const std::size_t  min_length = lines.size();
-		std::vector<entry> parsed(min_length);
+		std::vector<Entry> parsed(min_length);
 		dictionary.reserve(min_length);
 
 		#pragma omp parallel for
-		for (int i = 0; i < lines.size(); i++) {
+		for (int i = 0; i < lines.size(); ++i) {
 			parsed[i] = parse(lines[i]).value();
 		}
 
 		for (const auto& curr : parsed) {
-			const std::string simp = curr.get_simp();
-			const std::string trad = curr.get_trad();
+			const std::string simp = curr.getSimp();
+			const std::string trad = curr.getTrad();
 			dictionary[simp].emplace_back(curr);
 			if (simp != trad) {
 				dictionary[trad].emplace_back(curr);
@@ -49,26 +49,34 @@ namespace iwra {
 		return true;
 	}
 
-	std::optional<DictParser::entry> CCCEdictDictParser::parse(const std::string_view& line) {
-		entry res{};
+	std::optional<DictionaryParser::Entry> CCCEdictDictParser::parse(const std::string_view& line) {
+		Entry res{};
 
 		const std::string::size_type end_trad_pos = line.find(' ');
-		if (end_trad_pos == std::string::npos) { return std::nullopt; }
+		if (end_trad_pos == std::string::npos) {
+			return std::nullopt;
+		}
 		std::string_view trad = line.substr(0, end_trad_pos);
 
 		const std::string::size_type end_simp_pos = line.find(' ', end_trad_pos + 1);
-		if (end_simp_pos == std::string::npos) { return std::nullopt; }
+		if (end_simp_pos == std::string::npos) {
+			return std::nullopt;
+		}
 		std::string_view simp = line.substr(end_trad_pos + 1, end_simp_pos - end_trad_pos - 1);
 
 		const std::string::size_type sb = line.find('[');
-		if (sb == std::string::npos) { return std::nullopt; }
+		if (sb == std::string::npos) {
+			return std::nullopt;
+		}
 		const bool                   is_v2_syntax     = line[sb + 1] == '[';
 		const std::string::size_type start_pinyin_pos = sb + (is_v2_syntax ? 2 : 1);
 
 		const std::string::size_type end_pinyin_pos = (is_v2_syntax)
 		                                              ? line.find("]]", start_pinyin_pos)
 		                                              : line.find(']', start_pinyin_pos);
-		if (end_pinyin_pos == std::string::npos) { return std::nullopt; }
+		if (end_pinyin_pos == std::string::npos) {
+			return std::nullopt;
+		}
 		const std::string_view pinyin = line.substr(start_pinyin_pos, end_pinyin_pos - start_pinyin_pos);
 
 		const auto pinyin_split = split_pinyin(pinyin, is_v2_syntax);
@@ -77,8 +85,8 @@ namespace iwra {
 		auto       trad_it      = trad.begin();
 		const auto trad_end     = trad.end();
 		for (auto& curr_split : pinyin_split) {
-			word curr_word{};
-			for (std::size_t i = 0; i < curr_split.size(); i++) {
+			Word curr_word{};
+			for (std::size_t i = 0; i < curr_split.size(); ++i) {
 				const std::string& curr      = curr_split[i];
 				char32_t           curr_simp = utf8::next(simp_it, simp_end);
 				char32_t           curr_trad = utf8::next(trad_it, trad_end);
@@ -117,7 +125,7 @@ namespace iwra {
 					const std::size_t curr_len = curr.length();
 					std::string       simp_tot = toUtf8(curr_simp);
 					std::string       trad_tot = toUtf8(curr_trad);
-					for (; i < std::min(i + curr_len - 1, curr_split.size()); i++) {
+					for (; i < std::min(i + curr_len - 1, curr_split.size()); ++i) {
 						simp_tot += toUtf8(utf8::next(simp_it, simp_end));
 						trad_tot += toUtf8(utf8::next(trad_it, trad_end));
 					}
@@ -142,14 +150,15 @@ namespace iwra {
 		return res;
 	}
 
-	std::vector<DictParser::entry> CCCEdictDictParser::get_entry(const std::string& hanzi) {
-		if (const auto pos = dictionary.find(hanzi); pos != dictionary.end()) {
+	std::vector<DictionaryParser::Entry> CCCEdictDictParser::getEntry(const std::string& hanzi) {
+		if (const auto pos = dictionary.find(hanzi);
+			pos != dictionary.end()) {
 			return pos->second;
 		}
 		return {};
 	}
 
-	bool CCCEdictDictParser::_isPinyin(const std::string_view& in) {
+	bool CCCEdictDictParser::isPinyinSingleWord(const std::string_view& in) {
 		if (in.back() - U'0' < 1 || in.back() - U'0' > 5) {
 			return false;
 		}
@@ -184,7 +193,7 @@ namespace iwra {
 		}
 
 		while (start != in.size()) {
-			if (!_isPinyin(in.substr(start, end - start + 1))) {
+			if (!isPinyinSingleWord(in.substr(start, end - start + 1))) {
 				return false;
 			}
 			start = end + 1;

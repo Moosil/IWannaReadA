@@ -2,18 +2,17 @@
 
 #include "dict_parser.h"
 
-
 namespace iwra {
-	class CCCEdictDictParser : public DictParser {
+	class CCCEdictDictParser : public DictionaryParser {
 	public:
 		bool load(const std::filesystem::path& file_path) override;
 
-		static std::optional<entry> parse(const std::string_view& line);
+		static std::optional<Entry> parse(const std::string_view& line);
 
-		std::vector<entry> get_entry(const std::string& hanzi) override;
+		std::vector<Entry> getEntry(const std::string& hanzi) override;
 
 	private:
-		static bool _isPinyin(const std::string_view& in);
+		static bool isPinyinSingleWord(const std::string_view& in);
 
 		static bool isPinyin(const std::string_view& in);
 

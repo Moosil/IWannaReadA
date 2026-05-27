@@ -1,8 +1,7 @@
 #pragma once
 
-#include <utf8/cpp20.h>
 #include <string>
-
+#include <utf8/cpp20.h>
 
 namespace iwra {
 	std::pair<std::string::const_iterator, std::string::const_iterator> utf8Find(

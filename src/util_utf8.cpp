@@ -1,6 +1,5 @@
 #include "util_utf8.h"
 
-
 namespace iwra {
 	auto utf8Find(
 		const std::string& in,
@@ -42,7 +41,7 @@ namespace iwra {
 		const auto  end = in.end();
 		while (it != end) {
 			utf8::next(it, end);
-			res++;
+			++res;
 		}
 		return res;
 	}

@@ -5,22 +5,21 @@
 #include <unordered_map>
 #include <vector>
 
-
 namespace iwra {
-	class DictParser {
+	class DictionaryParser {
 	public:
-		virtual ~DictParser() = default;
+		virtual ~DictionaryParser() = default;
 
-		struct character {
+		struct Character {
 			std::string simp;
 			std::string trad;
 			std::string pinyin;
 		};
 
-		struct word {
-			std::vector<character> characters;
+		struct Word {
+			std::vector<Character> characters;
 
-			[[nodiscard]] std::string get_simp() const {
+			[[nodiscard]] std::string getSimp() const {
 				std::string simp;
 				for (const auto& character : characters) {
 					simp += character.simp;
@@ -28,7 +27,7 @@ namespace iwra {
 				return simp;
 			}
 
-			[[nodiscard]] std::string get_trad() const {
+			[[nodiscard]] std::string getTrad() const {
 				std::string trad;
 				for (const auto& character : characters) {
 					trad += character.trad;
@@ -36,51 +35,51 @@ namespace iwra {
 				return trad;
 			}
 
-			[[nodiscard]] std::string get_pinyin() const {
-				std::string pinyin;
-				for (const auto& character : characters) {
-					pinyin += character.pinyin;
-				}
-				return pinyin;
-			}
+			[[nodiscard]] std::string getPinyin() const;
 		};
 
-		struct entry {
-			std::vector<word>        words;
+		struct Entry {
+			std::vector<Word>        words;
 			std::vector<std::string> definitions;
 
-			[[nodiscard]] std::string get_simp() const {
+			[[nodiscard]] std::string getSimp() const {
 				std::string simp;
 				for (const auto& w : words) {
-					simp += w.get_simp();
+					simp += w.getSimp();
 				}
 				return simp;
 			}
 
-			[[nodiscard]] std::string get_trad() const {
+			[[nodiscard]] std::string getTrad() const {
 				std::string trad;
 				for (const auto& w : words) {
-					trad += w.get_trad();
+					trad += w.getTrad();
 				}
 				return trad;
 			}
 
-			[[nodiscard]] std::string get_pinyin() const {
+			[[nodiscard]] std::string getPinyin() const {
 				std::string pinyin;
 				for (const auto& w : words) {
-					pinyin += w.get_pinyin() + ' ';
+					pinyin += w.getPinyin() + ' ';
 				}
 				pinyin.pop_back();
 				return pinyin;
 			}
 		};
 
-		virtual bool load(const std::filesystem::path& file_path);
+		virtual bool load(const std::filesystem::path& file_path) = 0;
 
-		static std::optional<entry> parse(const std::string_view& line);
+		virtual std::vector<Entry> getEntry(const std::string& hanzi) = 0;
 
-		virtual std::vector<entry> get_entry(const std::string& hanzi);
-
-		std::unordered_map<std::string, std::vector<entry> > dictionary;
+		std::unordered_map<std::string, std::vector<Entry> > dictionary;
 	};
+
+	inline std::string DictionaryParser::Word::getPinyin() const {
+		std::string pinyin;
+		for (const auto& character : characters) {
+			pinyin += character.pinyin;
+		}
+		return pinyin;
+	}
 }

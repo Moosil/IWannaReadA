@@ -5,6 +5,7 @@
 #include <qmainwindow.h>
 #include <opencv2/core/types.hpp>
 
+#include "ocr_engine.h"
 #include "screenshot_viewer.h"
 
 namespace iwra {
@@ -28,7 +29,8 @@ namespace iwra {
 
 		[[nodiscard]] QPixmap captureScreenRegion(cv::Rect capture_rect) const;
 
-		static cv::Mat QPixmap2cvMat(const QPixmap& pixmap);
+		// ReSharper disable once CppInconsistentNaming
+		static cv::Mat QPixmapToCvMat(const QPixmap& pixmap);
 
 		void updateScreenshotLabel() const;
 

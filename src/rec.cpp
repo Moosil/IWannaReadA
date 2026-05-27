@@ -7,11 +7,10 @@
 
 #include "util_text.h"
 
-
 namespace iwra {
-	Text Rec::_run(const cv::Mat& image) const {
+	Text Rec::runSingle(const cv::Mat& image) const {
 		// resize image
-		const float ratio = static_cast<float>(target_height) / static_cast<float>(image.rows);
+		const float ratio = static_cast<float>(targetHeight) / static_cast<float>(image.rows);
 		const int   rsz_w = static_cast<int>(static_cast<float>(image.cols) * ratio);
 
 		ncnn::Mat in_inf = ncnn::Mat::from_pixels_resize(
@@ -20,9 +19,9 @@ namespace iwra {
 			image.cols,
 			image.rows,
 			rsz_w,
-			target_height
+			targetHeight
 		);
-		in_inf.substract_mean_normalize(mean_values, norm_values);
+		in_inf.substract_mean_normalize(meanValues, normValues);
 
 		// inference
 		ncnn::Extractor ex = net->create_extractor();
@@ -35,7 +34,7 @@ namespace iwra {
 
 	Text Rec::infer2Text(const ncnn::Mat& infer, const RetInfo info) const {
 		const std::size_t cols = infer.w;
-		if (cols != key_count) {
+		if (cols != keyCount) {
 			return Text{};
 		}
 
@@ -87,9 +86,9 @@ namespace iwra {
 		}
 
 		return {
-			.text = trim(text),
+			.text         = trim(text),
 			.char_lengths = text_lengths,
-			.scores = text_scores
+			.scores       = text_scores
 		};
 	}
 
@@ -112,10 +111,9 @@ namespace iwra {
 		net->load_model(det_model_path.c_str());
 	}
 
-	Rec::Rec(Rec&& other) noexcept :
+	Rec::Rec(Rec&& other) noexcept:
 		net{std::move(other.net)},
-		keys{std::move(other.keys)} {
-	}
+		keys{std::move(other.keys)} {}
 
 	Rec& Rec::operator=(Rec&& other) noexcept {
 		if (this != &other) {
@@ -131,7 +129,7 @@ namespace iwra {
 
 		#pragma omp parallel for num_threads(10) schedule(dynamic)
 		for (int i = 0; i < static_cast<int>(length); ++i) {
-			text_lines[i] = _run(images[i]);
+			text_lines[i] = runSingle(images[i]);
 		}
 
 		return text_lines;

@@ -4,18 +4,18 @@
 #include <httplib.h>
 #include <nlohmann/json.hpp>
 
-namespace Anki {
-	class Interface {
+namespace iwra {
+	class AnkiInterface {
 	public:
-		Interface(std::string deck_name, std::string card_type, int port = 8765);
+		AnkiInterface(std::string deck_name, std::string card_type, int port = 8765);
 
-		~Interface();
+		~AnkiInterface();
 
-		Interface& operator=(const Interface&) = delete;
+		AnkiInterface& operator=(const AnkiInterface&) = delete;
 
-		Interface(const Interface&) = delete;
+		AnkiInterface(const AnkiInterface&) = delete;
 
-		Interface& operator=(Interface&& other) noexcept {
+		AnkiInterface& operator=(AnkiInterface&& other) noexcept {
 			if (this != &other) {
 				client    = std::move(other.client);
 				deck_name = std::move(other.deck_name);
@@ -24,11 +24,10 @@ namespace Anki {
 			return *this;
 		};
 
-		Interface(Interface&& other) noexcept :
+		AnkiInterface(AnkiInterface&& other) noexcept:
 			client{std::move(other.client)},
 			deck_name{std::move(other.deck_name)},
-			card_type{std::move(other.card_type)} {
-		};
+			card_type{std::move(other.card_type)} {};
 
 		static nlohmann::json get_request_body(const std::string& request_name, const nlohmann::json& params = nullptr);
 
@@ -48,7 +47,7 @@ namespace Anki {
 			const std::string& pinyin,
 			const std::string& definition,
 			const std::string& sentence
-		) const;
+		);
 
 		static nlohmann::json get_add_node_request(
 			const std::string&                        deck_name,
@@ -60,14 +59,15 @@ namespace Anki {
 
 		static nlohmann::json get_response_json(const httplib::Result& response);
 
-		[[nodiscard]] [[maybe_unused]] httplib::Result post_and_receive(const std::string& request) const;
+		[[nodiscard]] [[maybe_unused]] httplib::Result post_and_receive(const std::string& request);
 
-		[[nodiscard]] [[maybe_unused]] httplib::Result post_and_receive(const nlohmann::json& json) const;
+		[[nodiscard]] [[maybe_unused]] httplib::Result post_and_receive(const nlohmann::json& json);
 
 	private:
+		// ReSharper disable once CppInconsistentNaming
 		using CardID = unsigned long long;
 
-		std::unique_ptr<httplib::Client> client;
+		httplib::Client client;
 
 		std::string deck_name;
 		std::string card_type;

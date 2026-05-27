@@ -2,7 +2,6 @@
 
 #include <locale>
 
-
 namespace iwra {
 	std::string& ltrim(std::string& str) {
 		const auto it2 = std::ranges::find_if(

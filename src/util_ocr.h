@@ -1,12 +1,10 @@
 #pragma once
 
-
 #include <clipper2/clipper.h>
 #include <opencv2/core/types.hpp>
 #include <spdlog/spdlog.h>
 
 #include "common.h"
-
 
 namespace iwra {
 	Poly2F rotatedRect2Poly2F(const cv::RotatedRect& rect);
@@ -27,7 +25,7 @@ namespace iwra {
 		}
 		const Clipper2Lib::Paths64 paths1{path1};
 
-		const auto intersection_paths = Clipper2Lib::Intersect(paths0, paths1, Clipper2Lib::FillRule::NonZero);
+		const auto intersection_paths = Intersect(paths0, paths1, Clipper2Lib::FillRule::NonZero);
 		return !intersection_paths.empty();
 	}
 
@@ -47,7 +45,7 @@ namespace iwra {
 		}
 		const Clipper2Lib::Paths64 paths1{path1};
 
-		const auto             union_paths = Clipper2Lib::Union(paths0, paths1, Clipper2Lib::FillRule::NonZero);
+		const auto             union_paths = Union(paths0, paths1, Clipper2Lib::FillRule::NonZero);
 		std::vector<cv::Point> res;
 		if (union_paths.size() != 1) {
 			spdlog::warn("union_ failed");
@@ -61,7 +59,7 @@ namespace iwra {
 		return res;
 	}
 
-	inline Clipper2Lib::Path64 rect2path(const Poly2I& rect) {
+	inline Clipper2Lib::Path64 rectToPath(const Poly2I& rect) {
 		return {
 			Clipper2Lib::Point64(rect[0].x, rect[0].y),
 			Clipper2Lib::Point64(rect[1].x, rect[1].y),
@@ -70,7 +68,7 @@ namespace iwra {
 		};
 	}
 
-	inline Clipper2Lib::Path64 rect2path(const Poly2F& rect) {
+	inline Clipper2Lib::Path64 rectToPath(const Poly2F& rect) {
 		return {
 			Clipper2Lib::Point64(rect[0].x, rect[0].y),
 			Clipper2Lib::Point64(rect[1].x, rect[1].y),

@@ -8,11 +8,11 @@
 #include <opencv2/core/mat.hpp>
 #include <spdlog/spdlog.h>
 
+#include "config.h"
 #include "util.h"
 
-
 namespace iwra {
-	ScreenshotWindow::ScreenshotWindow(QWidget* parent) :
+	ScreenshotWindow::ScreenshotWindow(QWidget* parent):
 		QMainWindow{parent},
 		scene{new QGraphicsScene(this)},
 		view{new QGraphicsView(scene)},
@@ -40,7 +40,8 @@ namespace iwra {
 		return this->screen()->grabWindow(0, capture_rect.x, capture_rect.y, capture_rect.width, capture_rect.height);
 	}
 
-	cv::Mat ScreenshotWindow::QPixmap2cvMat(const QPixmap& pixmap) {
+	// ReSharper disable once CppInconsistentNaming
+	cv::Mat ScreenshotWindow::QPixmapToCvMat(const QPixmap& pixmap) {
 		if (pixmap.isNull()) {
 			return {};
 		}
@@ -70,7 +71,7 @@ namespace iwra {
 		const auto [top, bottom] = static_cast<std::tuple<int, int>>(std::minmax(start.y(), end.y()));
 		const auto r_width       = right - left;
 		const auto r_height      = bottom - top;
-		screenshot_viewer->update_pixmap_rect(desktop, {left, top, r_width, r_height});
+		screenshot_viewer->updatePixmapRect(desktop, {left, top, r_width, r_height});
 	}
 
 	void ScreenshotWindow::mousePressEvent(QMouseEvent* event) {
@@ -102,7 +103,7 @@ namespace iwra {
 				const auto r_width       = right - left;
 				const auto r_height      = bottom - top;
 				const auto pixmap        = desktop.copy(left, top, r_width, r_height);
-				const auto cvMat         = QPixmap2cvMat(pixmap);
+				const auto cvMat         = QPixmapToCvMat(pixmap);
 				emit activated(cvMat, {left, top, r_width, r_height});
 			}
 		}

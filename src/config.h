@@ -4,37 +4,36 @@
 
 #include <filesystem>
 
-
 namespace iwra {
 	class Config {
 	public:
-		using file_path = std::filesystem::path;
+		using FilePath = std::filesystem::path;
 
-		explicit Config(const file_path& path);
+		explicit Config(const FilePath& path);
 
-		file_path getRootPath();
+		FilePath getRootPath() const;
 
-		file_path getOcrRootPath();
+		FilePath getOcrRootPath() const;
 
-		file_path getKeyPath();
+		FilePath getKeyPath() const;
 
-		file_path getDetModelPath();
+		FilePath getDetModelPath() const;
 
-		file_path getDetParamPath();
+		FilePath getDetParamPath() const;
 
-		file_path getRecModelPath();
+		FilePath getRecModelPath() const;
 
-		file_path getRecParamPath();
+		FilePath getRecParamPath() const;
 
-		file_path getDictPath();
+		FilePath getDictPath() const;
 
-		std::optional<std::string> getAnkiCardType();
+		std::optional<std::string> getAnkiCardType() const;
 
-		std::optional<std::string> getAnkiDeckName();
+		std::optional<std::string> getAnkiDeckName() const;
 
-		bool getRefresh();
+		bool getRefresh() const;
 
-		std::optional<int> getRefreshIntervalMs();
+		std::optional<int> getRefreshIntervalMs() const;
 
 	private:
 		enum class ModelType {
@@ -49,13 +48,13 @@ namespace iwra {
 
 		YAML::Node node;
 
-		file_path config_path;
-		file_path file_root;
-		file_path ocr_file_root;
+		FilePath config_path;
+		FilePath file_root;
+		FilePath ocr_file_root;
 
-		file_path getPath(ModelType model_type, FileType file_type);
+		FilePath getPath(ModelType model_type, FileType file_type) const;
 
-		std::optional<std::string> getRefreshIntervalAsString();
+		std::optional<std::string> getRefreshIntervalAsString() const;
 
 		static std::string enum2String(ModelType model_type);
 

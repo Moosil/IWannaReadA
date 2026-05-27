@@ -1,13 +1,17 @@
 #include "util_ocr.h"
 
-
 #include <opencv2/imgproc.hpp>
 
 namespace iwra {
 	Poly2F rotatedRect2Poly2F(const cv::RotatedRect& rect) {
 		Poly2F poly{};
 		rect.points(poly.data());
-		std::ranges::sort(poly, [](const cv::Point2f& lhs, const cv::Point2f& rhs) { return lhs.x < rhs.x; });
+		std::ranges::sort(
+			poly,
+			[](const cv::Point2f& lhs, const cv::Point2f& rhs) {
+				return lhs.x < rhs.x;
+			}
+		);
 
 		// sorts points top left, top right, bottom right, bottom left
 		if (poly[1].y > poly[0].y) {
@@ -33,9 +37,9 @@ namespace iwra {
 		const float distance = getUnclipDistance(rect, unclip_ratio);
 
 		// convert rect to Clipper2 path
-		const Clipper2Lib::Paths64 path = {rect2path(rect)};
+		const Clipper2Lib::Paths64 path = {rectToPath(rect)};
 
-		const Clipper2Lib::Paths64 inflated_path = Clipper2Lib::InflatePaths(
+		const Clipper2Lib::Paths64 inflated_path = InflatePaths(
 			path,
 			distance,
 			Clipper2Lib::JoinType::Round,
@@ -55,7 +59,7 @@ namespace iwra {
 			return {cv::Point2f(0.f, 0.f), cv::Size2f(1.f, 1.f), 0.f};
 			// ReSharper disable once CppRedundantElseKeywordInsideCompoundStatement
 		} else {
-			return cv::minAreaRect(points);
+			return minAreaRect(points);
 		}
 	}
 
@@ -64,7 +68,7 @@ namespace iwra {
 		constexpr std::size_t max_index = 3;
 
 		// Shoelace formula start (https://en.wikipedia.org/wiki/Shoelace_formula)[Wikipedia]
-		for (std::size_t i = 0; i < max_index; i++) {
+		for (std::size_t i = 0; i < max_index; ++i) {
 			area      += rect[i].x * rect[i + 1].y - rect[i].y * rect[i + 1].x;
 			perimeter += distance(rect[i], rect[i + 1]);
 		}
@@ -110,11 +114,11 @@ namespace iwra {
 			cv::Point2f(0.f, crop_h)
 		};
 
-		const cv::Mat transform_mat = cv::getPerspectiveTransform(src_rect, dst_rect, cv::DECOMP_LU);
+		const cv::Mat transform_mat = getPerspectiveTransform(src_rect, dst_rect, cv::DECOMP_LU);
 
 		// transform image according to transformation matrix
 		cv::Mat text_image;
-		cv::warpPerspective(
+		warpPerspective(
 			crop_image,
 			text_image,
 			transform_mat,
@@ -125,7 +129,7 @@ namespace iwra {
 		// if text is vertical, rotate it
 		if (static_cast<float>(text_image.rows) >= static_cast<float>(text_image.cols) * 1.5f) {
 			cv::Mat dst;
-			cv::rotate(text_image, dst, cv::ROTATE_90_COUNTERCLOCKWISE);
+			rotate(text_image, dst, cv::ROTATE_90_COUNTERCLOCKWISE);
 			return dst;
 		}
 		return text_image;

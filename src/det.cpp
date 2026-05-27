@@ -8,9 +8,8 @@
 
 #include "util_ocr.h"
 
-
 namespace iwra {
-	std::vector<TextRect> Det::box_from_bitmap(
+	std::vector<TextRect> Det::boxFromBitmap(
 		const cv::Mat& probability_map,
 		const cv::Mat& bitmap,
 		const int      dest_width,
@@ -20,13 +19,13 @@ namespace iwra {
 
 		// Get contours of bitmap. As in strips that cover the "white" parts
 		std::vector<std::vector<cv::Point> > contours;
-		cv::findContours(bitmap, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
+		findContours(bitmap, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
 
 		std::vector<TextRect> output;
 		for (const auto& contour : contours) {
 			// get the smallest rect that covers the contour
 			// if longest side is too small, continue
-			cv::RotatedRect min_area_rect = cv::minAreaRect(contour);
+			cv::RotatedRect min_area_rect = minAreaRect(contour);
 			if (const float max_side_length = std::max(min_area_rect.size.width, min_area_rect.size.height);
 				max_side_length < min_size) {
 				continue;
@@ -37,7 +36,7 @@ namespace iwra {
 
 			// score particular box
 			// if score lower than threshold, continue
-			float score = box_score(probability_map, min_area_rect_points);
+			float score = boxScore(probability_map, min_area_rect_points);
 			if (score < box_threshold) {
 				continue;
 			}
@@ -92,11 +91,10 @@ namespace iwra {
 		return output;
 	}
 
-	float Det::box_score(const cv::Mat& bitmap, const Poly2F& rect) {
+	float Det::boxScore(const cv::Mat& bitmap, const Poly2F& rect) {
 		const int width = bitmap.cols, height = bitmap.rows;
 
 		// get extent of rect, clamped 0 -> width/height
-		// TODO check if working
 		const int min_x = std::clamp(static_cast<int>(std::ceilf(std::max(rect[0].x, rect[3].x))), 0, width);
 		const int max_x = std::clamp(static_cast<int>(std::ceilf(std::max(rect[1].x, rect[2].x))), 0, width);
 		const int min_y = std::clamp(static_cast<int>(std::ceilf(std::max(rect[0].y, rect[1].y))), 0, height);
@@ -116,10 +114,10 @@ namespace iwra {
 		// fill the mask
 		const cv::Point* pts[1] = {normalised_rect.data()};
 		constexpr int    npt[]  = {4};
-		cv::fillPoly(mask, pts, npt, 1, cv::Scalar(1));
+		fillPoly(mask, pts, npt, 1, cv::Scalar(1));
 
 		// gets mean of bitmap & mask
-		const cv::Mat croppedImage = bitmap(
+		const cv::Mat cropped_image = bitmap(
 			cv::Rect(
 				min_x,
 				min_y,
@@ -128,7 +126,7 @@ namespace iwra {
 			)
 		).clone();
 
-		return static_cast<float>(cv::mean(croppedImage, mask)[0] / 255.f);
+		return static_cast<float>(mean(cropped_image, mask)[0] / 255.f);
 	}
 
 	Det::Det(const std::string& det_model_path, const std::string& det_param_path) {
@@ -141,9 +139,8 @@ namespace iwra {
 		net->load_model(det_model_path.c_str());
 	}
 
-	Det::Det(Det&& other) noexcept :
-		net{std::move(other.net)} {
-	}
+	Det::Det(Det&& other) noexcept:
+		net{std::move(other.net)} {}
 
 	Det& Det::operator=(Det&& other) noexcept {
 		if (this != &other) {
@@ -155,7 +152,7 @@ namespace iwra {
 	std::vector<TextRect> Det::run(const cv::Mat& image) const {
 		// padding
 		cv::Mat pad_image = image.clone();
-		cv::copyMakeBorder(
+		copyMakeBorder(
 			image,
 			pad_image,
 			padding,
@@ -196,6 +193,7 @@ namespace iwra {
 
 		// binarisation: Mat float -> Mat bool
 		constexpr float denorm_values[1] = {255.f};
+		// ReSharper disable once CppZeroConstantCanBeReplacedWithNullptr
 		out_inf.substract_mean_normalize(0, denorm_values);
 
 		const cv::Mat pred(rsz_rows, rsz_cols, CV_8UC1);
@@ -203,6 +201,6 @@ namespace iwra {
 		const cv::Mat bitmap = pred > threshold;
 
 
-		return box_from_bitmap(pred, bitmap, img_cols, img_rows);
+		return boxFromBitmap(pred, bitmap, img_cols, img_rows);
 	}
 } // ocr
