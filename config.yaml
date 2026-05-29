@@ -16,6 +16,23 @@ refresh-interval: 100ms
 
 dictionary-path: "dictionaries/cedict_ts.u8"
 
+style: ~
+width: 100
+height: 100
+
 anki:
   card-type: "Chinese Card Cloze"
   deck-name: "中文::看句子练习句子"
+  card-tags:
+    - "iwra"
+  api-key: ~
+
+  idle-timeout: 0ms
+
+  fields:
+    sentence: ""
+    hanyu: ""
+    pinyin: ""
+    definition (word): ""
+    definition (sentence): ""
+

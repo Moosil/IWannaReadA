@@ -26,15 +26,7 @@ namespace iwra {
 			const std::filesystem::path& keys_path
 		);
 
-		OCREngine(
-			const char* det_model_path,
-			const char* det_param_path,
-			const char* rec_model_path,
-			const char* rec_param_path,
-			const char* keys_path
-		);
-
-		explicit OCREngine(const Config& config);
+		static std::unique_ptr<OCREngine> create(const Config& config);
 
 		std::vector<OCRResult> run(const std::string& image_path) const;
 

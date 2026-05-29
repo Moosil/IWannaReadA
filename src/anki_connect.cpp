@@ -4,20 +4,22 @@
 #include <spdlog/spdlog.h>
 
 namespace iwra {
-	AnkiInterface::AnkiInterface(std::string deck_name, std::string card_type, const int port):
+	AnkiInterface::AnkiInterface(const std::string& deck_name, const std::string& card_type, const int port):
 		client{"127.0.0.1", port},
-		deck_name{std::move(deck_name)},
-		card_type{std::move(card_type)} {
+		deck_name{deck_name},
+		card_type{card_type} {
 		//client->set_connection_timeout(0, 500'000); // 500 ms
 
 		spdlog::info("connected AnkiConnect HTTP client to 127.0.0.1:{}", port);
+
+		requestPermission();
 	}
 
 	AnkiInterface::~AnkiInterface() {
 		spdlog::info("disconnected AnkiConnect HTTP client");
 	}
 
-	nlohmann::json AnkiInterface::get_request_body(const std::string& request_name, const nlohmann::json& params) {
+	nlohmann::json AnkiInterface::getRequestBody(const std::string& request_name, const nlohmann::json& params) {
 		nlohmann::json req = {
 			{"action", request_name},
 			{"version", ankiconnect_version}
@@ -28,23 +30,23 @@ namespace iwra {
 		return req;
 	}
 
-	nlohmann::json AnkiInterface::get_find_note_request(const std::string& query) {
+	nlohmann::json AnkiInterface::getFindNoteRequest(const std::string& query) {
 		auto params     = nlohmann::json::object();
 		params["query"] = query;
-		return get_request_body("findNotes", params);
+		return getRequestBody("findNotes", params);
 	}
 
-	nlohmann::json AnkiInterface::get_card_info_request(const CardID note_id) {
-		return get_card_info_request(std::vector{note_id});
+	nlohmann::json AnkiInterface::getCardInfoRequest(const CardID note_id) {
+		return getCardInfoRequest(std::vector{note_id});
 	}
 
-	nlohmann::json AnkiInterface::get_card_info_request(const std::vector<CardID>& note_id) {
+	nlohmann::json AnkiInterface::getCardInfoRequest(const std::vector<CardID>& note_id) {
 		auto params     = nlohmann::json::object();
 		params["cards"] = note_id;
-		return get_request_body("cardsInfo", params);
+		return getRequestBody("cardsInfo", params);
 	}
 
-	nlohmann::json AnkiInterface::get_update_note_field_request(
+	nlohmann::json AnkiInterface::getUpdateNoteFieldRequest(
 		const CardID                              note_id,
 		const std::map<std::string, std::string>& fields
 	) {
@@ -53,98 +55,10 @@ namespace iwra {
 		note["fields"] = fields;
 		auto params    = nlohmann::json::object();
 		params["note"] = note;
-		return get_request_body("updateNoteFields", params);
+		return getRequestBody("updateNoteFields", params);
 	}
 
-	void AnkiInterface::add_note(
-		const std::string& hanyu,
-		const std::string& pinyin,
-		const std::string& definition,
-		const std::string& sentence
-	) {
-		spdlog::info("[AnkiConnect] attempting to add card: {} | {} | {} | {}", hanyu, pinyin, definition, sentence);
-		const nlohmann::json  find_note_request = get_find_note_request("deck:chinese_read_text hanyu:" + hanyu);
-		const httplib::Result find_note_result  = post_and_receive(find_note_request);
-		if (!find_note_result) {
-			spdlog::error("[AnkiConnect] findNote failed: HTTP {}", to_string(find_note_result.error()));
-			return;
-		}
-
-		const nlohmann::json find_note_json = get_response_json(find_note_result);
-		if (!find_note_json["error"].is_null()) {
-			spdlog::error("[AnkiConnect] findNote failed: {}", find_note_json["error"].get<std::string>());
-			return;
-		}
-
-		if (find_note_json["result"].empty()) {
-			nlohmann::json add_node_request = get_add_node_request(
-				deck_name,
-				card_type,
-				{
-					{"hanyu", hanyu},
-					{"pinyin", pinyin},
-					{"definition (word)", definition},
-					{"definition (sentence)", "<please input>"},
-					{"sentence", sentence}
-				}
-			);
-			const httplib::Result add_node_result = post_and_receive(add_node_request);
-			if (!add_node_result) {
-				spdlog::error("[AnkiConnect] addNote failed: HTTP {}", to_string(add_node_result.error()));
-				return;
-			}
-
-			if (const nlohmann::json add_node_json = get_response_json(add_node_result);
-				!add_node_json["error"].
-				is_null()) {
-				spdlog::error("[AnkiConnect] addNote failed: {}", add_node_json["error"].get<std::string>());
-			}
-		} else {
-			const CardID note_id = find_note_json["result"][0].get<CardID>();
-
-			const nlohmann::json  card_info_request = get_card_info_request(note_id);
-			const httplib::Result card_info_result  = post_and_receive(card_info_request);
-			if (!card_info_result) {
-				spdlog::error("[AnkiConnect] getCardInfo failed: HTTP {}", to_string(find_note_result.error()));
-				return;
-			}
-
-			const nlohmann::json card_info_json = get_response_json(card_info_result);
-			if (!card_info_json["error"].is_null()) {
-				spdlog::error("[AnkiConnect] getCardInfo failed: {}", card_info_json["error"].get<std::string>());
-				return;
-			}
-
-			const std::string old_sentence = card_info_json["result"][0]["fields"]["sentence"]["value"].get<
-				std::string>();
-
-			if (!old_sentence.contains(sentence)) {
-				nlohmann::json update_note_field_request = get_update_note_field_request(
-					note_id,
-					{{"sentence", old_sentence + "<br>" + sentence}, {"definition (sentence)", "<please input>"}}
-				);
-				const httplib::Result update_note_field_result = post_and_receive(update_note_field_request);
-				if (!update_note_field_result) {
-					spdlog::error(
-						"[AnkiConnect] updateNoteFields failed: HTTP {}",
-						to_string(update_note_field_result.error())
-					);
-					return;
-				}
-
-				if (const nlohmann::json update_note_field_json = get_response_json(update_note_field_result);
-					!
-					update_note_field_json["error"].is_null()) {
-					spdlog::error(
-						"[AnkiConnect] updateNoteFields failed: {}",
-						update_note_field_json["error"].get<std::string>()
-					);
-				}
-			}
-		}
-	}
-
-	inline nlohmann::json AnkiInterface::get_add_node_request(
+	inline nlohmann::json AnkiInterface::getAddNodeRequest(
 		const std::string&                        deck_name,
 		const std::string&                        card_type,
 		const std::map<std::string, std::string>& fields
@@ -155,27 +69,162 @@ namespace iwra {
 		note["fields"]    = fields;
 		auto params       = nlohmann::json::object();
 		params["note"]    = note;
-		return get_request_body("addNote", params);
+		return getRequestBody("addNote", params);
 	}
 
-	inline nlohmann::json AnkiInterface::get_multi_request(const std::vector<nlohmann::json>& requests) {
+	inline nlohmann::json AnkiInterface::getMultiRequest(const std::vector<nlohmann::json>& requests) {
 		auto params       = nlohmann::json::object();
 		params["actions"] = requests;
-		return get_request_body("multi", params);
+		return getRequestBody("multi", params);
 	}
 
-	inline nlohmann::json AnkiInterface::get_response_json(const httplib::Result& response) {
+	inline nlohmann::json AnkiInterface::getResponseJson(const httplib::Result& response) {
 		std::string body = response->body;
 		return nlohmann::json::parse(body);
 	}
 
-	httplib::Result AnkiInterface::post_and_receive(const std::string& request) {
-		spdlog::info("posting: {}", request);
+	void AnkiInterface::checkConnection() {
+		if (!connected) {
+			requestPermission();
+		}
+
+		if (requires_api_key && api_key == "") {
+			spdlog::error("[AnkiConnect] Anki api key required, but no api key supplied");
+		}
+	}
+
+	bool AnkiInterface::addNote(
+		const std::string& hanyu,
+		const std::string& pinyin,
+		const std::string& definition,
+		const std::string& sentence
+	) {
+		checkConnection();
+		if (!connected || (requires_api_key && api_key == "")) {
+			return false;
+		}
+
+		spdlog::info("[AnkiConnect] attempting to add card: {} | {} | {} | {}", hanyu, pinyin, definition, sentence);
+		const nlohmann::json  find_note_request = getFindNoteRequest("deck:chinese_read_text hanyu:" + hanyu);
+		const httplib::Result find_note_result  = postAndReceive(find_note_request);
+		if (!find_note_result) {
+			spdlog::error("[AnkiConnect] findNote failed: HTTP {}", to_string(find_note_result.error()));
+			return false;
+		}
+
+		const nlohmann::json find_note_json = getResponseJson(find_note_result);
+		if (!find_note_json["error"].is_null()) {
+			spdlog::error("[AnkiConnect] findNote failed: {}", find_note_json["error"].get<std::string>());
+			return false;
+		}
+
+		if (find_note_json["result"].empty()) {
+			nlohmann::json add_node_request = getAddNodeRequest(
+				deck_name,
+				card_type,
+				{
+					{"hanyu", hanyu},
+					{"pinyin", pinyin},
+					{"definition (word)", definition},
+					{"definition (sentence)", "<please input>"},
+					{"sentence", sentence}
+				}
+			);
+			const httplib::Result add_node_result = postAndReceive(add_node_request);
+			if (!add_node_result) {
+				spdlog::error("[AnkiConnect] addNote failed: HTTP {}", to_string(add_node_result.error()));
+				return false;
+			}
+
+			if (const nlohmann::json add_node_json = getResponseJson(add_node_result);
+				!add_node_json["error"].
+				is_null()) {
+				spdlog::error("[AnkiConnect] addNote failed: {}", add_node_json["error"].get<std::string>());
+			}
+		} else {
+			const CardID note_id = find_note_json["result"][0].get<CardID>();
+
+			const nlohmann::json  card_info_request = getCardInfoRequest(note_id);
+			const httplib::Result card_info_result  = postAndReceive(card_info_request);
+			if (!card_info_result) {
+				spdlog::error("[AnkiConnect] getCardInfo failed: HTTP {}", to_string(find_note_result.error()));
+				return false;
+			}
+
+			const nlohmann::json card_info_json = getResponseJson(card_info_result);
+			if (!card_info_json["error"].is_null()) {
+				spdlog::error("[AnkiConnect] getCardInfo failed: {}", card_info_json["error"].get<std::string>());
+				return false;
+			}
+
+			const std::string old_sentence = card_info_json["result"][0]["fields"]["sentence"]["value"].get<
+				std::string>();
+
+			if (!old_sentence.contains(sentence)) {
+				nlohmann::json update_note_field_request = getUpdateNoteFieldRequest(
+					note_id,
+					{{"sentence", old_sentence + "<br>" + sentence}, {"definition (sentence)", "<please input>"}}
+				);
+				const httplib::Result update_note_field_result = postAndReceive(update_note_field_request);
+				if (!update_note_field_result) {
+					spdlog::error(
+						"[AnkiConnect] updateNoteFields failed: HTTP {}",
+						to_string(update_note_field_result.error())
+					);
+					return false;
+				}
+
+				if (const nlohmann::json update_note_field_json = getResponseJson(update_note_field_result);
+					!
+					update_note_field_json["error"].is_null()) {
+					spdlog::error(
+						"[AnkiConnect] updateNoteFields failed: {}",
+						update_note_field_json["error"].get<std::string>()
+					);
+				}
+			}
+		}
+
+		return true;
+	}
+
+	void AnkiInterface::requestPermission() {
+		spdlog::info("[AnkiConnect] requesting API access");
+		const nlohmann::json permission_request = getRequestBody("requestPermission");
+		const httplib::Result permission_result  = postAndReceive(permission_request);
+		if (!permission_result) {
+			spdlog::error("[AnkiConnect] requestPermission failed: HTTP {}", to_string(permission_result.error()));
+			return;
+		}
+
+		const nlohmann::json permission_json = getResponseJson(permission_result);
+		if (!permission_json["error"].is_null()) {
+			spdlog::error("[AnkiConnect] requestPermission failed: {}", permission_json["error"].get<std::string>());
+			return;
+		}
+
+		if (permission_json["permission"].get<std::string>() == "denied") {
+			spdlog::error("[AnkiConnect] API access denied");
+			connected = false;
+			return;
+		}
+		connected = true;
+
+		if (permission_json["requireApiKey"].get<bool>()) {
+			requires_api_key = true;
+			spdlog::info("[AnkiConnect] API access requires API key");
+		} else {
+			requires_api_key = false;
+		}
+	}
+
+	httplib::Result AnkiInterface::postAndReceive(const std::string& request) {
+		spdlog::info("[AnkiConnect] posting: {}", request);
 		return client.Post("/", request, "application/json");
 	}
 
-	httplib::Result AnkiInterface::post_and_receive(const nlohmann::json& json) {
+	httplib::Result AnkiInterface::postAndReceive(const nlohmann::json& json) {
 		const auto str = json.dump();
-		return post_and_receive(str);
+		return postAndReceive(str);
 	}
 }

@@ -13,14 +13,36 @@ namespace iwra {
 	Application::Application(int& argc, char** argv, int):
 		QApplication{argc, argv},
 		config{"../config.yaml"},
-		ocr_engine{config},
 		is_refresh_enabled{config.getRefresh()},
-		refresh_interval{config.getRefreshIntervalMs().value()},
 		screenshot_hotkey{new QHotkey(QKeySequence("ctrl+d"), true, this)},
 		screenshot_window{new ScreenshotWindow(nullptr)},
 		tooltip_window{new TooltipWindow(nullptr, config)} {
+		// start function definition
+		ocr_engine = OCREngine::create(config);
+		if (!ocr_engine) {
+			throw std::runtime_error("OCREngine::create failed");
+		}
+
 		screenshot_window->hide();
 		tooltip_window->hide();
+
+		if (const std::optional refresh_interval_opt = config.getRefreshIntervalMs();
+			refresh_interval_opt.has_value()) {
+			refresh_interval = refresh_interval_opt.value();
+		} else {
+			is_refresh_enabled = false;
+		}
+
+		if (const std::optional style_path = config.getStyle();
+			style_path.has_value()) {
+			if (std::ifstream file_stream{style_path.value()};
+				!file_stream.is_open()) {
+				spdlog::warn("failed to open style (qss) file at {}", style_path.value().string());
+			} else {
+				const std::string content((std::istreambuf_iterator(file_stream)), std::istreambuf_iterator<char>());
+				setStyleSheet(QString::fromStdString(content));
+			}
+		}
 
 		connect(
 			screenshot_window,
@@ -29,7 +51,7 @@ namespace iwra {
 			[this](const cv::Mat& screenshot_mat, const cv::Rect& rect) {
 				curr_screenshot_rect = rect;
 				screenshot_window->hide();
-				processScreenshot(screenshot_mat, rect);
+				std::ignore = processScreenshot(screenshot_mat, rect);
 
 				if (is_refresh_enabled) {
 					if (timer_id == 0) {
@@ -65,7 +87,7 @@ namespace iwra {
 
 		return QtConcurrent::run(
 			[this, copy]() {
-				const auto res = ocr_engine.run(copy);
+				const auto res = ocr_engine->run(copy);
 				return res;
 			}
 		).then(
@@ -80,7 +102,7 @@ namespace iwra {
 		const QPixmap curr_screenshot_pixmap = screenshot_window->captureScreenRegion(curr_screenshot_rect);
 		const auto    cv_mat                 = ScreenshotWindow::QPixmapToCvMat(curr_screenshot_pixmap);
 
-		processScreenshot(cv_mat, curr_screenshot_rect);
+		std::ignore = processScreenshot(cv_mat, curr_screenshot_rect);
 
 		QApplication::timerEvent(event);
 	}

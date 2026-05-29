@@ -19,7 +19,7 @@ namespace iwra {
 
 	private:
 		Config    config;
-		OCREngine ocr_engine;
+		std::unique_ptr<OCREngine> ocr_engine;
 
 		int  timer_id{0};
 		bool is_refresh_enabled;

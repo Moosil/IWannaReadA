@@ -4,6 +4,7 @@
 #include <fstream>
 #include <ranges>
 #include <opencv2/core/mat.hpp>
+#include <spdlog/spdlog.h>
 
 #include "util_text.h"
 
@@ -100,7 +101,8 @@ namespace iwra {
 		std::string   line;
 		std::ifstream file_stream{keys_path.c_str()};
 		if (!file_stream.is_open()) {
-			throw std::runtime_error(std::format("fatal error to open keys file at {}", keys_path));
+			spdlog::error("failed to open keys file at {}", keys_path);
+			throw std::runtime_error(std::format("failed to open keys file at {}", keys_path));
 		}
 		while (std::getline(file_stream, line)) {
 			keys.emplace_back(line);

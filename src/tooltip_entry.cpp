@@ -190,10 +190,6 @@ namespace iwra {
 		QMenu menu(this);
 
 		const QAction* copy_character_action = menu.addAction("copy character");
-		const QAction* copy_phrase_action    = menu.addAction("copy phrase");
-		const QAction* copy_sentence_action  = menu.addAction("copy sentence");
-		const QAction* add_to_anki_action    = menu.addAction("add_to_anki");
-
 		connect(
 			copy_character_action,
 			&QAction::triggered,
@@ -202,6 +198,8 @@ namespace iwra {
 				setClipboardCharacter();
 			}
 		);
+
+		const QAction* copy_phrase_action = menu.addAction("copy phrase");
 		connect(
 			copy_phrase_action,
 			&QAction::triggered,
@@ -210,6 +208,8 @@ namespace iwra {
 				setClipboardPhrase();
 			}
 		);
+
+		const QAction* copy_sentence_action = menu.addAction("copy sentence");
 		connect(
 			copy_sentence_action,
 			&QAction::triggered,
@@ -218,14 +218,18 @@ namespace iwra {
 				setClipboardSentence();
 			}
 		);
-		connect(
-			add_to_anki_action,
-			&QAction::triggered,
-			this,
-			[this]() {
-				addToAnki();
-			}
-		);
+
+		if (anki_interface) {
+			const QAction* add_to_anki_action = menu.addAction("add_to_anki");
+			connect(
+				add_to_anki_action,
+				&QAction::triggered,
+				this,
+				[this]() {
+					addToAnki();
+				}
+			);
+		}
 
 		menu.exec(event->globalPos());
 

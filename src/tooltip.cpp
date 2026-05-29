@@ -14,23 +14,40 @@
 #include "util_qt.h"
 #include "util_utf8.h"
 
-
 namespace iwra {
 	TooltipWindow::TooltipWindow(
 		QWidget*      parent,
 		const Config& config
-	) :
+	):
 		QMainWindow{parent},
 		hover_hotkey{new QHotkey(QKeySequence("ctrl+shift+3"), true, this)},
 		dictionary_parser{std::make_shared<CCCEdictDictParser>()},
 		central_widget{new QWidget(this)},
 		layout{new QVBoxLayout(central_widget)},
 		scrollbar{new QScrollArea(this)} {
-		dictionary_parser->load(config.getDictPath());
-		anki_interface = std::make_shared<AnkiInterface>(
-			config.getAnkiCardType().value(),
-			config.getAnkiDeckName().value()
-		);
+		// function definition start
+		dictionary_parser->load(config.getDictPath()); {
+			const std::optional anki_card_type = config.getAnkiCardType();
+			const std::optional anki_deck_name = config.getAnkiDeckName();
+			if (anki_card_type.has_value() && anki_deck_name.has_value()) {
+				anki_interface = std::make_shared<AnkiInterface>(
+					anki_card_type.value(),
+					anki_deck_name.value()
+				);
+
+				if (anki_interface && anki_interface->requiresAPIKey()) {
+					if (const std::optional anki_api_key = config.getAnkiAPIKey();
+						anki_api_key.has_value()) {
+						anki_interface->setAPIKey(anki_api_key.value());
+					} else {
+						anki_interface = nullptr;
+					}
+				}
+			} else {
+				// anki is disabled
+				anki_interface = nullptr;
+			}
+		}
 
 		connect(
 			hover_hotkey,
@@ -87,8 +104,7 @@ namespace iwra {
 		scrollbar->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 		scrollbar->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
 
-		setMinimumSize(256, 128);
-		setMaximumSize(256, 256);
+		setFixedSize(config.getTooltipWidth(), config.getTooltipHeight());
 	}
 
 	bool TooltipWindow::initDictEntry(const std::string& key, const std::string& phrase) {
@@ -109,6 +125,7 @@ namespace iwra {
 		return !dictionary_data[key].entries.empty();
 	}
 
+	// ReSharper disable once CppInconsistentNaming
 	std::vector<OCRBlock> TooltipWindow::processOCRResults(
 		const std::vector<OCRResult>& unprocessed_results,
 		const cv::Point&              topleft
@@ -172,9 +189,9 @@ namespace iwra {
 		std::vector<OCRResultPacked> out{};
 		out.reserve(text.char_lengths.size());
 		for (const auto& [lower, upper] : text.char_lengths) {
-			std::string utf16i;
+			std::string utf16_it;
 			try {
-				utf8::append(utf8::next(it, end), utf16i);
+				utf8::append(utf8::next(it, end), utf16_it);
 			} catch (const utf8::not_enough_room& _) {
 				continue;
 			}
@@ -194,7 +211,7 @@ namespace iwra {
 					cv::Point{rect[3].x, static_cast<int>(std::lerp(rect[0].y, rect[3].y, upper))}
 				};
 			}
-			out.emplace_back(char_rect, utf16i);
+			out.emplace_back(char_rect, utf16_it);
 		}
 
 		return std::move(out);
@@ -416,13 +433,15 @@ namespace iwra {
 			std::string(find_pos_second, sentence.end())
 		);
 
-		anki_interface->add_note(phrase, pinyin, definition, sentence_add);
+		anki_interface->addNote(phrase, pinyin, definition, sentence_add);
 	}
 
 	std::string TooltipWindow::getSentence(OCRBlock* hover_block) {
 		return hover_block->results
 		       | std::ranges::views::transform(
-			       [](auto& r) -> std::string& { return r.text; }
+			       [](auto& r) -> std::string& {
+				       return r.text;
+			       }
 		       )
 		       | std::views::join | std::ranges::to<std::string>();
 	}

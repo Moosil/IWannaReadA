@@ -48,7 +48,11 @@ namespace iwra {
 		}
 
 		void addToAnki() const {
-			anki_interface->add_note(
+			if (!anki_interface) {
+				return;
+			}
+
+			anki_interface->addNote(
 				entry.getSimp(),
 				entry.getPinyin(),
 				entry.definitions | std::views::join_with('\n') | std::ranges::to<std::string>(),
