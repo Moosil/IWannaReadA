@@ -16,37 +16,28 @@
 
 namespace iwra {
 	TooltipWindow::TooltipWindow(
-		QWidget*      parent,
-		const Config& config
+		QWidget*                       parent,
+		const std::shared_ptr<Config>& config
 	):
 		QMainWindow{parent},
 		hover_hotkey{new QHotkey(QKeySequence("ctrl+shift+3"), true, this)},
 		dictionary_parser{std::make_shared<CCCEdictDictParser>()},
 		central_widget{new QWidget(this)},
+		anki_interface{std::make_shared<AnkiInterface>(config)},
 		layout{new QVBoxLayout(central_widget)},
 		scrollbar{new QScrollArea(this)} {
 		// function definition start
-		dictionary_parser->load(config.getDictPath()); {
-			const std::optional anki_card_type = config.getAnkiCardType();
-			const std::optional anki_deck_name = config.getAnkiDeckName();
-			if (anki_card_type.has_value() && anki_deck_name.has_value()) {
-				anki_interface = std::make_shared<AnkiInterface>(
-					anki_card_type.value(),
-					anki_deck_name.value()
-				);
 
-				if (anki_interface && anki_interface->requiresAPIKey()) {
-					if (const std::optional anki_api_key = config.getAnkiAPIKey();
-						anki_api_key.has_value()) {
-						anki_interface->setAPIKey(anki_api_key.value());
-					} else {
-						anki_interface = nullptr;
-					}
-				}
-			} else {
-				// anki is disabled
-				anki_interface = nullptr;
-			}
+		if (!config) {
+			spdlog::error("TooltipWindow cannot be created because config is null");
+			throw std::runtime_error("TooltipWindow cannot be created because config is null");
+		}
+
+		if (const std::optional dict_path_opt = config->getDictPath();
+			dict_path_opt.has_value()) {
+			dictionary_parser->load(dict_path_opt.value());
+		} else {
+			spdlog::error("TooltipWindow has no dictionary file");
 		}
 
 		connect(
@@ -104,7 +95,7 @@ namespace iwra {
 		scrollbar->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 		scrollbar->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
 
-		setFixedSize(config.getTooltipWidth(), config.getTooltipHeight());
+		setFixedSize(config->getTooltipWidth(), config->getTooltipHeight());
 	}
 
 	bool TooltipWindow::initDictEntry(const std::string& key, const std::string& phrase) {
@@ -385,7 +376,7 @@ namespace iwra {
 			results,
 			[&mouse_pos](const OCRBlock& block) -> bool {
 				// returns positive (inside), negative (outside), or zero (on an edge) value
-				if (block.poly.empty()) {
+				if (block.poly.size() <= 1) {
 					return false;
 				}
 				return pointPolygonTest(block.poly, mouse_pos, false) > 0;

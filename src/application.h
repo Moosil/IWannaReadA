@@ -10,6 +10,8 @@
 
 namespace iwra {
 	class Application : public QApplication {
+		Q_OBJECT
+
 	public:
 		#ifdef Q_QDOC
 		Application(int& argc, char** argv);
@@ -18,7 +20,7 @@ namespace iwra {
 		#endif
 
 	private:
-		Config    config;
+		std::shared_ptr<Config>    config;
 		std::unique_ptr<OCREngine> ocr_engine;
 
 		int  timer_id{0};
@@ -35,7 +37,7 @@ namespace iwra {
 		QFuture<void> processScreenshot(
 			const cv::Mat&  screenshot_mat,
 			const cv::Rect& rect
-		) const;
+		);
 
 	protected:
 		void timerEvent(QTimerEvent* event) override;

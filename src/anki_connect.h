@@ -1,14 +1,13 @@
 #pragma once
 
-#include <future>
 #include <httplib.h>
 #include <nlohmann/json.hpp>
+
+#include "config.h"
 
 namespace iwra {
 	class AnkiInterface {
 	public:
-		AnkiInterface(const std::string& deck_name, const std::string& card_type, int port = 8765);
-
 		~AnkiInterface();
 
 		AnkiInterface& operator=(const AnkiInterface&) = delete;
@@ -17,17 +16,17 @@ namespace iwra {
 
 		AnkiInterface& operator=(AnkiInterface&& other) noexcept {
 			if (this != &other) {
-				client    = std::move(other.client);
-				deck_name = std::move(other.deck_name);
-				card_type = std::move(other.card_type);
+				client = std::move(other.client);
+				config = std::move(other.config);
 			}
 			return *this;
-		};
+		}
 
 		AnkiInterface(AnkiInterface&& other) noexcept:
 			client{std::move(other.client)},
-			deck_name{std::move(other.deck_name)},
-			card_type{std::move(other.card_type)} {};
+			config{std::move(other.config)} {}
+
+		explicit AnkiInterface(const std::shared_ptr<Config>& config);
 
 		static nlohmann::json getRequestBody(const std::string& request_name, const nlohmann::json& params = nullptr);
 
@@ -65,17 +64,12 @@ namespace iwra {
 
 		[[nodiscard]] bool getConnected() const {
 			return connected;
-		};
-
-		// ReSharper disable once CppInconsistentNaming
-		void setAPIKey(const std::string& anki_api_key) {
-			api_key = anki_api_key;
-		};
+		}
 
 		// ReSharper disable once CppInconsistentNaming
 		[[nodiscard]] bool requiresAPIKey() const {
 			return requires_api_key;
-		};
+		}
 
 		[[nodiscard]] [[maybe_unused]] httplib::Result postAndReceive(const std::string& request);
 
@@ -85,11 +79,11 @@ namespace iwra {
 		// ReSharper disable once CppInconsistentNaming
 		using CardID = unsigned long long;
 
+		int port;
+
 		httplib::Client client;
 
-		std::string deck_name;
-		std::string card_type;
-		std::string api_key;
+		std::shared_ptr<Config> config;
 
 		bool connected{false};
 

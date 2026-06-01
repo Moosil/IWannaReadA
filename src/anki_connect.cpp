@@ -4,19 +4,15 @@
 #include <spdlog/spdlog.h>
 
 namespace iwra {
-	AnkiInterface::AnkiInterface(const std::string& deck_name, const std::string& card_type, const int port):
-		client{"127.0.0.1", port},
-		deck_name{deck_name},
-		card_type{card_type} {
-		//client->set_connection_timeout(0, 500'000); // 500 ms
-
-		spdlog::info("connected AnkiConnect HTTP client to 127.0.0.1:{}", port);
-
-		requestPermission();
-	}
-
 	AnkiInterface::~AnkiInterface() {
 		spdlog::info("disconnected AnkiConnect HTTP client");
+	}
+
+	AnkiInterface::AnkiInterface(const std::shared_ptr<Config>& config):
+		port{config->getAnkiPort()},
+		client{"127.0.0.1", port},
+		config{config} {
+		client.set_connection_timeout(config->getAnkiConnectionTimeoutMs());
 	}
 
 	nlohmann::json AnkiInterface::getRequestBody(const std::string& request_name, const nlohmann::json& params) {
@@ -84,11 +80,12 @@ namespace iwra {
 	}
 
 	void AnkiInterface::checkConnection() {
+		spdlog::info("[AnkiConnect] checking connection to 127.0.0.1:{}", port);
 		if (!connected) {
 			requestPermission();
 		}
 
-		if (requires_api_key && api_key == "") {
+		if (requires_api_key && !config->getAnkiAPIKey().has_value()) {
 			spdlog::error("[AnkiConnect] Anki api key required, but no api key supplied");
 		}
 	}
@@ -100,7 +97,7 @@ namespace iwra {
 		const std::string& sentence
 	) {
 		checkConnection();
-		if (!connected || (requires_api_key && api_key == "")) {
+		if (!connected || (requires_api_key && !config->getAnkiAPIKey().has_value())) {
 			return false;
 		}
 
@@ -120,8 +117,8 @@ namespace iwra {
 
 		if (find_note_json["result"].empty()) {
 			nlohmann::json add_node_request = getAddNodeRequest(
-				deck_name,
-				card_type,
+				config->getAnkiDeckName().value(),
+				config->getAnkiCardType().value(),
 				{
 					{"hanyu", hanyu},
 					{"pinyin", pinyin},
@@ -190,7 +187,7 @@ namespace iwra {
 
 	void AnkiInterface::requestPermission() {
 		spdlog::info("[AnkiConnect] requesting API access");
-		const nlohmann::json permission_request = getRequestBody("requestPermission");
+		const nlohmann::json  permission_request = getRequestBody("requestPermission");
 		const httplib::Result permission_result  = postAndReceive(permission_request);
 		if (!permission_result) {
 			spdlog::error("[AnkiConnect] requestPermission failed: HTTP {}", to_string(permission_result.error()));

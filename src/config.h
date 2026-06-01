@@ -4,17 +4,22 @@
 #include <yaml-cpp/yaml.h>
 
 #include <filesystem>
+#include <unordered_set>
 
 namespace iwra {
 	class Config {
 	public:
-		static constexpr int defaultWidth  = 256;
-		static constexpr int defaultHeight = 256;
+		static constexpr int defaultWidth                 = 256;
+		static constexpr int defaultHeight                = 256;
+		static constexpr int defaultRefreshInterval       = 100;
+		static constexpr int defaultAnkiConnectionTimeout = 0;
+		static constexpr int defaultAnkiConnectPort = 8765;
 
 		using FilePath = std::filesystem::path;
 
 		explicit Config(const FilePath& path);
 
+		// GETTERS //
 		FilePath getRootPath() const;
 
 		FilePath getOcrRootPath() const;
@@ -29,11 +34,11 @@ namespace iwra {
 
 		std::optional<FilePath> getRecParamPath() const;
 
-		FilePath getDictPath() const;
+		std::optional<FilePath> getDictPath() const;
 
 		bool getRefresh() const;
 
-		std::optional<int> getRefreshIntervalMs() const;
+		int getRefreshIntervalMs() const;
 
 		std::optional<FilePath> getStyle() const;
 
@@ -50,11 +55,55 @@ namespace iwra {
 		// ReSharper disable once CppInconsistentNaming
 		std::optional<std::string> getAnkiAPIKey() const;
 
+		int getAnkiConnectionTimeoutMs() const;
+
+		int getAnkiPort();
+
+		std::optional<std::unordered_map<std::string, std::string> > getAnkiCardFieldValues() const;
+
+		// SETTERS //
+		void fillDefault();
+
+		void fillEmptyDefault();
+
+		void fillAnki(const std::unordered_set<std::string>& field_names = {});
+
+		void setAnkiDeckName(const std::string& deck_name);
+
+		void setAnkiCardType(const std::string& card_type);
+
+		// ReSharper disable once CppInconsistentNaming
+		void setAnkiAPIKey(const std::string& api_key);
+
+		void setAnkiConnectionTimeoutMs(const std::string& timeout);
+
+		void fillAnkiFields(const std::unordered_map<std::string, std::string>& field_values);
+
+	private:
+		enum class ModelType {
+			Rec,
+			Det
+		};
+
+		enum class FileType {
+			Model,
+			Param
+		};
+
+		YAML::Node node;
+
+		FilePath config_path;
+		FilePath file_root;
+		FilePath ocr_file_root;
+
+		// ReSharper disable once CppInconsistentNaming
+		std::optional<FilePath> getOCRFile(ModelType model_type, FileType file_type) const;
+
 		template<spdlog::level::level_enum NotDefinedLevel, spdlog::level::level_enum IsNullLevel>
 		static bool has(
 			const YAML::Node&                           node,
 			const std::string&                          item,
-			const std::string&                          item_prefix = "",
+			const std::string&                          item_prefix     = "",
 			const spdlog::format_string_t<std::string>& fmt_not_defined = "{} not found",
 			const spdlog::format_string_t<std::string>& fmt_is_null     = "{} is null") {
 			// function definition start
@@ -75,7 +124,7 @@ namespace iwra {
 		static std::optional<T> get(
 			const YAML::Node&                           node,
 			const std::string&                          item,
-			const std::string&                          item_prefix = "",
+			const std::string&                          item_prefix     = "",
 			const spdlog::format_string_t<std::string>& fmt_not_defined = "{} not found",
 			const spdlog::format_string_t<std::string>& fmt_is_null     = "{} is null") {
 			// function definition start
@@ -91,12 +140,12 @@ namespace iwra {
 		static std::optional<FilePath> getFile(
 			const YAML::Node&                                        node,
 			const std::string&                                       item,
-			const std::string&                                       item_prefix = "",
-			const FilePath&                             parent_path = FilePath(),
+			const std::string&                                       item_prefix        = "",
+			const FilePath&                                          parent_path        = FilePath(),
 			const spdlog::format_string_t<std::string>&              fmt_not_defined    = "{} not found",
 			const spdlog::format_string_t<std::string>&              fmt_is_null        = "{} is null",
 			const spdlog::format_string_t<std::string, std::string>& fmt_not_valid_path =
-					"The value of {} ({}) is not a valid path",
+					"The value of {} ({}) does not point to anything",
 			const spdlog::format_string_t<std::string, std::string, std::string>& fmt_wrong_type =
 					"The value of {} ({}) does not point to a {}") {
 			// function definition start
@@ -151,26 +200,7 @@ namespace iwra {
 			return path;
 		}
 
-	private:
-		enum class ModelType {
-			Rec,
-			Det
-		};
-
-		enum class FileType {
-			Model,
-			Param
-		};
-
-		YAML::Node node;
-
-		FilePath config_path;
-		FilePath file_root;
-		FilePath ocr_file_root;
-
-		std::optional<FilePath> getPath(ModelType model_type, FileType file_type) const;
-
-		std::optional<std::string> getRefreshIntervalAsString() const;
+		static std::optional<int> getTime(const std::optional<std::string>& time_as_string_opt);
 
 		static std::string enum2String(ModelType model_type);
 

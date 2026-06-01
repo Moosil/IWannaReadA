@@ -11,24 +11,54 @@ namespace iwra {
 		QWidget{parent},
 		anki_interface{p_interface},
 		layout{new QVBoxLayout(this)},
-		headword{new QWidget(this)},
-		headword_layout{new QGridLayout(headword)},
+		title_bar{new QWidget(this)},
+		title_bar_layout{new QHBoxLayout(title_bar)},
+		anki_button{new QPushButton(title_bar)},
+		headword{new QWidget(title_bar)},
+		headword_layout{new QHBoxLayout(headword)},
 		definitions{new QLabel(this)} { {
 			QFont font = definitions->font();
 			font.setPointSize(10);
 			definitions->setFont(font);
 		}
 
+		anki_button->setFlat(true);
+		connect(
+			anki_button,
+			&QPushButton::pressed,
+			this,
+			[this]() {
+				addToAnki();
+			}
+		);
+
+		if (anki_interface->getConnected()) {
+			anki_button->setIcon(QIcon("../assets/add_to_anki.png"));
+			anki_button->setToolTip("Click to add current entry to Anki");
+			anki_connected = true;
+		} else {
+			anki_button->setIcon(QIcon("../assets/retry_connection.png"));
+			anki_button->setToolTip("Click to retry Anki connection");
+			anki_connected = false;
+		}
+
 		definitions->setWordWrap(true);
 
-		layout->addWidget(headword);
+		title_bar_layout->addWidget(headword);
+		title_bar_layout->addWidget(anki_button, 0, Qt::AlignRight | Qt::AlignVCenter);
+
+		layout->addWidget(title_bar);
 		layout->addSpacing(8);
 		layout->addWidget(definitions);
 
-		compactifyWidget(headword);
+		compactifyWidget(anki_button);
 		definitions->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Maximum);
 		definitions->setContentsMargins(4, 0, 4, 0);
+
 		compactifyWidget(this);
+		title_bar->setContentsMargins(0, 0, 0, 0);
+		title_bar->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Maximum);
+		compactifyWidget(headword);
 
 		compactifyLayout(layout);
 		compactifyLayout(headword_layout);
@@ -45,46 +75,42 @@ namespace iwra {
 
 		int index = 0;
 		for (const auto& [characters] : p_entry.words) {
-			for (const auto& [simp, _, pinyin] : characters) {
-				addLabelToHeadword(0, index, pinyin);
-				addLabelToHeadword(1, index, simp);
+			for (const auto& [simp, trad, pinyin] : characters) {
+				addLabelToHeadword(index, pinyin, simp);
 				++index;
 			}
-			while (index < headword_layout->columnCount() && !headword_layout->itemAtPosition(0, index)->spacerItem()) {
-				hideHeadwordLayoutItem(0, index);
-				hideHeadwordLayoutItem(1, index);
+			while (index < headword_layout->count() && !headword_layout->itemAt(index)->spacerItem()) {
+				hideHeadwordLayoutItem(index);
 				++index;
 			}
-			addSpacerToHeadword(0, index, 4);
-			addSpacerToHeadword(1, index, 4);
+			addSpacerToHeadword(index, 4);
 			++index;
 		}
 
-		--index;
-		addSpacerToHeadword(0, index, 8);
-		addSpacerToHeadword(1, index, 8);
-		++index;
+		if (index > 0) {
+			--index;
+			addSpacerToHeadword(index, 8);
+			++index;
+		}
 
 		for (const auto& [characters] : p_entry.words) {
-			for (const auto& [_, trad, pinyin] : characters) {
-				addLabelToHeadword(0, index, pinyin);
-				addLabelToHeadword(1, index, trad);
+			for (const auto& [simp, trad, pinyin] : characters) {
+				addLabelToHeadword(index, pinyin, trad);
 				++index;
 			}
-			while (index < headword_layout->columnCount() && !headword_layout->itemAtPosition(0, index)->spacerItem()) {
-				hideHeadwordLayoutItem(0, index);
-				hideHeadwordLayoutItem(1, index);
+			while (index < headword_layout->count() && !headword_layout->itemAt(index)->spacerItem()) {
+				hideHeadwordLayoutItem(index);
 				++index;
 			}
-			addSpacerToHeadword(0, index, 4);
-			addSpacerToHeadword(1, index, 4);
+			addSpacerToHeadword(index, 4);
 			++index;
 		}
 
-		--index;
-		for (; index < headword_layout->columnCount(); ++index) {
-			hideHeadwordLayoutItem(0, index);
-			hideHeadwordLayoutItem(1, index);
+		if (index > 0) {
+			--index;
+		}
+		for (; index < headword_layout->count(); ++index) {
+			hideHeadwordLayoutItem(index);
 		}
 
 		using namespace std::string_literals;
@@ -94,71 +120,82 @@ namespace iwra {
 		definitions->setText(QString::fromStdString(definition_concat));
 	}
 
-	void TooltipEntry::hideHeadwordLayoutItem(const int row, const int column) const {
-		QLayoutItem* curr = headword_layout->itemAtPosition(row, column);
+	void TooltipEntry::hideHeadwordLayoutItem(const int column) const {
+		QLayoutItem* curr = headword_layout->itemAt(column);
 		if (!curr) {
 			return;
 		}
 
-		if (curr->widget()) {
-			curr->widget()->hide();
+		if (curr->layout()) {
+			curr->layout()->itemAt(0)->widget()->hide();
+			curr->layout()->itemAt(1)->widget()->hide();
 		} else if (curr->spacerItem()) {
 			curr->spacerItem()->changeSize(0, 0);
 		} else {
-			spdlog::warn("malformed QLayoutItem ({}, {}) in TooltipEntry", row, column);
+			spdlog::warn("malformed QLayoutItem ({}) in TooltipEntry", column);
 		}
 	}
 
-	void TooltipEntry::addSpacerToHeadword(const int row, const int column, const int size) const {
-		QLayoutItem* spacer = headword_layout->itemAtPosition(row, column);
-		if (!spacer) {
-			headword_layout->addItem(new QSpacerItem(size, 0), row, column);
+	void TooltipEntry::addSpacerToHeadword(const int index, const int size) const {
+		if (headword_layout->count() <= index) {
+			headword_layout->addItem(new QSpacerItem(size, 0));
 			return;
 		}
+
+		QLayoutItem* spacer = headword_layout->itemAt(index);
 
 		if (QSpacerItem* curr_spacer = spacer->spacerItem()) {
 			curr_spacer->changeSize(size, 0);
-		} else if (spacer->widget()) {
-			headword_layout->addItem(new QSpacerItem(size, 0), row, column);
+		} else if (spacer->layout()) {
+			headword_layout->insertItem(index, new QSpacerItem(size, 0));
 		} else {
-			spdlog::warn("malformed QLayoutItem ({}, {}) in TooltipEntry", row, column);
-			headword_layout->addItem(new QSpacerItem(size, 0), row, column);
+			spdlog::warn("malformed QLayoutItem ({}) in TooltipEntry", index);
+			headword_layout->insertItem(index, new QSpacerItem(size, 0));
 		}
 	}
 
-	void TooltipEntry::addLabelToHeadword(const int row, const int column, const std::string& text) const {
-		QLayoutItem* label = headword_layout->itemAtPosition(row, column);
-
-		if (!label) {
-			auto* new_label = getPinyinLabel();
-			new_label->setText(QString::fromStdString(text));
-			headword_layout->addWidget(new_label, row, column);
+	void TooltipEntry::addLabelToHeadword(const int index, const std::string& pinyin, const std::string& hanzi) const {
+		if (headword_layout->count() <= index) {
+			headword_layout->addLayout(getLayoutLabel(pinyin, hanzi));
 			return;
 		}
 
-		if (QWidget* curr_widget = label->widget()) {
-			if (auto* curr_label = qobject_cast<QLabel*>(curr_widget)) {
-				curr_label->setText(QString::fromStdString(text));
-				curr_label->show();
+		QLayoutItem* label_item = headword_layout->itemAt(index);
+
+		if (const QLayout* label_layout = label_item->layout()) {
+			if (QWidget* pinyin_widget = label_layout->itemAt(0)->widget();
+				auto*    pinyin_label  = qobject_cast<QLabel*>(pinyin_widget)) {
+				pinyin_label->setText(QString::fromStdString(pinyin));
+				pinyin_label->show();
 			} else {
-				spdlog::warn("non-QLabel QWidget in QLayoutItem ({}, {}) in TooltipEntry", row, column);
-				auto* new_label = getPinyinLabel();
-				new_label->setText(QString::fromStdString(text));
-				headword_layout->addWidget(new_label, row, column);
+				spdlog::warn("non-QLabel QWidget in QLayoutItem ({}) in TooltipEntry", index);
 			}
-		} else if (label->spacerItem()) {
-			auto* new_label = getPinyinLabel();
-			new_label->setText(QString::fromStdString(text));
-			headword_layout->addWidget(new_label, row, column);
+			if (QWidget* hanzi_widget = label_layout->itemAt(1)->widget();
+				auto*    pinyin_label = qobject_cast<QLabel*>(hanzi_widget)) {
+				pinyin_label->setText(QString::fromStdString(hanzi));
+				pinyin_label->show();
+			} else {
+				spdlog::warn("non-QLabel QWidget in QLayoutItem ({}) in TooltipEntry", index);
+			}
+		} else if (label_item->spacerItem()) {
+			headword_layout->insertLayout(index, getLayoutLabel(pinyin, hanzi));
 		} else {
-			spdlog::warn("malformed QLayoutItem ({}, {}) in TooltipEntry", row, column);
-			auto* new_label = getPinyinLabel();
-			new_label->setText(QString::fromStdString(text));
-			headword_layout->addWidget(new_label, row, column);
+			spdlog::warn("malformed QLayoutItem ({}) in TooltipEntry", index);
+			headword_layout->insertLayout(index, getLayoutLabel(pinyin, hanzi));
 		}
 	}
 
-	QLabel* TooltipEntry::getHanziLabel() const {
+	QVBoxLayout* TooltipEntry::getLayoutLabel(const std::string& pinyin, const std::string& hanzi) const {
+		auto* res = new QVBoxLayout();
+
+		res->addWidget(getPinyinLabel(pinyin));
+		res->addWidget(getHanziLabel(hanzi));
+		compactifyLayout(res);
+
+		return res;
+	}
+
+	QLabel* TooltipEntry::getHanziLabel(const std::string& text) const {
 		auto* res = new QLabel(headword);
 
 		QFont font = res->font();
@@ -169,10 +206,12 @@ namespace iwra {
 
 		compactifyLabel(res);
 
+		res->setText(QString::fromStdString(text));
+
 		return res;
 	}
 
-	QLabel* TooltipEntry::getPinyinLabel() const {
+	QLabel* TooltipEntry::getPinyinLabel(const std::string& text) const {
 		auto* res = new QLabel(headword);
 
 		QFont font = res->font();
@@ -182,6 +221,8 @@ namespace iwra {
 		res->setAlignment(Qt::AlignCenter);
 
 		compactifyLabel(res);
+
+		res->setText(QString::fromStdString(text));
 
 		return res;
 	}

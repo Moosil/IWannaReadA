@@ -29,7 +29,7 @@ namespace iwra {
 	public:
 		TooltipWindow() = delete;
 
-		TooltipWindow(QWidget* parent, const Config& config);
+		TooltipWindow(QWidget* parent, const std::shared_ptr<Config>& config);
 
 		void updateResRect(const std::vector<OCRResult>& new_res, const cv::Rect& new_rect);
 
