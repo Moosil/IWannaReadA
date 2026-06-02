@@ -33,6 +33,15 @@ namespace iwra {
 			throw std::runtime_error("TooltipWindow cannot be created because config is null");
 		}
 
+		if (config->getAnkiNoteType().has_value()) {
+			anki_interface->fillConfigNoteFields();
+		} else {
+			spdlog::warn(
+				"No Anki note type supplied, to allow anki support, please fill anki: note-type field in the config"
+				" and restart the application to automatically generate the fields"
+			);
+		}
+
 		if (const std::optional dict_path_opt = config->getDictPath();
 			dict_path_opt.has_value()) {
 			dictionary_parser->load(dict_path_opt.value());
@@ -424,7 +433,7 @@ namespace iwra {
 			std::string(find_pos_second, sentence.end())
 		);
 
-		anki_interface->addNote(phrase, pinyin, definition, sentence_add);
+		anki_interface->addNote(TODO);
 	}
 
 	std::string TooltipWindow::getSentence(OCRBlock* hover_block) {

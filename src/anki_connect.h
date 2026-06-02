@@ -38,13 +38,14 @@ namespace iwra {
 
 		static nlohmann::json getUpdateNoteFieldRequest(
 			unsigned long long                        note_id,
-			const std::map<std::string, std::string>& fields
+			const std::map<std::string, std::string>& note_fields
 		);
 
 		static nlohmann::json getAddNodeRequest(
 			const std::string&                        deck_name,
-			const std::string&                        card_type,
-			const std::map<std::string, std::string>& fields
+			const std::string&                        note_type,
+			const std::map<std::string, std::string>& note_fields,
+			const std::vector<std::string>& tags
 		);
 
 		static nlohmann::json getMultiRequest(const std::vector<nlohmann::json>& requests);
@@ -54,11 +55,14 @@ namespace iwra {
 		void checkConnection();
 
 		bool addNote(
-			const std::string& hanyu,
-			const std::string& pinyin,
-			const std::string& definition,
-			const std::string& sentence
+			const std::map<std::string, std::string>& field_values
 		);
+
+		std::optional<std::vector<std::string>> getNoteTypeFieldNames(const std::string& note_type);
+
+		std::optional<std::vector<std::string>> getNoteTypeFieldDescriptors(const std::string& note_type);
+
+		void fillConfigNoteFields();
 
 		void requestPermission();
 

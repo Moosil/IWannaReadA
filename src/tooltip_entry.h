@@ -61,10 +61,7 @@ namespace iwra {
 
 			if (anki_connected) {
 				anki_interface->addNote(
-					entry.getSimp(),
-					entry.getPinyin(),
-					entry.definitions | std::views::join_with('\n') | std::ranges::to<std::string>(),
-					sentence
+					TODO
 				);
 			} else {
 				anki_interface->checkConnection();

@@ -1,10 +1,13 @@
 #pragma once
 
+#include <complex.h>
 #include <spdlog/spdlog.h>
 #include <yaml-cpp/yaml.h>
 
 #include <filesystem>
+#include <unordered_map>
 #include <unordered_set>
+#include <variant>
 
 namespace iwra {
 	class Config {
@@ -48,9 +51,11 @@ namespace iwra {
 
 		bool hasAnki() const;
 
-		std::optional<std::string> getAnkiCardType() const;
+		std::optional<std::string> getAnkiNoteType() const;
 
 		std::optional<std::string> getAnkiDeckName() const;
+
+		std::optional<std::vector<std::string>> getAnkiTags();
 
 		// ReSharper disable once CppInconsistentNaming
 		std::optional<std::string> getAnkiAPIKey() const;
@@ -59,7 +64,7 @@ namespace iwra {
 
 		int getAnkiPort();
 
-		std::optional<std::unordered_map<std::string, std::string> > getAnkiCardFieldValues() const;
+		std::optional<std::unordered_map<std::string, std::string> > getAnkiNoteFieldValues() const;
 
 		// SETTERS //
 		void fillDefault();
@@ -70,14 +75,14 @@ namespace iwra {
 
 		void setAnkiDeckName(const std::string& deck_name);
 
-		void setAnkiCardType(const std::string& card_type);
+		void setAnkiNoteType(const std::string& note_type);
 
 		// ReSharper disable once CppInconsistentNaming
 		void setAnkiAPIKey(const std::string& api_key);
 
 		void setAnkiConnectionTimeoutMs(const std::string& timeout);
 
-		void fillAnkiFields(const std::unordered_map<std::string, std::string>& field_values);
+		void fillAnkiNoteFields(const std::unordered_map<std::string, std::string>& field_values);
 
 	private:
 		enum class ModelType {

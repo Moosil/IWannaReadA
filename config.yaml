@@ -21,17 +21,17 @@ width: 256
 height: 384
 
 anki:
-  card-type: "Chinese Card Cloze"
+  note-type: "Chinese Card Cloze"
   deck-name: "中文::看句子练习句子"
-  card-tags:
+  note-tags:
     - "iwra"
   api-key: ~
 
   connection-timeout: 0ms
 
-  fields:
+  note-fields:
     sentence: ""
-    hanyu: ""
+    hanzi: ""
     pinyin: ""
     definition (word): ""
     definition (sentence): ""

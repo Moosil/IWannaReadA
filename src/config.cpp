@@ -1,5 +1,7 @@
 #include "config.h"
 
+#include <variant>
+
 #include "util_text.h"
 
 namespace iwra {
@@ -134,14 +136,14 @@ namespace iwra {
 		);
 	}
 
-	std::optional<std::string> Config::getAnkiCardType() const {
+	std::optional<std::string> Config::getAnkiNoteType() const {
 		if (!hasAnki()) {
 			return std::nullopt;
 		}
 
 		return get<std::string, spdlog::level::err, spdlog::level::err>(
 			node["anki"],
-			"card-type",
+			"note-type",
 			"anki ",
 			"{} not found. Implicitly disabling Anki. Set a value to allow Anki integration",
 			"{} is null. Implicitly disabling Anki. Set a value to allow Anki integration"
@@ -162,6 +164,20 @@ namespace iwra {
 		);
 	}
 
+	std::optional<std::vector<std::string>> Config::getAnkiTags() {
+		if (!hasAnki()) {
+			return std::nullopt;
+		}
+
+		return get<std::vector<std::string>, spdlog::level::warn, spdlog::level::info>(
+			node["anki"],
+			"note-tags",
+			"anki ",
+			"{} not found. Implicitly using no tags. Set to null (~) to explicitly disable or set a value to add note tags",
+			"{} is null. Implicitly disabling Anki. Set a value to add note tags"
+		);
+	}
+
 	// ReSharper disable once CppInconsistentNaming
 	std::optional<std::string> Config::getAnkiAPIKey() const {
 		if (!hasAnki()) {
@@ -172,8 +188,8 @@ namespace iwra {
 			node["anki"],
 			"api-key",
 			"anki ",
-			"{} not found. Implicitly disabling Anki. Set a value or disable AnkiConnect API key to allow Anki integration",
-			"{} is null. Implicitly disabling Anki. Set a value or disable AnkiConnect API key to allow Anki integration"
+			"{} not found. Implicitly disabling Anki. Set a value  to allow Anki integration",
+			"{} is null. Implicitly disabling Anki. Set a value  to allow Anki integration"
 		);
 	}
 
@@ -209,14 +225,14 @@ namespace iwra {
 		).value_or(defaultAnkiConnectPort);
 	}
 
-	std::optional<std::unordered_map<std::string, std::string> > Config::getAnkiCardFieldValues() const {
+	std::optional<std::unordered_map<std::string, std::string> > Config::getAnkiNoteFieldValues() const {
 		if (!hasAnki()) {
 			return std::nullopt;
 		}
 
 		return get<std::unordered_map<std::string, std::string>, spdlog::level::err, spdlog::level::err>(
 			node["anki"],
-			"fields",
+			"note-fields",
 			"anki ",
 			"{} not found. Implicitly disabling Anki. Set values to enable Anki integration",
 			"{} is null. Implicitly disabling Anki. Set values to enable Anki integration"
@@ -300,8 +316,8 @@ namespace iwra {
 			node["anki"] = {};
 		}
 
-		if (!getAnkiCardType().has_value()) {
-			node["anki"]["card-type"] = YAML::Null;
+		if (!getAnkiNoteType().has_value()) {
+			node["anki"]["note-type"] = YAML::Null;
 		}
 
 		if (!getAnkiDeckName().has_value()) {
@@ -317,7 +333,7 @@ namespace iwra {
 		}
 
 		for (const auto& key : field_names) {
-			node["anki"]["fields"][key] = "";
+			node["anki"]["note-fields"][key] = "";
 		}
 	}
 
@@ -326,9 +342,9 @@ namespace iwra {
 		node["anki"]["deck-name"] = deck_name;
 	}
 
-	void Config::setAnkiCardType(const std::string& card_type) {
+	void Config::setAnkiNoteType(const std::string& note_type) {
 		fillAnki();
-		node["anki"]["card-type"] = card_type;
+		node["anki"]["note-type"] = note_type;
 	}
 
 	// ReSharper disable once CppInconsistentNaming
@@ -342,9 +358,9 @@ namespace iwra {
 		node["anki"]["connection-timeout"] = timeout;
 	}
 
-	void Config::fillAnkiFields(const std::unordered_map<std::string, std::string>& field_values) {
+	void Config::fillAnkiNoteFields(const std::unordered_map<std::string, std::string>& field_values) {
 		fillAnki();
-		node["anki"]["fields"] = field_values;
+		node["anki"]["note-fields"] = field_values;
 	}
 
 	// ReSharper disable once CppInconsistentNaming
