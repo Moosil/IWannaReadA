@@ -54,7 +54,7 @@ namespace iwra {
 		std::vector<TooltipEntry*> entries{};
 
 		std::shared_ptr<AnkiInterface> anki_interface;
-		std::shared_ptr<Config> config;
+		std::shared_ptr<Config>        config;
 
 		bool initDictEntry(const std::string& key, const std::string& phrase);
 
@@ -70,7 +70,11 @@ namespace iwra {
 
 		const DictionaryData* getDictDataOrInit(const std::string& key, const std::string& phrase);
 
-		void updateWindowEntry(const DictionaryData* dict_data, const std::string& phrase, const std::string& sentence, long long offset);
+		void updateWindowEntry(
+			const DictionaryData* dict_data,
+			const std::string&    phrase,
+			const std::string&    sentence,
+			long long             offset);
 
 		void refreshWindow();
 

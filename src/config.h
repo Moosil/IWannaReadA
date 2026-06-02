@@ -16,7 +16,7 @@ namespace iwra {
 		static constexpr int defaultHeight                = 256;
 		static constexpr int defaultRefreshInterval       = 100;
 		static constexpr int defaultAnkiConnectionTimeout = 0;
-		static constexpr int defaultAnkiConnectPort = 8765;
+		static constexpr int defaultAnkiConnectPort       = 8765;
 
 		using FilePath = std::filesystem::path;
 
@@ -55,7 +55,7 @@ namespace iwra {
 
 		std::optional<std::string> getAnkiDeckName() const;
 
-		std::optional<std::vector<std::string>> getAnkiTags();
+		std::optional<std::vector<std::string> > getAnkiTags();
 
 		// ReSharper disable once CppInconsistentNaming
 		std::optional<std::string> getAnkiAPIKey() const;
@@ -64,7 +64,7 @@ namespace iwra {
 
 		int getAnkiPort();
 
-		std::optional<std::map<std::string, std::string>> getAnkiNoteFieldValues() const;
+		std::optional<std::map<std::string, std::string> > getAnkiNoteFieldValues() const;
 
 		// SETTERS //
 		void fillDefault();

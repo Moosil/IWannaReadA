@@ -268,7 +268,7 @@ namespace iwra {
 		const DictionaryData* dict_data,
 		const std::string&    phrase,
 		const std::string&    sentence,
-		const long long offset
+		const long long       offset
 	) {
 		std::size_t i = 0;
 		for (; i < dict_data->entries.size(); ++i) {
@@ -354,7 +354,7 @@ namespace iwra {
 
 		current_phrase             = current_word->text;
 		const std::string sentence = getSentence(current_block);
-		const long long offset = std::distance(current_block->results.begin()._Ptr, current_word);
+		const long long   offset   = std::distance(current_block->results.begin()._Ptr, current_word);
 
 		updateWindowEntry(dict_data, phrase, sentence, offset);
 	}

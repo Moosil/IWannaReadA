@@ -164,7 +164,7 @@ namespace iwra {
 		);
 	}
 
-	std::optional<std::vector<std::string>> Config::getAnkiTags() {
+	std::optional<std::vector<std::string> > Config::getAnkiTags() {
 		if (!hasAnki()) {
 			return std::nullopt;
 		}
@@ -225,7 +225,7 @@ namespace iwra {
 		).value_or(defaultAnkiConnectPort);
 	}
 
-	std::optional<std::map<std::string, std::string>> Config::getAnkiNoteFieldValues() const {
+	std::optional<std::map<std::string, std::string> > Config::getAnkiNoteFieldValues() const {
 		if (!hasAnki()) {
 			return std::nullopt;
 		}

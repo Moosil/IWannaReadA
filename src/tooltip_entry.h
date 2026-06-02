@@ -18,7 +18,11 @@ namespace iwra {
 			const std::shared_ptr<AnkiInterface>& interface,
 			const std::shared_ptr<Config>&        config);
 
-		void update(const DictionaryParser::Entry& p_entry, const std::string& p_phrase, const std::string& p_sentence, long long p_offset);
+		void update(
+			const DictionaryParser::Entry& p_entry,
+			const std::string&             p_phrase,
+			const std::string&             p_sentence,
+			long long                      p_offset);
 
 		void hideHeadwordLayoutItem(int column) const;
 
@@ -34,7 +38,7 @@ namespace iwra {
 		DictionaryParser::Entry entry;
 		std::string             phrase;
 		std::string             sentence;
-		long long offset;
+		long long               offset;
 
 		QVBoxLayout* layout;
 

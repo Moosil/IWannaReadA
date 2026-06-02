@@ -45,7 +45,7 @@ namespace iwra {
 			const std::string&                        deck_name,
 			const std::string&                        note_type,
 			const std::map<std::string, std::string>& note_fields,
-			const std::vector<std::string>& tags
+			const std::vector<std::string>&           tags
 		);
 
 		static nlohmann::json getMultiRequest(const std::vector<nlohmann::json>& requests);
@@ -68,9 +68,9 @@ namespace iwra {
 			const std::map<std::string, std::string>& field_values
 		);
 
-		std::optional<std::vector<std::string>> getNoteTypeFieldNames(const std::string& note_type);
+		std::optional<std::vector<std::string> > getNoteTypeFieldNames(const std::string& note_type);
 
-		std::optional<std::vector<std::string>> getNoteTypeFieldDescriptors(const std::string& note_type);
+		std::optional<std::vector<std::string> > getNoteTypeFieldDescriptors(const std::string& note_type);
 
 		void fillConfigNoteFields();
 

@@ -8,7 +8,10 @@
 #include "util_utf8.h"
 
 namespace iwra {
-	TooltipEntry::TooltipEntry(QWidget* parent, const std::shared_ptr<AnkiInterface>& interface, const std::shared_ptr<Config>& config):
+	TooltipEntry::TooltipEntry(
+		QWidget*                              parent,
+		const std::shared_ptr<AnkiInterface>& interface,
+		const std::shared_ptr<Config>&        config):
 		QWidget{parent},
 		anki_interface{interface},
 		config{config},
@@ -70,12 +73,12 @@ namespace iwra {
 		const DictionaryParser::Entry& p_entry,
 		const std::string&             p_phrase,
 		const std::string&             p_sentence,
-		const long long p_offset
+		const long long                p_offset
 	) {
 		entry    = p_entry;
 		phrase   = p_phrase;
 		sentence = p_sentence;
-		offset = p_offset;
+		offset   = p_offset;
 
 		int index = 0;
 		for (const auto& [characters] : p_entry.words) {
@@ -195,11 +198,11 @@ namespace iwra {
 		}
 
 		if (anki_connected) {
-			const std::string entry_trad = entry.getTrad();
-			const auto entry_length = utf8Length(entry_trad);
-			const std::string cloze_inner = (phrase.starts_with(entry_trad)) ? entry_trad : entry.getSimp();
+			const std::string entry_trad   = entry.getTrad();
+			const auto        entry_length = utf8Length(entry_trad);
+			const std::string cloze_inner  = (phrase.starts_with(entry_trad)) ? entry_trad : entry.getSimp();
 
-			const std::string cloze_sentence                      = std::format(
+			const std::string cloze_sentence = std::format(
 				"{}{{{{c1::{}}}}}{}",
 				std::string(sentence.begin(), sentence.begin() + offset),
 				cloze_inner,
