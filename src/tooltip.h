@@ -54,6 +54,7 @@ namespace iwra {
 		std::vector<TooltipEntry*> entries{};
 
 		std::shared_ptr<AnkiInterface> anki_interface;
+		std::shared_ptr<Config> config;
 
 		bool initDictEntry(const std::string& key, const std::string& phrase);
 
@@ -69,19 +70,11 @@ namespace iwra {
 
 		const DictionaryData* getDictDataOrInit(const std::string& key, const std::string& phrase);
 
-		void updateWindowEntry(const DictionaryData* dict_data, const std::string& phrase, const std::string& sentence);
+		void updateWindowEntry(const DictionaryData* dict_data, const std::string& phrase, const std::string& sentence, long long offset);
 
 		void refreshWindow();
 
 		void refreshHovering();
-
-		void addAnkiCard(
-			const std::string& character,
-			const std::string& phrase,
-			const std::string& pinyin,
-			const std::string& sentence,
-			const std::string& definition
-		) const;
 
 		static std::string getSentence(OCRBlock* hover_block);
 

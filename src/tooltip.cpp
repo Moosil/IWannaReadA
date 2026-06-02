@@ -24,6 +24,7 @@ namespace iwra {
 		dictionary_parser{std::make_shared<CCCEdictDictParser>()},
 		central_widget{new QWidget(this)},
 		anki_interface{std::make_shared<AnkiInterface>(config)},
+		config{config},
 		layout{new QVBoxLayout(central_widget)},
 		scrollbar{new QScrollArea(this)} {
 		// function definition start
@@ -266,19 +267,20 @@ namespace iwra {
 	void TooltipWindow::updateWindowEntry(
 		const DictionaryData* dict_data,
 		const std::string&    phrase,
-		const std::string&    sentence
+		const std::string&    sentence,
+		const long long offset
 	) {
 		std::size_t i = 0;
 		for (; i < dict_data->entries.size(); ++i) {
 			if (i < entries.size()) {
 				entries[i]->show();
-				entries[i]->update(dict_data->entries[i], phrase, sentence);
+				entries[i]->update(dict_data->entries[i], phrase, sentence, offset);
 			} else {
-				auto* new_entry = new TooltipEntry(this, anki_interface);
+				auto* new_entry = new TooltipEntry(this, anki_interface, config);
 				new_entry->setFixedWidth(256 - 12);
 				layout->addWidget(new_entry);
 				entries.push_back(new_entry);
-				entries[i]->update(dict_data->entries[i], phrase, sentence);
+				entries[i]->update(dict_data->entries[i], phrase, sentence, offset);
 			}
 		}
 		for (; i < entries.size(); ++i) {
@@ -352,8 +354,9 @@ namespace iwra {
 
 		current_phrase             = current_word->text;
 		const std::string sentence = getSentence(current_block);
+		const long long offset = std::distance(current_block->results.begin()._Ptr, current_word);
 
-		updateWindowEntry(dict_data, phrase, sentence);
+		updateWindowEntry(dict_data, phrase, sentence, offset);
 	}
 
 	void TooltipWindow::refreshHovering() {
@@ -416,24 +419,6 @@ namespace iwra {
 		current_word  = word_iter._Ptr;
 		current_block = intersect_iter._Ptr;
 		refreshWindow();
-	}
-
-	void TooltipWindow::addAnkiCard(
-		const std::string& character,
-		const std::string& phrase,
-		const std::string& pinyin,
-		const std::string& sentence,
-		const std::string& definition
-	) const {
-		auto              [find_pos_first, find_pos_second] = utf8Find(sentence, character);
-		const std::string sentence_add                      = std::format(
-			"{}{{{{c1::{}}}}}{}",
-			std::string(sentence.begin(), find_pos_first),
-			phrase,
-			std::string(find_pos_second, sentence.end())
-		);
-
-		anki_interface->addNote(TODO);
 	}
 
 	std::string TooltipWindow::getSentence(OCRBlock* hover_block) {

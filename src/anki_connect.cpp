@@ -58,22 +58,22 @@ namespace iwra {
 		const std::string&                        deck_name,
 		const std::string&                        note_type,
 		const std::map<std::string, std::string>& note_fields,
-		const std::vector<std::string>& tags
+		const std::vector<std::string>&           tags
 	) {
-		auto note         = nlohmann::json::object();
-		note["deckName"]  = deck_name;
-		note["modelName"] = note_type;
-		note["fields"]    = note_fields;
-		auto options = nlohmann::json::object();
+		auto note                 = nlohmann::json::object();
+		note["deckName"]          = deck_name;
+		note["modelName"]         = note_type;
+		note["fields"]            = note_fields;
+		auto options              = nlohmann::json::object();
 		options["allowDuplicate"] = true;
-		auto tags_json = nlohmann::json::array();
+		auto tags_json            = nlohmann::json::array();
 		for (const auto& tag : tags) {
 			tags_json.push_back(tag);
 		}
 		auto params       = nlohmann::json::object();
 		params["note"]    = note;
 		params["options"] = options;
-		params["tags"] = tags_json;
+		params["tags"]    = tags_json;
 		return getRequestBody("addNote", params);
 	}
 
@@ -86,6 +86,38 @@ namespace iwra {
 	inline nlohmann::json AnkiInterface::getResponseJson(const httplib::Result& response) {
 		std::string body = response->body;
 		return nlohmann::json::parse(body);
+	}
+
+	std::string AnkiInterface::formatString(
+		const std::string& input,
+		const std::string& simp,
+		const std::string& trad,
+		const std::string& pinyin,
+		const std::string& definition,
+		const std::string& phrase,
+		const std::string& sentence,
+		const std::string& cloze_sentence) {
+		std::string res = fmt::format(
+			fmt::runtime(input),
+			fmt::arg("simp", simp),
+			fmt::arg("trad", trad),
+			fmt::arg("pinyin", pinyin),
+			fmt::arg("definition", definition),
+			fmt::arg("phrase", phrase),
+			fmt::arg("sentence", sentence),
+			fmt::arg("cloze_sentence", cloze_sentence)
+		);
+
+		size_t pos = 0;
+		while ((pos = res.find_first_of("{}", pos)) != std::string::npos) {
+			if (res[pos] == '{') {
+				res.replace(pos, 1, "{{");
+			} else {
+				res.replace(pos, 1, "}}");
+			}
+			pos += 2;
+		}
+		return res;
 	}
 
 	void AnkiInterface::checkConnection() {
@@ -107,8 +139,8 @@ namespace iwra {
 			return false;
 		}
 
-		const std::string deck_name       = config->getAnkiDeckName().value();
-		const std::string note_type       = config->getAnkiNoteType().value();
+		const std::string deck_name = config->getAnkiDeckName().value();
+		const std::string note_type = config->getAnkiNoteType().value();
 
 		const nlohmann::json add_node_request = getAddNodeRequest(
 			deck_name,
@@ -131,9 +163,9 @@ namespace iwra {
 	}
 
 	std::optional<std::vector<std::string> > AnkiInterface::getNoteTypeFieldNames(const std::string& note_type) {
-		auto  params                   = nlohmann::json::object();
-		params["modelName"] = note_type;
-		const auto  note_type_fields_request = getRequestBody("modelFieldNames", params);
+		auto params                                    = nlohmann::json::object();
+		params["modelName"]                            = note_type;
+		const auto            note_type_fields_request = getRequestBody("modelFieldNames", params);
 		const httplib::Result field_result             = postAndReceive(note_type_fields_request);
 		if (!field_result) {
 			spdlog::error("[AnkiConnect] modelFieldNames failed: HTTP {}", to_string(field_result.error()));

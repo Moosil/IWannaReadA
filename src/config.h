@@ -64,7 +64,7 @@ namespace iwra {
 
 		int getAnkiPort();
 
-		std::optional<std::unordered_map<std::string, std::string> > getAnkiNoteFieldValues() const;
+		std::optional<std::map<std::string, std::string>> getAnkiNoteFieldValues() const;
 
 		// SETTERS //
 		void fillDefault();

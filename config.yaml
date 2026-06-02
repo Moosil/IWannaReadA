@@ -30,9 +30,9 @@ anki:
   connection-timeout: 0ms
 
   note-fields:
-    sentence: ""
-    hanzi: ""
-    pinyin: ""
-    definition (word): ""
+    sentence: "{cloze-sentence}"
+    hanzi: "{simp}"
+    pinyin: "{pinyin}"
+    definition (word): "{definition}"
     definition (sentence): ""
 

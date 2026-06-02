@@ -5,11 +5,13 @@
 #include <spdlog/spdlog.h>
 
 #include "util_qt.h"
+#include "util_utf8.h"
 
 namespace iwra {
-	TooltipEntry::TooltipEntry(QWidget* parent, const std::shared_ptr<AnkiInterface>& p_interface):
+	TooltipEntry::TooltipEntry(QWidget* parent, const std::shared_ptr<AnkiInterface>& interface, const std::shared_ptr<Config>& config):
 		QWidget{parent},
-		anki_interface{p_interface},
+		anki_interface{interface},
+		config{config},
 		layout{new QVBoxLayout(this)},
 		title_bar{new QWidget(this)},
 		title_bar_layout{new QHBoxLayout(title_bar)},
@@ -67,11 +69,13 @@ namespace iwra {
 	void TooltipEntry::update(
 		const DictionaryParser::Entry& p_entry,
 		const std::string&             p_phrase,
-		const std::string&             p_sentence
+		const std::string&             p_sentence,
+		const long long p_offset
 	) {
 		entry    = p_entry;
 		phrase   = p_phrase;
 		sentence = p_sentence;
+		offset = p_offset;
 
 		int index = 0;
 		for (const auto& [characters] : p_entry.words) {
@@ -182,6 +186,51 @@ namespace iwra {
 		} else {
 			spdlog::warn("malformed QLayoutItem ({}) in TooltipEntry", index);
 			headword_layout->insertLayout(index, getLayoutLabel(pinyin, hanzi));
+		}
+	}
+
+	void TooltipEntry::addToAnki() const {
+		if (!anki_interface) {
+			return;
+		}
+
+		if (anki_connected) {
+			const std::string entry_trad = entry.getTrad();
+			const auto entry_length = utf8Length(entry_trad);
+			const std::string cloze_inner = (phrase.starts_with(entry_trad)) ? entry_trad : entry.getSimp();
+
+			const std::string cloze_sentence                      = std::format(
+				"{}{{{{c1::{}}}}}{}",
+				std::string(sentence.begin(), sentence.begin() + offset),
+				cloze_inner,
+				std::string(sentence.begin() + offset + entry_length, sentence.end())
+			);
+
+			auto anki_field_values = config->getAnkiNoteFieldValues().value();
+			for (auto& value : anki_field_values | std::views::values) {
+				value = AnkiInterface::formatString(
+					value,
+					entry.getSimp(),
+					entry_trad,
+					entry.getPinyin(),
+					entry.definitions | std::views::join_with('\n') | std::ranges::to<std::string>(),
+					phrase,
+					sentence,
+					cloze_sentence
+				);
+			}
+			anki_interface->addNote(anki_field_values);
+		} else {
+			anki_interface->checkConnection();
+		}
+
+		if (!anki_connected && anki_interface->getConnected()) {
+			anki_button->setIcon(QIcon("../assets/add_to_anki.png"));
+			anki_button->setToolTip("Click to add current entry to Anki");
+		}
+		if (anki_connected && !anki_interface->getConnected()) {
+			anki_button->setIcon(QIcon("../assets/retry_connection.png"));
+			anki_button->setToolTip("Click to retry Anki connection");
 		}
 	}
 

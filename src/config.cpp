@@ -225,12 +225,12 @@ namespace iwra {
 		).value_or(defaultAnkiConnectPort);
 	}
 
-	std::optional<std::unordered_map<std::string, std::string> > Config::getAnkiNoteFieldValues() const {
+	std::optional<std::map<std::string, std::string>> Config::getAnkiNoteFieldValues() const {
 		if (!hasAnki()) {
 			return std::nullopt;
 		}
 
-		return get<std::unordered_map<std::string, std::string>, spdlog::level::err, spdlog::level::err>(
+		return get<std::map<std::string, std::string>, spdlog::level::err, spdlog::level::err>(
 			node["anki"],
 			"note-fields",
 			"anki ",

@@ -13,9 +13,12 @@
 namespace iwra {
 	class TooltipEntry : public QWidget {
 	public:
-		TooltipEntry(QWidget* parent, const std::shared_ptr<AnkiInterface>& p_interface);
+		TooltipEntry(
+			QWidget*                              parent,
+			const std::shared_ptr<AnkiInterface>& interface,
+			const std::shared_ptr<Config>&        config);
 
-		void update(const DictionaryParser::Entry& p_entry, const std::string& p_phrase, const std::string& p_sentence);
+		void update(const DictionaryParser::Entry& p_entry, const std::string& p_phrase, const std::string& p_sentence, long long p_offset);
 
 		void hideHeadwordLayoutItem(int column) const;
 
@@ -26,10 +29,12 @@ namespace iwra {
 	private:
 		std::shared_ptr<AnkiInterface> anki_interface;
 		bool                           anki_connected;
+		std::shared_ptr<Config>        config;
 
 		DictionaryParser::Entry entry;
 		std::string             phrase;
 		std::string             sentence;
+		long long offset;
 
 		QVBoxLayout* layout;
 
@@ -54,28 +59,7 @@ namespace iwra {
 			clip::set_text(sentence);
 		}
 
-		void addToAnki() const {
-			if (!anki_interface) {
-				return;
-			}
-
-			if (anki_connected) {
-				anki_interface->addNote(
-					TODO
-				);
-			} else {
-				anki_interface->checkConnection();
-			}
-
-			if (!anki_connected && anki_interface->getConnected()) {
-				anki_button->setIcon(QIcon("../assets/add_to_anki.png"));
-				anki_button->setToolTip("Click to add current entry to Anki");
-			}
-			if (anki_connected && !anki_interface->getConnected()) {
-				anki_button->setIcon(QIcon("../assets/retry_connection.png"));
-				anki_button->setToolTip("Click to retry Anki connection");
-			}
-		}
+		void addToAnki() const;
 
 		[[nodiscard]] QVBoxLayout* getLayoutLabel(const std::string& pinyin, const std::string& hanzi) const;
 

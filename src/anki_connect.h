@@ -52,6 +52,16 @@ namespace iwra {
 
 		static nlohmann::json getResponseJson(const httplib::Result& response);
 
+		static std::string formatString(
+			const std::string& input,
+			const std::string& simp,
+			const std::string& trad,
+			const std::string& pinyin,
+			const std::string& definition,
+			const std::string& phrase,
+			const std::string& sentence,
+			const std::string& cloze_sentence);
+
 		void checkConnection();
 
 		bool addNote(
