@@ -1,7 +1,8 @@
 #pragma once
 
 #include "common.h"
-#include "ncnn/net.h"
+
+#include <net.h>
 
 namespace iwra {
 	class Det {

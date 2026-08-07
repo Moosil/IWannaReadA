@@ -6,3 +6,4 @@
 /dictionaries/
 config.yaml
 html_template.html
+/third_party/libtorch

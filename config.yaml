@@ -2,13 +2,13 @@ file-root: ".."
 
 ocr:
   file-root: "models"
-  keys-path: "ppocr_keys_v5.txt"
+  keys-path: "ppocr_keys_v6.txt"
   det:
-    model-path: "PP-OCRv5_mobile_det.bin"
-    param-path: "PP-OCRv5_mobile_det.param"
+    model-path: "PP_OCRv6_small_det.bin"
+    param-path: "PP_OCRv6_small_det.param"
   rec:
-    model-path: "PP-OCRv5_mobile_rec.bin"
-    param-path: "PP-OCRv5_mobile_rec.param"
+    model-path: "PP_OCRv6_small_rec.bin"
+    param-path: "PP_OCRv6_small_rec.param"
 
 
 refresh: on

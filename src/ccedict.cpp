@@ -5,11 +5,30 @@
 #include <mio/mmap.hpp>
 #include <spdlog/spdlog.h>
 #include <utf8/cpp20.h>
+#include <indicators/cursor_control.hpp>
+#include <indicators/progress_bar.hpp>
 
 #include "util_utf8.h"
 
 namespace iwra {
 	bool CCCEdictDictParser::load(const std::filesystem::path& file_path) {
+		indicators::show_console_cursor(false);
+		indicators::ProgressBar bar{
+			indicators::option::BarWidth{50},
+			indicators::option::Start{"["},
+			indicators::option::Fill{"■"},
+			indicators::option::Lead{"■"},
+			indicators::option::Remainder{" "},
+			indicators::option::End{" ]"},
+			indicators::option::PrefixText{"Loading Dictionary "},
+			indicators::option::ForegroundColor{indicators::Color::yellow},
+			indicators::option::ShowPercentage{true},
+			indicators::option::ShowElapsedTime{true},
+			indicators::option::ShowRemainingTime{true},
+			indicators::option::FontStyles{std::vector{indicators::FontStyle::bold}}
+		};
+
+
 		std::vector<std::string_view> lines;
 		mio::mmap_source              mmap(file_path.string());
 		auto                          start = mmap.begin();
@@ -29,9 +48,14 @@ namespace iwra {
 		std::vector<Entry> parsed(min_length);
 		dictionary.reserve(min_length);
 
+		std::atomic<float> total_completed = 0;
 		#pragma omp parallel for
 		for (int i = 0; i < lines.size(); ++i) {
 			parsed[i] = parse(lines[i]).value();
+			total_completed += 1;
+			if (total_completed / min_length * 100 > bar.current()) {
+				bar.tick();
+			}
 		}
 
 		for (const auto& curr : parsed) {
@@ -46,6 +70,8 @@ namespace iwra {
 		for (auto& value : dictionary | std::views::values) {
 			std::ranges::reverse(value);
 		}
+		bar.mark_as_completed();
+		indicators::show_console_cursor(true);
 		return true;
 	}
 

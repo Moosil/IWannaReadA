@@ -11,7 +11,8 @@ namespace iwra {
 
 	inline void compactifyLabel(QLabel* label) {
 		label->setFixedHeight(label->fontMetrics().ascent());
-		compactifyWidget(label);
+		label->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Maximum);
+		label->setContentsMargins(0, 0, 0, 0);
 	}
 
 	inline void compactifyLayout(QLayout* layout) {

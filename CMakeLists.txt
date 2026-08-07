@@ -4,12 +4,7 @@ project(OCRTest VERSION 1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
-find_package(fmt CONFIG REQUIRED)
-find_package(yaml-cpp CONFIG REQUIRED)
-find_package(ncnn CONFIG REQUIRED)
 find_package(OpenCV CONFIG REQUIRED)
-find_package(Clipper2 CONFIG REQUIRED)
-find_package(spdlog CONFIG REQUIRED)
 find_package(clip CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(httplib CONFIG REQUIRED)
@@ -30,6 +25,12 @@ add_compile_definitions(WIN32_LEAN_AND_MEAN)
 
 add_subdirectory(third_party/utfcpp)
 add_subdirectory(third_party/QHotkey)
+add_subdirectory(third_party/indicators)
+add_subdirectory(third_party/yaml-cpp)
+add_subdirectory(third_party/fmt)
+add_subdirectory(third_party/clipper2/CPP)
+add_subdirectory(third_party/spdlog)
+add_subdirectory(third_party/ncnn)
 
 add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/ocr_engine.cpp
@@ -63,20 +64,20 @@ add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/tooltip_entry.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/tooltip_entry.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/util_qt.h
-        src/cccedict.h
-        src/application.cpp
-        src/application.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/cccedict.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/application.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/application.h
 )
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
-        yaml-cpp::yaml-cpp
-        Clipper2::Clipper2
-        spdlog::spdlog
+        yaml-cpp
+        Clipper2
+        spdlog
         ncnn
         ${OpenCV_LIBS}
-        fmt::fmt
+        fmt
         utf8cpp
         clip::clip
         nlohmann_json::nlohmann_json
@@ -84,6 +85,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         Qt6::Widgets
         Qt6::Concurrent
         qhotkey
+        indicators
 )
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD

@@ -2,7 +2,7 @@
 
 #include <memory>
 #include <vector>
-#include <ncnn/net.h>
+#include <net.h>
 
 #include "common.h"
 

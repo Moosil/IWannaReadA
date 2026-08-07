@@ -4,3 +4,21 @@
 [submodule "third_party/QHotkey"]
 	path = third_party/QHotkey
 	url = https://github.com/Skycoder42/QHotkey.git
+[submodule "third_party/indicators"]
+	path = third_party/indicators
+	url = https://github.com/p-ranav/indicators.git
+[submodule "third_party/yaml-cpp"]
+	path = third_party/yaml-cpp
+	url = https://github.com/jbeder/yaml-cpp.git
+[submodule "third_party/fmt"]
+	path = third_party/fmt
+	url = https://github.com/fmtlib/fmt.git
+[submodule "third_party/clipper2"]
+	path = third_party/clipper2
+	url = https://github.com/AngusJohnson/Clipper2.git
+[submodule "third_party/spdlog"]
+	path = third_party/spdlog
+	url = https://github.com/gabime/spdlog.git
+[submodule "third_party/ncnn"]
+	path = third_party/ncnn
+	url = https://github.com/Tencent/ncnn.git

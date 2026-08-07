@@ -67,6 +67,7 @@ namespace iwra {
 
 		compactifyLayout(layout);
 		compactifyLayout(headword_layout);
+		this->setContentsMargins(8, 8, 8, 8);
 	}
 
 	void TooltipEntry::update(
