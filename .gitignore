@@ -2,8 +2,6 @@
 /cmake-build-release/
 /cmake-build-debug/
 /.idea
-/models/
-/dictionaries/
 config.yaml
 html_template.html
 /third_party/libtorch
