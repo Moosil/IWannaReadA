@@ -75,6 +75,9 @@ namespace iwra {
 	std::vector<OCRResult> OCREngine::run(const cv::Mat& image) const {
 		// det
 		std::vector<TextRect> text_boxes = det.run(image);
+		if (text_boxes.empty()) {
+			spdlog::error("OHNO");
+		}
 
 		const std::size_t num_boxes = text_boxes.size();
 

@@ -23,10 +23,10 @@ namespace iwra {
 		hover_hotkey{new QHotkey(QKeySequence("ctrl+shift+3"), true, this)},
 		dictionary_parser{std::make_shared<CCCEdictDictParser>()},
 		central_widget{new QWidget(this)},
-		anki_interface{std::make_shared<AnkiInterface>(config)},
-		config{config},
 		layout{new QVBoxLayout(central_widget)},
-		scrollbar{new QScrollArea(this)} {
+		scrollbar{new QScrollArea(this)},
+		anki_interface{std::make_shared<AnkiInterface>(config)},
+		config{config} {
 		// function definition start
 
 		if (!config) {
@@ -384,16 +384,18 @@ namespace iwra {
 			return;
 		}
 
-		const auto intersect_iter = std::ranges::find_if(
-			results,
-			[&mouse_pos](const OCRBlock& block) -> bool {
-				// returns positive (inside), negative (outside), or zero (on an edge) value
-				if (block.poly.size() <= 1) {
-					return false;
+		auto intersect_iter = results.end();
+		if (!results.empty()) {
+			for (auto block = results.begin(); block != intersect_iter; ++block) {
+				if (block->poly.size() <= 1) {
+					continue;
 				}
-				return pointPolygonTest(block.poly, mouse_pos, false) > 0;
+				if (pointPolygonTest(block->poly, mouse_pos, false) >= 0) {
+					intersect_iter = block;
+					break;
+				}
 			}
-		);
+		}
 
 		// mouse isn't in any of the OCR areas
 		if (intersect_iter == results.end()) {

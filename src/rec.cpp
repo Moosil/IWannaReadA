@@ -26,16 +26,16 @@ namespace iwra {
 
 		// inference
 		ncnn::Extractor ex = net->create_extractor();
-		ex.input("input", in_inf);
+		ex.input("in0", in_inf);
 		ncnn::Mat out_inf;
-		ex.extract("output", out_inf);
+		ex.extract("out0", out_inf);
 
-		return infer2Text(out_inf, {image.cols});
+		return infer2Text(out_inf);
 	}
 
-	Text Rec::infer2Text(const ncnn::Mat& infer, const RetInfo info) const {
+	Text Rec::infer2Text(const ncnn::Mat& infer) const {
 		const std::size_t cols = infer.w;
-		if (cols != keyCount) {
+		if (cols != keys.size()) {
 			return Text{};
 		}
 

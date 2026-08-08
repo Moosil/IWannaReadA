@@ -9,14 +9,9 @@
 namespace iwra {
 	class Rec {
 	private:
-		struct RetInfo {
-			int width;
-		};
-
 		static constexpr int         targetHeight = 48;
 		static constexpr float       meanValues[3]{127.5f, 127.5f, 127.5f};
 		static constexpr float       normValues[3]{1.0f / 127.5f, 1.0f / 127.5f, 1.0f / 127.5f};
-		static constexpr std::size_t keyCount = 18385;
 
 		std::unique_ptr<ncnn::Net> net{};
 
@@ -24,7 +19,7 @@ namespace iwra {
 
 		[[nodiscard]] Text runSingle(const cv::Mat& image) const;
 
-		[[nodiscard]] Text infer2Text(const ncnn::Mat& infer, RetInfo info) const;
+		[[nodiscard]] Text infer2Text(const ncnn::Mat& infer) const;
 
 	public:
 		Rec() = default;

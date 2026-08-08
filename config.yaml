@@ -4,11 +4,11 @@ ocr:
   file-root: "models"
   keys-path: "ppocr_keys_v6.txt"
   det:
-    model-path: "PP_OCRv6_small_det.bin"
-    param-path: "PP_OCRv6_small_det.param"
+    model-path: "det.bin"
+    param-path: "det.param"
   rec:
-    model-path: "PP_OCRv6_small_rec.bin"
-    param-path: "PP_OCRv6_small_rec.param"
+    model-path: "rec.bin"
+    param-path: "rec.param"
 
 
 refresh: on

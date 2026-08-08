@@ -23,11 +23,15 @@ namespace iwra {
 
 		std::vector<TextRect> output;
 		for (const auto& contour : contours) {
+			if (contour.size() <= 2) {
+				continue;
+			}
+
 			// get the smallest rect that covers the contour
 			// if longest side is too small, continue
 			cv::RotatedRect min_area_rect = minAreaRect(contour);
 			if (const float max_side_length = std::max(min_area_rect.size.width, min_area_rect.size.height);
-				max_side_length < min_size) {
+				max_side_length < minSize) {
 				continue;
 			}
 
@@ -37,13 +41,13 @@ namespace iwra {
 			// score particular box
 			// if score lower than threshold, continue
 			float score = boxScore(probability_map, min_area_rect_points);
-			if (score < box_threshold) {
+			if (score < boxThreshold) {
 				continue;
 			}
 
 			// unclip the text, increasing it's size to cover possibly cut out text
 			// if too small or if inflating path fails, continue
-			cv::RotatedRect unclip_rect = unclip(min_area_rect_points, unclip_ratio);
+			cv::RotatedRect unclip_rect = unclip(min_area_rect_points, unclipRatio);
 			if (unclip_rect.size.height <= 1 || unclip_rect.size.width <= 1) {
 				continue;
 			}
@@ -52,7 +56,7 @@ namespace iwra {
 			// if too small, discard
 			Poly2F unclip_rect_points = rotatedRect2Poly2F(unclip_rect);
 			if (const float max_side_length = std::max(min_area_rect.size.width, min_area_rect.size.height);
-				max_side_length < min_size + 2) {
+				max_side_length < minSize + 2) {
 				// 2 is arbitrary? (source: https://github.com/PaddlePaddle/PaddleOCR/blob/main/ppocr/postprocess/db_postprocess.py#L148)
 				continue;
 			}
@@ -165,7 +169,7 @@ namespace iwra {
 
 		// resize
 		const int target_size = std::min(
-			max_side_len + 2 * padding,
+			maxSideLen + 2 * padding,
 			std::max(pad_image.rows, pad_image.cols)
 		);
 
@@ -177,19 +181,19 @@ namespace iwra {
 
 		ncnn::Mat in_inf = ncnn::Mat::from_pixels_resize(
 			pad_image.data,
-			ncnn::Mat::PIXEL_RGB,
+			ncnn::Mat::PIXEL_BGR,
 			img_cols,
 			img_rows,
 			rsz_cols,
 			rsz_rows
 		);
-		in_inf.substract_mean_normalize(mean_values_, norm_values_);
+		in_inf.substract_mean_normalize(meanValues, normValues);
 
 		// inference: image -> Mat float
 		ncnn::Extractor ex = net->create_extractor();
-		ex.input("input", in_inf);
+		ex.input("in0", in_inf);
 		ncnn::Mat out_inf;
-		ex.extract("output", out_inf);
+		ex.extract("out0", out_inf);
 
 		// binarisation: Mat float -> Mat bool
 		constexpr float denorm_values[1] = {255.f};
@@ -198,7 +202,7 @@ namespace iwra {
 
 		const cv::Mat pred(rsz_rows, rsz_cols, CV_8UC1);
 		out_inf.to_pixels(pred.data, ncnn::Mat::PIXEL_GRAY);
-		const cv::Mat bitmap = pred > threshold;
+		const cv::Mat bitmap = pred > static_cast<uint8_t>(bitmapThreshold * 255.0f);
 
 
 		return boxFromBitmap(pred, bitmap, img_cols, img_rows);
