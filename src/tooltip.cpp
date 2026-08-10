@@ -3,7 +3,7 @@
 #include <qscrollbar>
 #include <ranges>
 #include <nlohmann/json.hpp>
-#include <opencv4/opencv2/imgproc.hpp>
+#include <opencv2/imgproc.hpp>
 #include <spdlog/spdlog.h>
 #include <utf8/cpp20.h>
 

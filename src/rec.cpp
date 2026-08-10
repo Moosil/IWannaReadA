@@ -3,7 +3,7 @@
 #include <format>
 #include <fstream>
 #include <ranges>
-#include <opencv4/opencv2/core/mat.hpp>
+#include <opencv2/core/mat.hpp>
 #include <spdlog/spdlog.h>
 
 #include "util_text.h"
@@ -129,7 +129,9 @@ namespace iwra {
 		const std::size_t length = images.size();
 		std::vector<Text> text_lines{length};
 
+		#if OPENMP_FOUND
 		#pragma omp parallel for num_threads(10) schedule(dynamic)
+		#endif
 		for (int i = 0; i < static_cast<int>(length); ++i) {
 			text_lines[i] = runSingle(images[i]);
 		}

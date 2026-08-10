@@ -5,7 +5,11 @@ Currently Windows ONLY. Planning to port to Linux/Apple once features are more f
 ## Getting Started
 ***
 ### Building from source
-Choose a model size [out of tiny, small and medium] (medium is recommended)
+Choose a model size for PP-OCR (tiny, small or medium). Medium is recommended
+#### Prerequisites
+- [Qt6](https://www.qt.io/development/download-qt-installer-oss)
+- [OpenCV](https://opencv.org/releases/)
+- [OpenMP supported c++ compiler](https://www.openmp.org/resources/openmp-compilers-tools/#compilers) (optional)
 #### Linux
 ```sh
 git clone https://github.com/moosil/iwannareada.git
@@ -13,26 +17,27 @@ cd iwannareada
 git submodule update --init --recursive
 curl -o temp.zip https://www.mdbg.net/chinese/export/cedict/cedict_1_0_ts_utf-8_mdbg.zip
 unzip temp.zip
-rm temp.zip
+rm -f temp.zip
 mkdir models
 cd models
-curl -o det.onnx "https://huggingface.co/PaddlePaddle/PP-OCRv6_<your chosen model size>_det_onnx/resolve/main/inference.onnx?download=true"
-curl -o rec.onnx "https://huggingface.co/PaddlePaddle/PP-OCRv6_<your chosen model size>_rec_onnx/resolve/main/inference.onnx?download=true"
 curl -o preprocessor_config.json "https://huggingface.co/PaddlePaddle/PP-OCRv6_<your chosen model size>_rec_safetensors/resolve/main/preprocessor_config.json?download=true"
-grep -o '(    "([^"]+))' preprocessor_config.json | cut -d " " -f 5 | cut -d '"' -f 2 > keys.txt
-rm preprocessor_config.json
-curl -o temp.zip https://github.com/pnnx/pnnx/releases/download/20260704/pnnx-20260704-linux.zip
-unzip temp.zip
-rm temp.zip
-cd pnnx-20260704-linux
-pnnx.exe ../det.onnx
+grep -o '    "([^"]+)' preprocessor_config.json | cut -d '"' -f 2 > keys.txt
+rm -f preprocessor_config.json
+curl -o pnnx.zip https://github.com/pnnx/pnnx/releases/download/20260704/pnnx-20260704-linux.zip
+unzip pnnx.zip
+rm -f pnnx.zip
+mv pnnx/pnnx-{$release_number}-windows/pnnx.exe pnnx/pnnx.exe
+cd pnnx
+curl -o det.onnx "https://huggingface.co/PaddlePaddle/PP-OCRv6_<your chosen model size>_det_onnx/resolve/main/inference.onnx?download=true"
+./pnnx.exe ./det.onnx
 mv det.ncnn.bin ../det.bin
 mv det.ncnn.param ../det.param
-pnnx.exe ../rec.onnx
+curl -o rec.onnx "https://huggingface.co/PaddlePaddle/PP-OCRv6_<your chosen model size>_rec_onnx/resolve/main/inference.onnx?download=true"
+./pnnx.exe ./rec.onnx
 mv rec.ncnn.bin ../rec.bin
 mv rec.ncnn.param ../rec.param
 cd ..
-rm pnnx-20260704-linux
+rm -rf pnnx
 cd ..
 mkdir build
 cmake -S . -B build
@@ -61,10 +66,10 @@ Remove-Item pnnx.zip -Force
 Move-Item "pnnx/pnnx-{$release_number}-windows/pnnx.exe" pnnx/pnnx.exe
 Set-Location pnnx
 Invoke-WebRequest -OutFile det.onnx "https://huggingface.co/PaddlePaddle/PP-OCRv6_${model_size}_det_onnx/resolve/main/inference.onnx?download=true"
-Invoke-WebRequest -OutFile rec.onnx "https://huggingface.co/PaddlePaddle/PP-OCRv6_${model_size}_rec_onnx/resolve/main/inference.onnx?download=true"
 ./pnnx.exe ./det.onnx
 Move-Item det.ncnn.bin ../det.bin
 Move-Item det.ncnn.param ../det.param
+Invoke-WebRequest -OutFile rec.onnx "https://huggingface.co/PaddlePaddle/PP-OCRv6_${model_size}_rec_onnx/resolve/main/inference.onnx?download=true"
 ./pnnx.exe ./rec.onnx
 Move-Item rec.ncnn.bin ../rec.bin
 Move-Item rec.ncnn.param ../rec.param

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <clipper2/clipper.h>
-#include <opencv4/opencv2/core/types.hpp>
+#include <opencv2/core/types.hpp>
 #include <spdlog/spdlog.h>
 
 #include "common.h"

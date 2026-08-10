@@ -1,9 +1,0 @@
-{
-  "name" : "ocrtest",
-  "version-string" : "1.0.0",
-  "builtin-baseline" : "cbb38f7824373004154d678b0eb54bff4e5466ea",
-  "dependencies" : [ {
-    "name" : "qtbase",
-    "version>=" : "6.10.0#1"
-  } ]
-}

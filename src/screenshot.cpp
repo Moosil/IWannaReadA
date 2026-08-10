@@ -4,8 +4,8 @@
 #include <qgraphicsview.h>
 #include <qhotkey.h>
 #include <qscreen.h>
-#include <opencv4/opencv2/imgproc.hpp>
-#include <opencv4/opencv2/core/mat.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/core/mat.hpp>
 #include <spdlog/spdlog.h>
 
 #include "config.h"

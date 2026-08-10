@@ -3,7 +3,7 @@
 #include <qgraphicsview.h>
 #include <qlabel.h>
 #include <qmainwindow.h>
-#include <opencv4/opencv2/core/types.hpp>
+#include <opencv2/core/types.hpp>
 
 #include "ocr_engine.h"
 #include "screenshot_viewer.h"

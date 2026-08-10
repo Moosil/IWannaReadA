@@ -3,8 +3,8 @@
 #include <filesystem>
 #include <ranges>
 #include <vector>
-#include <opencv4/opencv2/imgcodecs.hpp>
-#include <opencv4/opencv2/core/mat.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/core/mat.hpp>
 #include <spdlog/spdlog.h>
 
 #include "config.h"

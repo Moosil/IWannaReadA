@@ -2,7 +2,7 @@
 
 #include <array>
 #include <format>
-#include <opencv4/opencv2/core/types.hpp>
+#include <opencv2/core/types.hpp>
 
 namespace iwra {
 	using Poly2I = std::array<cv::Point, 4>;

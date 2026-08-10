@@ -5,12 +5,11 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
 find_package(Qt6 CONFIG REQUIRED COMPONENTS Widgets Concurrent)
+find_package(OpenCV CONFIG REQUIRED)
 
 set(CMAKE_AUTOMOC TRUE)
 
 if(MSVC)
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
     add_compile_options(/utf-8)
 endif()
 
@@ -24,13 +23,10 @@ add_subdirectory(third_party/indicators)
 add_subdirectory(third_party/json)
 add_subdirectory(third_party/mio)
 add_subdirectory(third_party/ncnn)
-add_subdirectory(third_party/opencv)
 add_subdirectory(third_party/QHotkey)
 add_subdirectory(third_party/spdlog)
 add_subdirectory(third_party/utfcpp)
 add_subdirectory(third_party/yaml-cpp)
-
-add_compile_definitions(WIN32_LEAN_AND_MEAN)
 
 add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/ocr_engine.cpp
@@ -69,7 +65,19 @@ add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/application.h
 )
 
+if (WIN32)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE WIN32_LEAN_AND_MEAN)
+endif()
+
+if(OPENMP_FOUND)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE OPENMP_FOUND=1)
+else()
+    target_compile_definitions(${PROJECT_NAME} PRIVATE OPENMP_FOUND=0)
+endif()
+
 set_property(TARGET ${PROJECT_NAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+
+target_include_directories(${PROJECT_NAME} PRIVATE ${OpenCV_INCLUDE_DIRS})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
         yaml-cpp
@@ -86,6 +94,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         Qt6::Concurrent
         qhotkey
         indicators
+        mio
 )
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
