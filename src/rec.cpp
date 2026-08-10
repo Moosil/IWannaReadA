@@ -3,7 +3,7 @@
 #include <format>
 #include <fstream>
 #include <ranges>
-#include <opencv2/core/mat.hpp>
+#include <opencv4/opencv2/core/mat.hpp>
 #include <spdlog/spdlog.h>
 
 #include "util_text.h"

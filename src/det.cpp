@@ -4,7 +4,7 @@
 #include <filesystem>
 #include <numeric>
 #include <ranges>
-#include <opencv2/imgproc.hpp>
+#include <opencv4/opencv2/imgproc.hpp>
 
 #include "util_ocr.h"
 

@@ -4,11 +4,6 @@ project(OCRTest VERSION 1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
-find_package(OpenCV CONFIG REQUIRED)
-find_package(clip CONFIG REQUIRED)
-find_package(nlohmann_json CONFIG REQUIRED)
-find_package(httplib CONFIG REQUIRED)
-find_package(ZLIB REQUIRED)
 find_package(Qt6 CONFIG REQUIRED COMPONENTS Widgets Concurrent)
 
 set(CMAKE_AUTOMOC TRUE)
@@ -21,16 +16,21 @@ endif()
 
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} /fp:contract /GA /Qpar")
 
-add_compile_definitions(WIN32_LEAN_AND_MEAN)
-
-add_subdirectory(third_party/utfcpp)
-add_subdirectory(third_party/QHotkey)
-add_subdirectory(third_party/indicators)
-add_subdirectory(third_party/yaml-cpp)
-add_subdirectory(third_party/fmt)
+add_subdirectory(third_party/clip)
 add_subdirectory(third_party/clipper2/CPP)
-add_subdirectory(third_party/spdlog)
+add_subdirectory(third_party/fmt)
+add_subdirectory(third_party/httplib)
+add_subdirectory(third_party/indicators)
+add_subdirectory(third_party/json)
+add_subdirectory(third_party/mio)
 add_subdirectory(third_party/ncnn)
+add_subdirectory(third_party/opencv)
+add_subdirectory(third_party/QHotkey)
+add_subdirectory(third_party/spdlog)
+add_subdirectory(third_party/utfcpp)
+add_subdirectory(third_party/yaml-cpp)
+
+add_compile_definitions(WIN32_LEAN_AND_MEAN)
 
 add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/ocr_engine.cpp
@@ -79,9 +79,9 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         ${OpenCV_LIBS}
         fmt
         utf8cpp
-        clip::clip
-        nlohmann_json::nlohmann_json
-        httplib::httplib
+        clip
+        nlohmann_json
+        httplib
         Qt6::Widgets
         Qt6::Concurrent
         qhotkey

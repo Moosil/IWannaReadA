@@ -2,7 +2,7 @@
 
 #include <qhotkey.h>
 #include <qtconcurrentrun.h>
-#include <opencv2/core/mat.hpp>
+#include <opencv4/opencv2/core/mat.hpp>
 #include <spdlog/spdlog.h>
 
 #include "config.h"

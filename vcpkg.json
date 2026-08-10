@@ -3,28 +3,7 @@
   "version-string" : "1.0.0",
   "builtin-baseline" : "cbb38f7824373004154d678b0eb54bff4e5466ea",
   "dependencies" : [ {
-    "name" : "clipper2",
-    "version>=" : "1.5.4"
-  }, {
-    "name" : "opencv",
-    "version>=" : "4.11.0"
-  }, {
-    "name" : "zlib",
-    "version>=" : "1.3.1"
-  }, {
-    "name" : "dacap-clip",
-    "version>=" : "1.13"
-  }, {
-    "name" : "mio",
-    "version>=" : "2023-03-03"
-  }, {
     "name" : "qtbase",
     "version>=" : "6.10.0#1"
-  }, {
-    "name" : "cpp-httplib",
-    "version>=" : "0.33.1"
-  }, {
-    "name" : "nlohmann-json",
-    "version>=" : "3.12.0#2"
   } ]
 }

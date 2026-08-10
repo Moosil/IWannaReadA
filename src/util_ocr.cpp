@@ -1,6 +1,6 @@
 #include "util_ocr.h"
 
-#include <opencv2/imgproc.hpp>
+#include <opencv4/opencv2/imgproc.hpp>
 
 namespace iwra {
 	Poly2F rotatedRect2Poly2F(const cv::RotatedRect& rect) {
