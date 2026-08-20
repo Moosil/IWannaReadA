@@ -3,6 +3,7 @@
 #include <qboxlayout.h>
 #include <qhotkey.h>
 #include <qmainwindow.h>
+#include <QMutex>
 #include <qscrollarea.h>
 #include <unordered_map>
 
@@ -55,6 +56,7 @@ namespace iwra {
 
 		std::shared_ptr<AnkiInterface> anki_interface;
 		std::shared_ptr<Config>        config;
+		QMutex                            mutex;
 
 		bool initDictEntry(const std::string& key, const std::string& phrase);
 

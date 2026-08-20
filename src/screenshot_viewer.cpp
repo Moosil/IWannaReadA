@@ -1,6 +1,7 @@
 #include "screenshot_viewer.h"
 
 #include <qpainter.h>
+#include <qpen.h>
 
 #include "util.h"
 

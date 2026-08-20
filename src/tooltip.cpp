@@ -64,7 +64,9 @@ namespace iwra {
 				} else {
 					hide();
 				}
+				mutex.lock();
 				refreshHovering();
+				mutex.unlock();
 				timer_id = startTimer(0, Qt::PreciseTimer);
 			}
 		);
@@ -331,10 +333,12 @@ namespace iwra {
 
 	// 40ms
 	void TooltipWindow::updateResRect(const std::vector<OCRResult>& new_res, const cv::Rect& new_rect) {
+		mutex.lock();
 		results       = processOCRResults(new_res, new_rect.tl());
 		rect          = new_rect;
 		current_block = nullptr;
 		current_word  = nullptr;
+		mutex.unlock();
 	}
 
 	void TooltipWindow::refreshWindow() {
@@ -384,18 +388,13 @@ namespace iwra {
 			return;
 		}
 
-		auto intersect_iter = results.end();
-		if (!results.empty()) {
-			for (auto block = results.begin(); block != intersect_iter; ++block) {
-				if (block->poly.size() <= 1) {
-					continue;
-				}
-				if (pointPolygonTest(block->poly, mouse_pos, false) >= 0) {
-					intersect_iter = block;
-					break;
-				}
+		const auto intersect_iter = std::ranges::find_if(
+			results,
+			[&mouse_pos](const OCRBlock& block) -> bool {
+				// returns positive (inside), negative (outside), or zero (on an edge) value
+				return block.poly.size() > 1 &&pointPolygonTest(block.poly, mouse_pos, false) >= 0;
 			}
-		}
+		);
 
 		// mouse isn't in any of the OCR areas
 		if (intersect_iter == results.end()) {
@@ -447,7 +446,9 @@ namespace iwra {
 		} else {
 			hide();
 		}
+		mutex.lock();
 		refreshHovering();
+		mutex.unlock();
 		QMainWindow::timerEvent(event);
 	}
 }

@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 4.0)
-project(OCRTest VERSION 1.0 LANGUAGES CXX)
+project(IWannaReadA VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
-find_package(Qt6 CONFIG REQUIRED COMPONENTS Widgets Concurrent)
+find_package(Qt6 CONFIG REQUIRED COMPONENTS Widgets Concurrent Gui)
 find_package(OpenCV CONFIG REQUIRED)
 
 set(CMAKE_AUTOMOC TRUE)
@@ -12,8 +12,6 @@ set(CMAKE_AUTOMOC TRUE)
 if(MSVC)
     add_compile_options(/utf-8)
 endif()
-
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} /fp:contract /GA /Qpar")
 
 add_subdirectory(third_party/clip)
 add_subdirectory(third_party/clipper2/CPP)
@@ -65,9 +63,7 @@ add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/application.h
 )
 
-if (WIN32)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE WIN32_LEAN_AND_MEAN)
-endif()
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} /fp:contract /GA /Qpar")
 
 if(OPENMP_FOUND)
     target_compile_definitions(${PROJECT_NAME} PRIVATE OPENMP_FOUND=1)
@@ -78,6 +74,8 @@ endif()
 set_property(TARGET ${PROJECT_NAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${OpenCV_INCLUDE_DIRS})
+
+target_include_directories(${PROJECT_NAME} PRIVATE ${Qt6_INCLUDE_DIRS})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
         yaml-cpp
@@ -92,16 +90,13 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         httplib
         Qt6::Widgets
         Qt6::Concurrent
+        Qt6::Gui
         qhotkey
         indicators
         mio
 )
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory
-        $<TARGET_FILE_DIR:${PROJECT_NAME}>/platforms
-
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/x64-windows/Qt6/plugins/platforms/qwindows.dll
-        $<TARGET_FILE_DIR:${PROJECT_NAME}>/platforms/qwindows.dll
+        COMMAND Qt6::windeployqt
+        ARGS $<TARGET_FILE:${PROJECT_NAME}>
 )

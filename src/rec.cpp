@@ -43,7 +43,7 @@ namespace iwra {
 		std::vector<float>                    text_scores;
 		std::vector<std::pair<float, float> > text_lengths;
 
-		std::size_t   prev_index  = -1;
+		long long  prev_index  = -1;
 		constexpr int blank_idx   = 0;
 		const int     len         = infer.h;
 		int           start_idx   = 0;
@@ -51,7 +51,7 @@ namespace iwra {
 		for (int i = 0; i < len; ++i) {
 			const float* row_i   = infer.row(i);
 			const auto   max_it  = std::max_element(row_i, row_i + cols);
-			const size_t max_idx = std::distance(row_i, max_it);
+			const long long max_idx = std::distance(row_i, max_it);
 			float        max_val = *max_it;
 
 			// if index is same, collapse A A B _ B B -> A B _ B
