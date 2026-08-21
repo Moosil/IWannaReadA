@@ -9,10 +9,6 @@ find_package(OpenCV CONFIG REQUIRED)
 
 set(CMAKE_AUTOMOC TRUE)
 
-if(MSVC)
-    add_compile_options(/utf-8)
-endif()
-
 add_subdirectory(third_party/clip)
 add_subdirectory(third_party/clipper2/CPP)
 add_subdirectory(third_party/fmt)
@@ -61,9 +57,21 @@ add_executable(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/cccedict.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/application.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/application.h
+        src/control_window.cpp
+        src/control_window.h
 )
 
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} /fp:contract /GA /Qpar")
+include(CheckIPOSupported)
+check_ipo_supported(RESULT IPO_SUPPORTED OUTPUT error)
+
+if(IPO_SUPPORTED)
+    set_property(TARGET ${PROJECT_NAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION "$<$<CONFIG:Release>:TRUE>")
+endif()
+
+if(MSVC)
+    target_compile_options(${PROJECT_NAME} PRIVATE "$<$<CONFIG:Release>:/fp:contract /GA /Qpar>")
+    target_compile_options(${PROJECT_NAME} PRIVATE /utf-8)
+endif()
 
 if(OPENMP_FOUND)
     target_compile_definitions(${PROJECT_NAME} PRIVATE OPENMP_FOUND=1)
@@ -71,10 +79,7 @@ else()
     target_compile_definitions(${PROJECT_NAME} PRIVATE OPENMP_FOUND=0)
 endif()
 
-set_property(TARGET ${PROJECT_NAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
-
 target_include_directories(${PROJECT_NAME} PRIVATE ${OpenCV_INCLUDE_DIRS})
-
 target_include_directories(${PROJECT_NAME} PRIVATE ${Qt6_INCLUDE_DIRS})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -100,3 +105,17 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND Qt6::windeployqt
         ARGS $<TARGET_FILE:${PROJECT_NAME}>
 )
+
+include(GNUInstallDirs)
+
+install(TARGETS ${PROJECT_NAME}
+    BUNDLE  DESTINATION .
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+qt_generate_deploy_app_script(
+    TARGET ${PROJECT_NAME}
+    OUTPUT_SCRIPT deploy_script
+    NO_UNSUPPORTED_PLATFORM_ERROR
+)
+install(SCRIPT ${deploy_script})

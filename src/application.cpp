@@ -16,15 +16,66 @@ namespace iwra {
 		is_refresh_enabled{config->getRefresh()},
 		screenshot_hotkey{new QHotkey(QKeySequence("ctrl+d"), true, this)},
 		screenshot_window{new ScreenshotWindow(nullptr)},
-		tooltip_window{new TooltipWindow(nullptr, config)} {
+		tooltip_window{new TooltipWindow(nullptr, config)},
+		main_window{new ControlWindow(nullptr, config)} {
 		// start function definition
 		ocr_engine = OCREngine::create(*config);
 		if (!ocr_engine) {
 			throw std::runtime_error("OCREngine::create failed");
 		}
 
+		main_window->show();
 		screenshot_window->hide();
 		tooltip_window->hide();
+
+		connect(
+			main_window->toggle_popup_button,
+			&QPushButton::toggled,
+			this,
+			[this](const bool checked) {
+				if (checked) {
+					tooltip_window->setShowAllowed(true);
+					if (is_refresh_enabled) {
+						if (timer_id == 0) {
+							timer_id = startTimer(refresh_interval);
+						} else {
+							spdlog::warn("[Application] timer is already running");
+						}
+					}
+				} else {
+					tooltip_window->setShowAllowed(false);
+					if (is_refresh_enabled) {
+						if (timer_id != 0) {
+							killTimer(timer_id);
+							timer_id = 0;
+						}
+					}
+				}
+			}
+		);
+
+		connect(
+			main_window->select_area_button,
+			&QPushButton::pressed,
+			this,
+			[this]() {
+				tooltip_window->setShowAllowed(false);
+				if (!main_window->isHidden()) {
+					main_window->hide();
+					was_main_window_open = true;
+				}
+				screenshot_window->showFullScreen();
+				screenshot_window->raise();
+				screenshot_window->activateWindow();
+
+				if (is_refresh_enabled) {
+					if (timer_id != 0) {
+						killTimer(timer_id);
+						timer_id = 0;
+					}
+				}
+			}
+		);
 
 		if (const std::optional refresh_interval_opt = config->getRefreshIntervalMs();
 			refresh_interval_opt.has_value()) {
@@ -51,6 +102,9 @@ namespace iwra {
 			[this](const cv::Mat& screenshot_mat, const cv::Rect& rect) {
 				curr_screenshot_rect = rect;
 				screenshot_window->hide();
+				if (was_main_window_open) {
+					main_window->show();
+				}
 				std::ignore = processScreenshot(screenshot_mat, rect);
 
 				if (is_refresh_enabled) {
@@ -68,6 +122,11 @@ namespace iwra {
 			&QHotkey::activated,
 			this,
 			[this]() {
+				tooltip_window->setShowAllowed(false);
+				if (!main_window->isHidden()) {
+					main_window->hide();
+					was_main_window_open = true;
+				}
 				screenshot_window->showFullScreen();
 				screenshot_window->raise();
 				screenshot_window->activateWindow();
@@ -94,6 +153,7 @@ namespace iwra {
 			QtFuture::Launch::Sync,
 			[this, &rect](const std::vector<OCRResult>& res) {
 				tooltip_window->updateResRect(res, rect);
+				tooltip_window->setShowAllowed(true);
 				QMetaObject::invokeMethod(
 					this,
 					[this]() {

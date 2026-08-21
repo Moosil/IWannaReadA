@@ -9,7 +9,16 @@ namespace iwra {
 		const std::string& to_find
 	);
 
+	std::pair<std::string_view::const_iterator, std::string_view::const_iterator> utf8Find(
+		const std::string_view& in,
+		const std::string&      to_find
+	);
+
 	std::string::const_iterator utf8Find(const std::string& in, char32_t to_find);
+
+	std::string_view::const_iterator utf8Find(const std::string_view& in, char32_t to_find);
+
+	std::string_view::const_iterator utf8Find(const std::string_view& in, char32_t to_find, const std::string_view::const_iterator& begin);
 
 	inline std::string toUtf8(const char32_t c) {
 		std::string out;
@@ -22,4 +31,6 @@ namespace iwra {
 	}
 
 	std::size_t utf8Length(const std::string& in);
+
+	std::size_t utf8Length(const std::string_view& in);
 }

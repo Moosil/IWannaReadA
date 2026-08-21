@@ -49,9 +49,11 @@ namespace iwra {
 		dictionary.reserve(min_length);
 
 		std::atomic<float> total_completed = 0;
+		#if OPENMP_FOUND && !DEBUG
 		#pragma omp parallel for
+		#endif
 		for (int i = 0; i < lines.size(); ++i) {
-			parsed[i] = parse(lines[i]).value();
+			parsed[i]       = parse(lines[i]).value();
 			total_completed += 1;
 			if (total_completed / min_length * 100 > bar.current()) {
 				bar.tick();
@@ -76,35 +78,51 @@ namespace iwra {
 	}
 
 	std::optional<DictionaryParser::Entry> CCCEdictDictParser::parse(const std::string_view& line) {
+		if (line == "不可思議 不可思议 [[bu4ke3-si1yi4]] /(idiom) inconceivable; unimaginable; unfathomable/") {
+			spdlog::info("hi");
+		}
+
 		Entry res{};
 
-		const std::string::size_type end_trad_pos = line.find(' ');
-		if (end_trad_pos == std::string::npos) {
+		auto end_trad_it = utf8Find(line, ' ');
+		if (end_trad_it == line.end()) {
 			return std::nullopt;
 		}
-		std::string_view trad = line.substr(0, end_trad_pos);
 
-		const std::string::size_type end_simp_pos = line.find(' ', end_trad_pos + 1);
-		if (end_simp_pos == std::string::npos) {
+		auto end_simp_it = utf8Find(line, ' ', end_trad_it);
+		if (end_simp_it == line.end()) {
 			return std::nullopt;
 		}
-		std::string_view simp = line.substr(end_trad_pos + 1, end_simp_pos - end_trad_pos - 1);
 
-		const std::string::size_type sb = line.find('[');
-		if (sb == std::string::npos) {
+		// Order matters here
+		utf8::prior(end_simp_it, line.end());
+
+		std::string_view simp{end_trad_it, end_simp_it};
+
+		// This has to be after
+		utf8::prior(end_trad_it, line.begin());
+
+		std::string_view trad{line.begin(), end_trad_it};
+
+		auto start_pinyin_it = utf8Find(line, '[');
+		if (start_pinyin_it == line.end()) {
 			return std::nullopt;
 		}
-		const bool                   is_v2_syntax     = line[sb + 1] == '[';
-		const std::string::size_type start_pinyin_pos = sb + (is_v2_syntax ? 2 : 1);
+		const bool is_v2_syntax    = utf8::peek_next(start_pinyin_it, line.end()) == '[';
 
-		const std::string::size_type end_pinyin_pos = (is_v2_syntax)
-		                                              ? line.find("]]", start_pinyin_pos)
-		                                              : line.find(']', start_pinyin_pos);
-		if (end_pinyin_pos == std::string::npos) {
+		if (is_v2_syntax) {
+			utf8::next(start_pinyin_it, line.end());
+		}
+
+		auto end_pinyin_it = utf8Find(line, ']', start_pinyin_it);
+		if (end_pinyin_it == line.end()) {
 			return std::nullopt;
 		}
-		const std::string_view pinyin = line.substr(start_pinyin_pos, end_pinyin_pos - start_pinyin_pos);
+		utf8::prior(end_pinyin_it, line.begin());
 
+		const std::string_view pinyin{start_pinyin_it, end_pinyin_it};
+
+		spdlog::info("Simp: {} (length: {}), Trad: {} (length: {}), Pinyin: {} (length: {})", simp, utf8Length(simp), trad, utf8Length(trad), pinyin, utf8Length(pinyin));
 		const auto pinyin_split = split_pinyin(pinyin, is_v2_syntax);
 		auto       simp_it      = simp.begin();
 		const auto simp_end     = simp.end();
@@ -166,11 +184,20 @@ namespace iwra {
 			res.words.emplace_back(curr_word);
 		}
 
-		std::string::size_type curr_pos;
-		std::string::size_type prev_pos = end_pinyin_pos + (is_v2_syntax ? 4 : 3);
-		while ((curr_pos = line.find('/', prev_pos)) != std::string::npos) {
-			res.definitions.emplace_back(line.substr(prev_pos, curr_pos - prev_pos));
-			prev_pos = curr_pos + 1;
+		std::string_view::const_iterator curr_pos;
+		auto                             prev_pos = end_pinyin_it;
+		utf8::next(prev_pos, line.end()); // skip ]
+		utf8::next(prev_pos, line.end()); // skip ' '
+		utf8::next(prev_pos, line.end()); // skip first /
+		if (is_v2_syntax) {
+			utf8::next(prev_pos, line.end()); // skip extra ]
+		}
+		while ((curr_pos = utf8Find(line, '/', prev_pos)) != line.end()) {
+			// order matters
+			auto curr_prior = curr_pos;
+			utf8::prior(curr_prior, line.begin());
+			res.definitions.emplace_back(prev_pos, curr_prior);
+			prev_pos = curr_pos;
 		}
 
 		return res;

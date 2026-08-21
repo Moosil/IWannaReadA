@@ -181,7 +181,7 @@ namespace iwra {
 
 		ncnn::Mat in_inf = ncnn::Mat::from_pixels_resize(
 			pad_image.data,
-			ncnn::Mat::PIXEL_BGR,
+			ncnn::Mat::PIXEL_RGB,
 			img_cols,
 			img_rows,
 			rsz_cols,

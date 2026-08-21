@@ -129,7 +129,7 @@ namespace iwra {
 		const std::size_t length = images.size();
 		std::vector<Text> text_lines{length};
 
-		#if OPENMP_FOUND
+		#if OPENMP_FOUND && !DEBUG
 		#pragma omp parallel for num_threads(10) schedule(dynamic)
 		#endif
 		for (int i = 0; i < static_cast<int>(length); ++i) {

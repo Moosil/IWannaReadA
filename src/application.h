@@ -4,6 +4,7 @@
 #include <qfuture.h>
 #include <qhotkey.h>
 
+#include "control_window.h"
 #include "ocr_engine.h"
 #include "screenshot.h"
 #include "tooltip.h"
@@ -31,6 +32,8 @@ namespace iwra {
 
 		ScreenshotWindow* screenshot_window;
 		TooltipWindow*    tooltip_window;
+		ControlWindow* main_window;
+		bool was_main_window_open{false};
 
 		cv::Rect curr_screenshot_rect;
 

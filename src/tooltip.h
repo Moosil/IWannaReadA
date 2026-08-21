@@ -34,6 +34,8 @@ namespace iwra {
 
 		void updateResRect(const std::vector<OCRResult>& new_res, const cv::Rect& new_rect);
 
+		void setShowAllowed(bool value);
+
 	private:
 		cv::Rect         rect;
 		OCRBlock*        current_block{nullptr};
@@ -43,6 +45,7 @@ namespace iwra {
 		QHotkey* hover_hotkey;
 		int      timer_id{0};
 		bool     is_hovering{false};
+		bool is_show_allowed{true};
 
 		std::vector<OCRBlock>                           results;
 		std::size_t                                     results_size{};
@@ -85,6 +88,10 @@ namespace iwra {
 		static std::string getSentence(OCRBlock* hover_block);
 
 		static std::string getPhrase(const OCRResultPacked* hover_word, const OCRBlock* hover_block);
+
+		void connectQHotkey();
+
+		void disconnectQHotkey();
 
 	protected:
 		void timerEvent(QTimerEvent* event) override;

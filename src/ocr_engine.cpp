@@ -76,7 +76,7 @@ namespace iwra {
 		// det
 		std::vector<TextRect> text_boxes = det.run(image);
 		if (text_boxes.empty()) {
-			spdlog::error("OHNO");
+			return {};
 		}
 
 		const std::size_t num_boxes = text_boxes.size();

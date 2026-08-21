@@ -76,6 +76,16 @@ namespace iwra {
 		const std::string&             p_sentence,
 		const long long                p_offset
 	) {
+		{
+			std::string debug;
+			for (const auto& [characters] : p_entry.words) {
+				for (const auto& c : characters) {
+					debug += c.simp;
+				}
+				debug += " ";
+			}
+			spdlog::info("Hanzi: {}", debug);
+		}
 		entry    = p_entry;
 		phrase   = p_phrase;
 		sentence = p_sentence;

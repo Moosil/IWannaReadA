@@ -50,41 +50,6 @@ namespace iwra {
 			spdlog::error("TooltipWindow has no dictionary file");
 		}
 
-		connect(
-			hover_hotkey,
-			&QHotkey::activated,
-			this,
-			[this]() {
-				if (timer_id != 0) {
-					spdlog::warn("[Tooltip] timer is already running");
-					return;
-				}
-				if (is_hovering) {
-					show();
-				} else {
-					hide();
-				}
-				mutex.lock();
-				refreshHovering();
-				mutex.unlock();
-				timer_id = startTimer(0, Qt::PreciseTimer);
-			}
-		);
-
-		connect(
-			hover_hotkey,
-			&QHotkey::released,
-			this,
-			[this]() {
-				if (timer_id == 0) {
-					spdlog::warn("[Tooltip] can't kill timer that hasn't started");
-					return;
-				}
-				killTimer(timer_id);
-				timer_id = 0;
-			}
-		);
-
 		setWindowFlags(
 			Qt::FramelessWindowHint |
 			Qt::Tool |
@@ -294,6 +259,44 @@ namespace iwra {
 		updateWindowPosition();
 	}
 
+	void TooltipWindow::connectQHotkey() {
+		connect(
+			hover_hotkey,
+			&QHotkey::activated,
+			this,
+			[this]() {
+				if (timer_id != 0) {
+					spdlog::warn("[Tooltip] timer is already running");
+					return;
+				}
+				timer_id = startTimer(0, Qt::PreciseTimer);
+			}
+		);
+
+		connect(
+			hover_hotkey,
+			&QHotkey::released,
+			this,
+			[this]() {
+				if (timer_id == 0) {
+					spdlog::warn("[Tooltip] can't kill timer that hasn't started");
+					return;
+				}
+				killTimer(timer_id);
+				timer_id = 0;
+			}
+		);
+	}
+
+	void TooltipWindow::disconnectQHotkey() {
+		disconnect(hover_hotkey, &QHotkey::activated, nullptr, nullptr);
+		disconnect(hover_hotkey, &QHotkey::released, nullptr, nullptr);
+		if (timer_id != 0) {
+			killTimer(timer_id);
+			timer_id = 0;
+		}
+	}
+
 	std::vector<std::string> splitHanzi(const std::string& hanzi, const std::string& pinyin) {
 		std::string              post_pinyin = pinyin + ' ';
 		std::vector<std::size_t> lengths;
@@ -339,6 +342,18 @@ namespace iwra {
 		current_block = nullptr;
 		current_word  = nullptr;
 		mutex.unlock();
+	}
+
+	void TooltipWindow::setShowAllowed(const bool value) {
+		if (is_show_allowed == value) {
+			return;
+		}
+		is_show_allowed = value;
+		if (value) {
+			connectQHotkey();
+		} else {
+			disconnectQHotkey();
+		}
 	}
 
 	void TooltipWindow::refreshWindow() {
@@ -392,7 +407,7 @@ namespace iwra {
 			results,
 			[&mouse_pos](const OCRBlock& block) -> bool {
 				// returns positive (inside), negative (outside), or zero (on an edge) value
-				return block.poly.size() > 1 &&pointPolygonTest(block.poly, mouse_pos, false) >= 0;
+				return block.poly.size() > 1 && pointPolygonTest(block.poly, mouse_pos, false) >= 0;
 			}
 		);
 
@@ -419,7 +434,6 @@ namespace iwra {
 		is_hovering   = true;
 		current_word  = word_iter._Ptr;
 		current_block = intersect_iter._Ptr;
-		refreshWindow();
 	}
 
 	std::string TooltipWindow::getSentence(OCRBlock* hover_block) {
@@ -441,14 +455,15 @@ namespace iwra {
 	}
 
 	void TooltipWindow::timerEvent(QTimerEvent* event) {
-		if (is_hovering) {
-			show();
-		} else {
-			hide();
-		}
 		mutex.lock();
 		refreshHovering();
 		mutex.unlock();
+		if (is_hovering) {
+			show();
+			refreshWindow();
+		} else {
+			hide();
+		}
 		QMainWindow::timerEvent(event);
 	}
 }
